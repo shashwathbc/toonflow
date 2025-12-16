@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Image Generation</title>
+    <style>
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #generateForm {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        textarea {
+            min-height: 100px;
+            padding: 10px;
+        }
+        input {
+            padding: 8px;
+        }
+        button {
+            padding: 10px;
+            background: #0066ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0052cc;
+        }
+        #generatedImage {
+            display: none;
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Image Generator</h1>
+    <form id="generateForm">
+        <textarea 
+            name="prompt" 
+            placeholder="Enter your image prompt (e.g., manga style character with blue hair and green eyes)" 
+            required
+        ></textarea>
+        <input 
+            type="number" 
+            name="width" 
+            value="768" 
+            placeholder="Width" 
+            min="64" 
+            max="1024"
+        >
+        <input 
+            type="number" 
+            name="height" 
+            value="1024" 
+            placeholder="Height"
+            min="64" 
+            max="1024"
+        >
+        <button type="submit">Generate Image</button>
+    </form>
+    <div class="loading" id="loadingMessage">
+        Generating image... This may take a few moments.
+    </div>
+    <div id="result">
+        <img id="generatedImage" alt="Generated image will appear here"
+
+    <script>
+        document.getElementById('generateForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            
+            try {
+                const response = await fetch('http://localhost:5050/api/generate-image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: formData.get('prompt'),
+                        width: parseInt(formData.get('width')),
+                        height: parseInt(formData.get('height'))
+                    })
+                });
+
+                const data = await response.json();
+                if (data.imageUrl) {
+                    const img = document.getElementById('generatedImage');
+                    img.src = data.imageUrl;
+                    img.style.display = 'block';
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to generate image'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>
