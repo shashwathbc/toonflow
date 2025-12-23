@@ -23,6 +23,8 @@ interface RightSidebarProps {
   handleDeleteCharacter: (id: string) => void;
 
   // Assistant Props
+  sceneName: string;
+  setSceneName: (name: string) => void;
   cmdPrompt: string;
   setCmdPrompt: (prompt: string) => void;
   targetPage: number;
@@ -48,6 +50,8 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
   onGenerateCharacter,
   onSaveCharacter,
   handleDeleteCharacter,
+  sceneName,
+  setSceneName,
   cmdPrompt,
   setCmdPrompt,
   targetPage,
@@ -61,6 +65,12 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
   isGeneratingPage,
   handleGeneratePage
 }) => {
+
+  const handleDragStart = (e: React.DragEvent<HTMLImageElement>, url: string) => {
+    e.dataTransfer.setData("text/plain", url);
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
   return (
     <div className="w-full bg-card p-4 space-y-4 overflow-y-auto flex flex-col">
       {/* Section 1: Character Builder */}
@@ -105,8 +115,20 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
           </div>
 
           <div className="space-y-1">
+            <label htmlFor="sceneName" className="text-xs text-muted-foreground">Name</label>
+            <input
+              id="sceneName"
+              type="text"
+              value={sceneName}
+              onChange={(e) => setSceneName(e.target.value)}
+              className="w-full rounded-md border bg-background px-2 py-1 text-sm"
+              placeholder="e.g. Stormy Temple"
+            />
+          </div>
+
+          <div className="space-y-1">
             <label htmlFor="cmdPrompt" className="text-xs text-muted-foreground">
-              Image Prompt
+              Description
             </label>
             <textarea
               id="cmdPrompt"
@@ -159,13 +181,16 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
             Generate Panel Image
           </Button>
 
-          {/* Preview of current page */}
+          {/* Preview of current page - Draggable */}
           {pageImages && pageImages[targetPage] && (
             <div className="mt-2">
+              <p className="text-xs text-muted-foreground mb-1">Preview (Drag to canvas):</p>
               <img
                 src={pageImages[targetPage]}
                 alt={`Preview of page ${targetPage}`}
-                className="w-full aspect-video object-cover rounded-lg border"
+                className="w-full aspect-video object-cover rounded-lg border cursor-grab active:cursor-grabbing hover:border-primary"
+                draggable={true}
+                onDragStart={(e) => handleDragStart(e, pageImages[targetPage])}
               />
             </div>
           )}

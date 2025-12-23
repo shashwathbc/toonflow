@@ -4,10 +4,19 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Eye, Download, Save, Pencil, RotateCcw, RotateCw } from "lucide-react";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 interface TopToolbarProps {
   onBack: () => void;
   onSave: () => void;
-  onExport: () => void;
+  onExport: () => void;     // Export Current Page (PNG)
+  onExportZIP?: () => void; // Optional for backward compat if not ready immediately
+  onExportPDF?: () => void; // Optional for backward compat
   isEditMode: boolean;
   setIsEditMode: (v: boolean) => void;
   onUndo: () => void;
@@ -17,7 +26,7 @@ interface TopToolbarProps {
 }
 
 const TopToolbar: React.FC<TopToolbarProps> = ({
-  onBack, onSave, onExport, isEditMode, setIsEditMode,
+  onBack, onSave, onExport, onExportZIP, onExportPDF, isEditMode, setIsEditMode,
   onUndo, onRedo, canUndo, canRedo
 }) => {
   return (
@@ -59,10 +68,27 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
             <Eye className="h-4 w-4" />
             Preview
           </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={onExport}>
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onExport}>
+                Current Page (PNG)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onExportZIP}>
+                All Pages (ZIP)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onExportPDF}>
+                Export Project (PDF)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button size="sm" onClick={onSave} className="gap-2">
             <Save className="h-4 w-4" />
             Save

@@ -37,25 +37,52 @@ console.log("HF Token Loaded:", HF_TOKEN ? "YES (" + HF_TOKEN.slice(0, 5) + "...
  * Generate Image Route (Legacy/Direct)
  * ... (keeping this for backward compatibility if needed, or we can deprecate)
  */
-app.post('/api/generate-image', async (req, res) => {
+// Rename to generic 'generate' as requested
+app.post('/api/generate', async (req, res) => {
   try {
+    // Determine input format - support both new payload and legacy prompt-only if needed
     const {
-      prompt,
+      characterName,
+      characterPrompt,
+      style,
+      prompt: legacyPrompt, // Fallback
       width = 1024,
       height = 1024
     } = req.body;
 
-    // Validate required prompt
-    if (!prompt) {
-      return res.status(400).json({ error: 'Missing prompt' });
+    // Construct final prompt based on inputs
+    // If 'characterName'/'characterPrompt' are present, use them with style logic
+    // Otherwise fall back to 'prompt'
+    let finalPrompt = legacyPrompt;
+
+    if (characterPrompt) {
+      // Construct prompt with style and name, but explicitly for SCENES/PANELS (Webtoon)
+      // avoiding "solo character" constraint if it's a scene
+      let styleDesc = "";
+      if (style === "Manga B/W" || style === "manga_bw") styleDesc = "manga style, black and white, line art, ink drawing, high contrast, speed lines";
+      else if (style === "Webtoon Color" || style === "anime_color") styleDesc = "webtoon style, anime style, vibrant colors, cel shaded, digital art";
+      else if (style === "Sketch") styleDesc = "rough sketch, pencil drawing, storyboard style";
+
+      const subjectDesc = characterName ? `Subject: ${characterName}.` : "";
+
+      finalPrompt = `
+            ${styleDesc},
+            ${subjectDesc}
+            ${characterPrompt},
+            masterpiece, best quality, narrative composition
+        `.trim().replace(/\s+/g, ' ');
     }
 
-    console.log(`Generating image for prompt: "${prompt}"`);
+    if (!finalPrompt) {
+      return res.status(400).json({ error: 'Missing description/prompt' });
+    }
+
+    console.log(`Generating image for prompt: "${finalPrompt}"`);
 
     // Call Hugging Face API
     const imageBlob = await hf.textToImage({
       model: MODEL,
-      inputs: prompt,
+      inputs: finalPrompt,
       parameters: {
         width: width,
         height: height,

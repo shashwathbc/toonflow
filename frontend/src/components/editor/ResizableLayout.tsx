@@ -29,6 +29,8 @@ type ResizableLayoutProps = {
   onBack: () => void;
   onSave: () => void;
   onExport: () => void;
+  onExportZIP?: () => void;
+  onExportPDF?: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -53,7 +55,7 @@ const DEFAULT_RIGHT = 320;
 
 export default function ResizableLayout(props: ResizableLayoutProps) {
   const {
-    onBack, onSave, onExport,
+    onBack, onSave, onExport, onExportZIP, onExportPDF,
     isEditMode, setIsEditMode,
     onUndo, onRedo, canUndo, canRedo,
     brushSize, opacity, color, activeTool,
@@ -136,6 +138,8 @@ export default function ResizableLayout(props: ResizableLayoutProps) {
           onBack={onBack}
           onSave={onSave}
           onExport={onExport}
+          onExportZIP={onExportZIP}
+          onExportPDF={onExportPDF}
           isEditMode={isEditMode}
           setIsEditMode={setIsEditMode}
           onUndo={onUndo}

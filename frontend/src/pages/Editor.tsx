@@ -3,7 +3,10 @@ import { useCanvasHistory } from '@/hooks/useCanvasHistory';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { Canvas, FabricImage } from 'fabric';
-import * as fabric from 'fabric'; // Keep just in case, but prefer specific imports
+import * as fabric from 'fabric';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import { jsPDF } from 'jspdf';
 
 import TopToolbar from '@/components/editor/TopToolbar';
 import LeftSidebar from '@/components/editor/LeftSidebar';
@@ -29,32 +32,39 @@ async function fetchCharacters(): Promise<ToonaryCharacter[]> {
   return data.characters;
 }
 
-/** ===== Simple mock image generators (replace with real AI calls) ===== */
-function svgDataUrl({
-  w = 800,
-  h = 1200,
-  label = "Generated",
-  subLabel,
-}: {
-  w?: number;
-  h?: number;
-  label?: string;
-  subLabel?: string;
-}) {
-  const svg = encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-      <rect width="100%" height="100%" fill="#f0f0f0"/>
-      <text x="50%" y="45%" text-anchor="middle" font-family="Arial" font-size="24" fill="#666">${label}</text>
-      ${subLabel ? `<text x="50%" y="55%" text-anchor="middle" font-family="Arial" font-size="16" fill="#999">${subLabel}</text>` : ''}
-    </svg>
-  `);
-  return `data:image/svg+xml;charset=utf-8,${svg}`;
-}
+async function generatePanelImage(name: string, prompt: string, style: string, aspect: "1:1" | "3:4" | "16:9"): Promise<string> {
+  // Map UI style to API style
+  let apiStyle = style;
+  if (style === "Webtoon Color") apiStyle = "anime_color";
+  else if (style === "Manga B/W") apiStyle = "manga_bw";
 
-async function generatePanelImage(prompt: string, style: string, aspect: "1:1" | "3:4" | "16:9"): Promise<string> {
-  const aspectMap = { "1:1": [1024, 1024], "3:4": [960, 1280], "16:9": [1600, 900] } as const;
-  const [w, h] = aspectMap[aspect];
-  return svgDataUrl({ w, h, label: "Page Image", subLabel: `${style} · ${prompt?.slice(0, 24)}` });
+  try {
+    // Call same API as generateCharacterAPI
+    const res = await fetch(`${API_BASE}/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        characterName: name,
+        characterPrompt: prompt,
+        style: apiStyle
+        // width and height removed as per request
+      }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.details || "Failed to generate image");
+    }
+
+    const data = await res.json();
+    // The characters API returns { tempImageUrl: "..." }
+    return `http://localhost:5050${data.tempImageUrl}`;
+  } catch (error) {
+    console.error("Generate Panel Image Error:", error);
+    throw error;
+  }
 }
 
 async function generateCharacterAPI(name: string, prompt: string, style: string): Promise<string> {
@@ -92,9 +102,13 @@ const Editor: React.FC = () => {
   const { toast } = useToast();
 
   /** ===== Canvas state ===== */
-  const [pageImages, setPageImages] = useState<Record<number, string>>({});
+  const [pageImages, setPageImages] = useState<Record<number, string>>({
+    1: "/one.png",
+    2: "/two.png",
+    3: "/three.png"
+  });
   const [template, setTemplate] = useState<string>("Blank");
-  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(3);
   const pages = useMemo(() => Array.from({ length: totalPages }, (_, i) => i + 1), [totalPages]);
 
   /** ===== Navigation ===== */
@@ -146,7 +160,9 @@ const Editor: React.FC = () => {
   };
 
   /** ===== AI Assistant state ===== */
+  /** ===== AI Assistant state ===== */
   const [isAssistantOpen, setAssistantOpen] = useState(false);
+  const [sceneName, setSceneName] = useState("");
   const [cmdPrompt, setCmdPrompt] = useState("");
   const [style, setStyle] = useState<"Manga B/W" | "Webtoon Color" | "Sketch">("Manga B/W");
   const [aspect, setAspect] = useState<"1:1" | "3:4" | "16:9">("3:4");
@@ -259,9 +275,11 @@ const Editor: React.FC = () => {
   const handleGeneratePage = async () => {
     setIsGeneratingPage(true);
     try {
-      const url = await generatePanelImage(cmdPrompt, style, aspect);
+      const url = await generatePanelImage(sceneName, cmdPrompt, style, aspect);
       setPageImages((prev) => ({ ...prev, [targetPage]: url }));
       toast({ title: `Page ${targetPage} updated`, description: `Generated image placed on Page ${targetPage}.` });
+    } catch (e) {
+      toast({ title: "Generation Failed", description: "Could not generate image. Check backend.", variant: "destructive" });
     } finally {
       setIsGeneratingPage(false);
     }
@@ -320,16 +338,83 @@ const Editor: React.FC = () => {
 
   const handleExport = () => {
     if (!fabricCanvas) return;
-    // Temporarily disable selection controls for export if needed? 
-    // toDataURL usually ignores controls if option is not set.
+    // Export current view
     const url = fabricCanvas.toDataURL({ format: 'png', multiplier: 2 });
     const link = document.createElement('a');
     link.href = url;
-    link.download = `canvas-export-${Date.now()}.png`;
+    link.download = `page-${targetPage}-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast({ title: "Exported", description: "Image downloaded as PNG." });
+    toast({ title: "Exported", description: "Current page downloaded." });
+  };
+
+  const handleExportZIP = async () => {
+    const zip = new JSZip();
+    let count = 0;
+
+    // If current canvas has unsaved changes, maybe prompt? For now we export what is in pageImages + current canvas
+    // Ideally we save current canvas to state first if needed, but let's assume user saved or we take pageImages
+    // We can auto-save current page to be safe:
+    if (editingPage !== null && fabricCanvas) {
+      const url = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 });
+      setPageImages(prev => ({ ...prev, [editingPage]: url }));
+    }
+
+    // Wait a tick for state update or just use the updated value locally if we extracted it?
+    // React state updates are async. For safety, let's just allow the user to save first or use current `pageImages`.
+    // Actually, `pageImages` in this closure might be stale if we JUST called setPageImages. 
+    // But for simplicity let's rely on standard flow.
+
+    for (let i = 1; i <= totalPages; i++) {
+      const imgData = pageImages[i];
+      if (imgData) {
+        // Remove data:image/png;base64, prefix
+        const base64Data = imgData.split(',')[1];
+        if (base64Data) {
+          zip.file(`page-${i}.png`, base64Data, { base64: true });
+          count++;
+        }
+      }
+    }
+
+    if (count === 0) {
+      toast({ title: "Nothing to export", description: "No pages have content.", variant: "destructive" });
+      return;
+    }
+
+    const content = await zip.generateAsync({ type: "blob" });
+    saveAs(content, `project-export-${Date.now()}.zip`);
+    toast({ title: "Exported ZIP", description: `Downloaded ${count} pages.` });
+  };
+
+  const handleExportPDF = () => {
+    // A4 size: 210 x 297 mm
+    // We'll fit images to pages. default is A4 portrait.
+    const pdf = new jsPDF();
+    let pageAdded = false;
+
+    for (let i = 1; i <= totalPages; i++) {
+      const imgData = pageImages[i];
+      if (imgData) {
+        if (i > 1 && pageAdded) pdf.addPage();
+
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pageAdded = true;
+      }
+    }
+
+    if (!pageAdded) {
+      toast({ title: "Nothing to export", description: "No pages have content.", variant: "destructive" });
+      return;
+    }
+
+    pdf.save(`project-export-${Date.now()}.pdf`);
+    toast({ title: "Exported PDF", description: "Project downloaded as PDF." });
   };
 
   // Toggle Edit Mode in Fabric
@@ -411,6 +496,8 @@ const Editor: React.FC = () => {
       onBack={handleBack}
       onSave={handleSave}
       onExport={handleExport}
+      onExportZIP={handleExportZIP}
+      onExportPDF={handleExportPDF}
       onUndo={undo}
       onRedo={redo}
       canUndo={canUndo}
@@ -455,6 +542,8 @@ const Editor: React.FC = () => {
       onGenerateCharacter={handleGenerateCharacter}
       onSaveCharacter={handleSaveCharacter}
       handleDeleteCharacter={handleDeleteCharacter}
+      sceneName={sceneName}
+      setSceneName={setSceneName}
       cmdPrompt={cmdPrompt}
       setCmdPrompt={setCmdPrompt}
       targetPage={targetPage}

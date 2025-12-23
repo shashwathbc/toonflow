@@ -72,13 +72,15 @@ class AIService {
             stylePrompt = "anime manga style";
         }
 
-        const finalPrompt = `
-            ${stylePrompt},
-            solo character, centered,
-            ${characterPrompt},
-            clean line art, white background,
-            no text, no watermark, masterpiece, best quality
-        `.trim().replace(/\s+/g, ' ');
+        // const finalPrompt = `
+        //     ${stylePrompt},
+        //     solo character, centered,
+        //     ${characterPrompt},
+        //     clean line art, white background,
+        //     no text, no watermark, masterpiece, best quality
+        // `.trim().replace(/\s+/g, ' ');
+
+        const finalPrompt = ` ${stylePrompt}, ${characterPrompt}`.trim().replace(/\s+/g, ' ');
 
         console.log(`[AIService] Generating with Replicate (google/imagen-4): ${finalPrompt}`);
 

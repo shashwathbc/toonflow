@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -17,13 +18,28 @@ const Login = () => {
     }
   }, [user, navigate]);
 
+  const { toast } = useToast();
+
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
       await loginWithGoogle();
       navigate("/");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to login", error);
+      if (error?.code === 'auth/unauthorized-domain') {
+        toast({
+          title: "Setup Required",
+          description: "This domain is not authorized. Go to Firebase Console > Auth > Settings > Authorized Domains and add 'localhost'.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Login Failed",
+          description: error?.message || "Could not sign in with Google.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
     }
