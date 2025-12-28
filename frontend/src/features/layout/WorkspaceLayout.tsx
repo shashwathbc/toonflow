@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ToolPalette from '../palettes/Tools/ToolPalette';
+import AssetLibrary from '../palettes/Assets/AssetLibrary';
 import { PanelLeftClose, PanelRightClose, Bot, Palette, Undo2, Redo2, Pencil, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEditorStore } from '@/store/editorStore';
@@ -29,7 +30,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
     return (
         <div className="flex h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
             {/* 1. Main Tools Sidebar */}
-            <div className={`${isLeftOpen ? 'w-14' : 'w-0'} flex-shrink-0 border-r border-zinc-900 transition-all duration-300 flex flex-col items-center bg-[#1e1e1e] z-30`}>
+            <div className={`${isLeftOpen ? 'w-64' : 'w-0'} flex-shrink-0 border-r border-zinc-900 transition-all duration-300 flex flex-col items-center bg-[#1e1e1e] z-30`}>
                 <div className="py-4 w-full flex justify-center border-b border-zinc-800">
                     <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-md shadow-lg"></div>
                 </div>
@@ -59,7 +60,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
                     </div>
                     <div className="flex-1 overflow-y-auto">
                         {activeSubSidebar === 'ai' && aiSidebar}
-                        {activeSubSidebar === 'assets' && <div className="p-10 text-center text-zinc-600 text-xs">Library Empty</div>}
+                        {activeSubSidebar === 'assets' && <AssetLibrary />}
                     </div>
                 </div>
             </div>
