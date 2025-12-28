@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import WorkspaceLayout from '@/features/layout/WorkspaceLayout';
 import WebtoonCanvas from '@/features/canvas/WebtoonCanvas';
 import AISidebar from '@/features/ai-sidebar/AISidebar';
-import ToolPropertiesPanel from '@/features/palettes/Properties/ToolPropertiesPanel';
+import RightSidebarContainer from '@/components/editor/RightSidebarContainer';
 import { useEditorStore } from '@/store/editorStore';
 
 /** ===== Types & API Helpers ===== */
@@ -110,7 +110,7 @@ const Editor: React.FC = () => {
           handleGeneratePage={handleGeneratePage}
         />
       }
-      rightSidebar={<ToolPropertiesPanel />}
+      rightSidebar={<RightSidebarContainer />}
     >
       <WebtoonCanvas />
     </WorkspaceLayout>

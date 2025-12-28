@@ -116,3 +116,118 @@ export const createSmartBubble = (canvas: Canvas, type: BubbleType, x: number, y
 
     return group;
 };
+
+// --- Constants for Auto-Fit ---
+const MAX_FONT_SIZE = 40;
+const MIN_FONT_SIZE = 12;
+
+/**
+ * Adjusts the font size of the text element within a group to fit the bubble shape.
+ * Follows strict rules: Text Containment, Dynamic Scaling (Grow/Shrink), Constraints.
+ * @param group The bubble group containing the shape and text
+ */
+export const autoFitText = (group: Group) => {
+    // 1. Get references
+    const objects = group.getObjects();
+    const shape = objects[0];
+    const text = objects[1] as Textbox;
+
+    if (!shape || !text || text.type !== 'textbox') return;
+
+    // 2. Determine Safe Area based on Shape Type
+    // We need unscaled dimensions relative to the group's coordinate system
+    const scaleX = group.scaleX || 1;
+    const scaleY = group.scaleY || 1;
+
+    // Unscaled dimensions of the group wrapper
+    const groupWidth = group.width;
+    const groupHeight = group.height;
+
+    // Absolute screen dimensions (for reference/debugging, though logic uses relative)
+    const fullWidth = groupWidth * scaleX;
+    const fullHeight = groupHeight * scaleY;
+
+    // Safe Area Ratios (Percentage of total width/height usable for text)
+    // Customize per bubble type for better visual fit
+    // REDUCED RATIOS to ensure text stays well inside borders
+    let safeRatioX = 0.7;
+    let safeRatioY = 0.6;
+
+    // @ts-ignore
+    const type = group.data?.bubbleType || 'normal';
+
+    switch (type) {
+        case 'thinking':
+            safeRatioX = 0.7;
+            safeRatioY = 0.55; // Clouds/Thought bubbles usually have tails/irregularities
+            break;
+        case 'shouting':
+            safeRatioX = 0.55; // Spikes need more clearance
+            safeRatioY = 0.55;
+            break;
+        case 'scared':
+            safeRatioX = 0.65;
+            safeRatioY = 0.65;
+            break;
+        case 'narration':
+            safeRatioX = 0.85; // Rectangles utilize space well
+            safeRatioY = 0.85;
+            break;
+        case 'normal':
+        default:
+            safeRatioX = 0.75;
+            safeRatioY = 0.65;
+            break;
+    }
+
+    // Calculate Available Dimensions (Unscaled relative to group)
+    // The textbox is inside the group, so it inherits the group's scale.
+    // We set the textbox's width/fontSize in *local* units.
+
+    // However, Fabric Textbox 'width' defines the wrapping point.
+    // If we want the text to wrap at 80% of the bubble's visual width,
+    // we set text.width = group.width * safeRatioX.
+
+    const targetWidth = groupWidth * safeRatioX;
+    const targetMaxHeight = groupHeight * safeRatioY;
+
+    // 3. Apply Width Constraint (Wrap)
+    if (text.width !== targetWidth) {
+        text.set('width', targetWidth);
+    }
+
+    // 4. Dynamic Font Scaling (Grow/Shrink Algorithm)
+    // Rule: "When user deletes text -> Font size increases back up"
+    // Approach: Reset to MAX, then shrink until it fits or hits MIN.
+
+    // Start at MAX
+    let currentFontSize = MAX_FONT_SIZE;
+    text.set('fontSize', currentFontSize);
+
+    // Helper to check fit
+    // Textbox height with cur font size vs Available Height
+    // fabric 6 / recent: .height is usually accurate after set width
+    // note: text.height is unscaled local height.
+    // Since text and shape are both in group with same scale, we compare local height to local constraint.
+
+    // Loop to shrink
+    // We use a simple loop. Binary search is optimization but loop is safe for < 40 steps.
+    while (
+        (text.height! > targetMaxHeight) &&
+        currentFontSize > MIN_FONT_SIZE
+    ) {
+        currentFontSize--;
+        text.set('fontSize', currentFontSize);
+        // Force recalc if needed, though 'set' usually triggers it.
+        // In newer fabric versions, we might need to access height via method if property is stale?
+        // text.height should be a getter or updated property.
+    }
+
+    // 5. Final Centering
+    text.set({
+        originX: 'center',
+        originY: 'center',
+        left: 0,
+        top: 0
+    });
+};

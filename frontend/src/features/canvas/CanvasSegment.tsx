@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import FabricCanvas from '@/components/editor/FabricCanvas';
 import { useEditorStore } from '@/store/editorStore';
 import { Canvas, FabricImage, PencilBrush, Group, Textbox } from 'fabric';
-import { createSmartBubble, BubbleType } from './utils/bubbleFactory';
+import { createSmartBubble, BubbleType, autoFitText } from './utils/bubbleFactory';
 
 interface CanvasSegmentProps {
     pageId: number;
@@ -193,7 +193,26 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
             }, 1000);
         });
 
-        canvas.on('object:modified', () => {
+        // Real-time Text Reflow during scaling
+        canvas.on('object:scaling', (e) => {
+            const obj = e.target;
+            if (obj && obj.type === 'group') {
+                // @ts-ignore
+                if (obj.data?.type === 'smartBubble') {
+                    autoFitText(obj as Group);
+                }
+            }
+        });
+
+        canvas.on('object:modified', (e) => {
+            const obj = e.target;
+            if (obj && obj.type === 'group') {
+                // @ts-ignore
+                if (obj.data?.type === 'smartBubble') {
+                    autoFitText(obj as Group);
+                }
+            }
+
             saveHistory(canvas);
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
             saveTimeoutRef.current = setTimeout(() => {
@@ -207,17 +226,11 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         // Auto-Fit Text Listener
         canvas.on('text:changed', (e) => {
             const obj = e.target as Textbox;
-            // Check if it's our bubble text (we marked it with bg: 'bubbleText' or via group data)
             if (obj && obj.type === 'textbox' && obj.group) {
                 const group = obj.group;
                 // @ts-ignore
                 if (group.data?.type === 'smartBubble') {
-                    // Simple Auto-Fit: Reduce font size if height exceeds limit
-                    // Ideally we check bounding box relative to shape
-                    const maxHeight = group.height * 0.8;
-                    if (obj.height > maxHeight && obj.fontSize > 10) {
-                        obj.set('fontSize', obj.fontSize - 1);
-                    }
+                    autoFitText(group);
                 }
             }
             saveHistory(canvas);
