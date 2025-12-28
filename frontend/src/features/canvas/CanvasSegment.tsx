@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import FabricCanvas from '@/components/editor/FabricCanvas';
 import { useEditorStore } from '@/store/editorStore';
-import { Canvas, FabricImage, PencilBrush } from 'fabric';
+import { Canvas, FabricImage, PencilBrush, Group, Textbox } from 'fabric';
+import { createSmartBubble, BubbleType, autoFitText } from './utils/bubbleFactory';
 
 interface CanvasSegmentProps {
     pageId: number;
@@ -18,7 +19,12 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     const redoStack = useRef<string[]>([]);
     const isHistoryLocked = useRef(false); // prevent saving during undo/redo
 
-    // Save History Snapshot
+    // Save timeout ref for debouncing
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+
+    // --- 1. HISTORY & PERSISTENCE ---
+
     const saveHistory = (canvas: Canvas) => {
         if (isHistoryLocked.current) return;
 
@@ -28,25 +34,19 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         redoStack.current = []; // Clear redo on new action
     };
 
-    // Handle Undo/Redo Signals
+    // Handle Undo
     useEffect(() => {
-        // Only undo on the currently focused page
         if (activePage !== pageId) return;
-
         const canvas = fabricRef.current;
         if (!canvas || history.current.length === 0) return;
 
         isHistoryLocked.current = true;
-
-        // Pop current state first? No, we need to go back.
-        // History structure: [State 0, State 1, State 2 (Recent)]
-
         const prevState = history.current.pop();
+
         if (prevState) {
             redoStack.current.push(JSON.stringify(canvas)); // Save current before undoing
-
             canvas.loadFromJSON(JSON.parse(prevState)).then(() => {
-                canvas.renderAll();
+                canvas.requestRenderAll();
                 isHistoryLocked.current = false;
                 // Sync thumbnail
                 const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1, quality: 1 });
@@ -55,13 +55,11 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         } else {
             isHistoryLocked.current = false;
         }
-
     }, [undoTrigger]);
 
+    // Handle Redo
     useEffect(() => {
-        // Only redo on the currently focused page
         if (activePage !== pageId) return;
-
         const canvas = fabricRef.current;
         if (!canvas || redoStack.current.length === 0) return;
 
@@ -71,7 +69,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         if (nextState) {
             history.current.push(JSON.stringify(canvas)); // Save current before redoing
             canvas.loadFromJSON(JSON.parse(nextState)).then(() => {
-                canvas.renderAll();
+                canvas.requestRenderAll();
                 isHistoryLocked.current = false;
                 // Sync thumbnail
                 const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1, quality: 1 });
@@ -83,94 +81,42 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     }, [redoTrigger]);
 
 
-    // Handle Canvas Ready
-    const onCanvasReady = (canvas: Canvas) => {
-        fabricRef.current = canvas;
+    // --- 2. DRAG & DROP HANDLERS ---
 
-        // Init History
-        history.current.push(JSON.stringify(canvas));
 
-        // Load existing image if any
-        // DEBUG: Disabling image load to check if it obstructs drawing
-        /*
-        const existing = pageImages[pageId];
-        if (existing) {
-            try {
-                FabricImage.fromURL(existing, { crossOrigin: 'anonymous' })
-                    .then((img) => {
-                        if (!canvas) return; // Cleanup check
-                        canvas.clear();
-                        canvas.add(img);
-                        canvas.sendObjectToBack(img);
-                        canvas.requestRenderAll();
-                        // Save loaded state as base history too
-                        history.current = [JSON.stringify(canvas)];
-                    })
-                    .catch(err => {
-                        console.error("Failed to load page image:", err);
-                    });
-            } catch (e) {
-                console.error("Error initiating image load:", e);
-            }
-        }
-        */
-        console.log("Canvas initialized (Fresh - Image Load Disabled)");
 
-        // Set initial configuration
-        updateInteraction(canvas);
 
-        // Listen for path creation to persist changes
-        // Using 'off' to prevent duplicates
-        canvas.off('path:created');
 
-        // Debounce timer ref
-        let saveTimeout: NodeJS.Timeout;
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        const canvas = fabricRef.current;
+        if (!canvas || !isEditMode) return;
 
-        canvas.on('path:created', () => {
-            console.log("Path created. Total Objects:", canvas.getObjects().length);
+        const assetType = e.dataTransfer.getData('assetType');
+        const bubbleType = e.dataTransfer.getData('bubbleType');
 
-            // 1. Immediate Visual Update
+        if (assetType === 'bubble' && bubbleType) {
+            const pointer = canvas.getScenePoint(e.nativeEvent);
+            const bubbleGroup = createSmartBubble(canvas, bubbleType as BubbleType, pointer.x, pointer.y);
+            canvas.add(bubbleGroup);
+            canvas.setActiveObject(bubbleGroup);
+            saveHistory(canvas);
             canvas.requestRenderAll();
-
-            // 2. Save History (Undo/Redo)
-            saveHistory(canvas);
-
-            // 3. Debounce Heavy Persistence (Store/Thumbnail)
-            clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(() => {
-                if (!canvas) return;
-                try {
-                    console.log("Auto-saving thumbnail...");
-                    const dataUrl = canvas.toDataURL({
-                        format: 'png',
-                        multiplier: 1,
-                        quality: 1
-                    });
-                    setPageImage(pageId, dataUrl);
-                } catch (err) {
-                    console.error("Save failed:", err);
-                }
-            }, 1000); // 1s debounce for safety
-        });
-
-        // Also listen for modifications (moves/resize) with same debounce
-        canvas.on('object:modified', () => {
-            saveHistory(canvas);
-            clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(() => {
-                try {
-                    const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1, quality: 1 });
-                    setPageImage(pageId, dataUrl);
-                } catch (e) { }
-            }, 1000);
-        });
+        }
     };
 
-    // Helper to update brush settings & interaction mode
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    };
+
+
+    // --- 3. CANVAS INITIALIZATION & INTERACTION ---
+
     const updateInteraction = (canvas: Canvas) => {
         if (!canvas) return;
 
-        // 1. Edit Mode Global Check
+        // Edit Mode Global Check
         if (!isEditMode) {
             canvas.isDrawingMode = false;
             canvas.selection = false;
@@ -180,18 +126,16 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
             return;
         }
 
-        // 2. Configure Drawing Tools
+        // Configure Drawing Tools
         const drawingTools = ['brush', 'pen', 'eraser'];
         const shouldDraw = drawingTools.includes(activeTool);
 
         if (shouldDraw) {
-            canvas.selection = false; // Disable selection to allow drawing
+            canvas.selection = false;
             canvas.forEachObject(o => { o.selectable = false; o.evented = false; });
             canvas.isDrawingMode = true;
 
-            // Explicitly ensure a brush exists
             if (!canvas.freeDrawingBrush) {
-                // Try/Catch in case PencilBrush import is weird
                 try {
                     canvas.freeDrawingBrush = new PencilBrush(canvas);
                 } catch (e) {
@@ -216,7 +160,84 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         }
     };
 
-    // React to tool changes or Edit Mode toggle
+    const onCanvasReady = (canvas: Canvas) => {
+        fabricRef.current = canvas;
+
+        // Init History
+        history.current.push(JSON.stringify(canvas));
+
+        // Image Load (Disabled for now as per debug status)
+        console.log("Canvas initialized (Fresh - Image Load Disabled)");
+
+        // Initial Config
+        updateInteraction(canvas);
+
+        // Listeners
+        canvas.off('path:created');
+        canvas.on('path:created', () => {
+            console.log("Path created. Total Objects:", canvas.getObjects().length);
+            canvas.requestRenderAll();
+            saveHistory(canvas);
+
+            // Debounce Thumbnail Save
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = setTimeout(() => {
+                if (!canvas) return;
+                try {
+                    console.log("Auto-saving thumbnail...");
+                    const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1, quality: 1 });
+                    setPageImage(pageId, dataUrl);
+                } catch (err) {
+                    console.error("Save failed:", err);
+                }
+            }, 1000);
+        });
+
+        // Real-time Text Reflow during scaling
+        canvas.on('object:scaling', (e) => {
+            const obj = e.target;
+            if (obj && obj.type === 'group') {
+                // @ts-ignore
+                if (obj.data?.type === 'smartBubble') {
+                    autoFitText(obj as Group);
+                }
+            }
+        });
+
+        canvas.on('object:modified', (e) => {
+            const obj = e.target;
+            if (obj && obj.type === 'group') {
+                // @ts-ignore
+                if (obj.data?.type === 'smartBubble') {
+                    autoFitText(obj as Group);
+                }
+            }
+
+            saveHistory(canvas);
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = setTimeout(() => {
+                try {
+                    const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1, quality: 1 });
+                    setPageImage(pageId, dataUrl);
+                } catch (e) { }
+            }, 1000);
+        });
+
+        // Auto-Fit Text Listener
+        canvas.on('text:changed', (e) => {
+            const obj = e.target as Textbox;
+            if (obj && obj.type === 'textbox' && obj.group) {
+                const group = obj.group;
+                // @ts-ignore
+                if (group.data?.type === 'smartBubble') {
+                    autoFitText(group);
+                }
+            }
+            saveHistory(canvas);
+        });
+    };
+
+    // React to tool changes
     useEffect(() => {
         if (fabricRef.current) {
             updateInteraction(fabricRef.current);
@@ -224,11 +245,14 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         }
     }, [activeTool, color, brushSize, isEditMode]);
 
+
     return (
         <div
             className={`relative transition-all duration-200 ${activePage === pageId ? 'z-10' : ''}`}
             style={{ width, height, marginBottom: '20px' }}
             onClick={() => setActivePage(pageId)}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
         >
             {/* Page Number */}
             <div className={`absolute -left-10 top-0 text-xs font-bold px-2 py-1 rounded transition-colors ${activePage === pageId ? 'text-blue-400 bg-zinc-800' : 'text-zinc-600'}`}>
@@ -240,7 +264,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
                     onCanvasReady={onCanvasReady}
                     width={width}
                     height={height}
-                    // className="bg-white" // REMOVED: Caused upper-canvas to be opaque white, hiding strokes
+                    // className="bg-white" // Removed for visibility fix
                     style={{ width: '100%', height: '100%', touchAction: 'none' }}
                 />
             </div>
