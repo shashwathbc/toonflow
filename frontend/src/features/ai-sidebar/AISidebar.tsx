@@ -160,7 +160,6 @@ const AISidebar: React.FC<AISidebarProps> = ({
                             {isGeneratingPage ? <Sparkles className="animate-spin mr-2" size={16} /> : <ImageIcon className="mr-2" size={16} />}
                             {isGeneratingPage ? "Generating..." : "Generate Panel"}
                         </Button>
-
                         {/* Preview Area */}
                         <PreviewSection targetPage={targetPage} />
                     </div>
