@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import FabricCanvas from '@/components/editor/FabricCanvas';
 import { useEditorStore } from '@/store/editorStore';
-import { Canvas, FabricImage, PencilBrush, Group, Textbox } from 'fabric';
+import { Canvas, FabricImage, PencilBrush, Group, Textbox, Line } from 'fabric';
 import { createSmartBubble, BubbleType, autoFitText } from './utils/bubbleFactory';
 
 interface CanvasSegmentProps {
@@ -13,6 +13,15 @@ interface CanvasSegmentProps {
 const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, height = 1200 }) => {
     const { activePage, setActivePage, pageImages, setPageImage, activeTool, color, brushSize, isEditMode, undoTrigger, redoTrigger } = useEditorStore();
     const fabricRef = useRef<Canvas | null>(null);
+
+    // Refs for Event Access
+    const activeToolRef = useRef(activeTool);
+    const colorRef = useRef(color);
+    const brushSizeRef = useRef(brushSize);
+
+    useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
+    useEffect(() => { colorRef.current = color; }, [color]);
+    useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
 
     // History Stacks
     const history = useRef<string[]>([]);
@@ -174,8 +183,38 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
 
         // Listeners
         canvas.off('path:created');
-        canvas.on('path:created', () => {
+        canvas.on('path:created', (e: any) => {
             console.log("Path created. Total Objects:", canvas.getObjects().length);
+
+            // G-PEN STRAIGHT LINE LOGIC
+            if (activeToolRef.current === 'pen') {
+                const path = e.path;
+                if (path && path.path && path.path.length > 1) {
+                    const cmds = path.path;
+                    // Get Start (Move command: ['M', x, y])
+                    const startX = cmds[0][1];
+                    const startY = cmds[0][2];
+
+                    // Get End (Last command: usually ['L', x, y] or ['Q', ...])
+                    const lastCmd = cmds[cmds.length - 1];
+                    const endX = lastCmd[lastCmd.length - 2];
+                    const endY = lastCmd[lastCmd.length - 1];
+
+                    if (typeof startX === 'number' && typeof endX === 'number') {
+                        const line = new Line([startX, startY, endX, endY], {
+                            stroke: colorRef.current,
+                            strokeWidth: brushSizeRef.current,
+                            strokeLineCap: 'round',
+                            strokeLineJoin: 'round',
+                            selectable: false,
+                            evented: false,
+                        });
+                        canvas.remove(path);
+                        canvas.add(line);
+                    }
+                }
+            }
+
             canvas.requestRenderAll();
             saveHistory(canvas);
 
