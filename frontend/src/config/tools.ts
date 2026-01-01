@@ -63,8 +63,19 @@ export const TOOLS_REGISTRY: Record<string, MainToolConfig> = {
         label: 'Brush',
         subTools: [
             {
+                id: 'ink-brush',
+                label: 'Ink Brush',
+                icon: '/assets/brushes/ink-brush.png',
+                properties: [
+                    { id: 'size', label: 'Size', type: 'slider', min: 1, max: 100, default: 8 },
+                    { id: 'opacity', label: 'Density', type: 'slider', min: 0, max: 100, default: 100 },
+                    { id: 'stabilization', label: 'Stabilization', type: 'slider', min: 0, max: 20, default: 5 },
+                ]
+            },
+            {
                 id: 'watercolor',
                 label: 'Watercolor',
+                icon: '/assets/brushes/watercolor.png',
                 properties: [
                     { id: 'size', label: 'Brush Size', type: 'slider', min: 5, max: 150, default: 30 },
                     { id: 'opacity', label: 'Opacity', type: 'slider', min: 0, max: 100, default: 60 },
@@ -72,11 +83,22 @@ export const TOOLS_REGISTRY: Record<string, MainToolConfig> = {
                 ]
             },
             {
-                id: 'thick-paint',
-                label: 'Thick Paint',
+                id: 'gouache',
+                label: 'Gouache',
+                icon: '/assets/brushes/gouache.png',
                 properties: [
                     { id: 'size', label: 'Size', type: 'slider', min: 1, max: 100, default: 15 },
-                    { id: 'opacity', label: 'Opacity', type: 'slider', min: 0, max: 100, default: 100 },
+                    { id: 'opacity', label: 'Opacity', type: 'slider', min: 0, max: 100, default: 90 },
+                    { id: 'impasto', label: 'Thickness', type: 'slider', min: 0, max: 100, default: 20 },
+                ]
+            },
+            {
+                id: 'airbrush',
+                label: 'Airbrush',
+                icon: '/assets/brushes/airbrush.png',
+                properties: [
+                    { id: 'size', label: 'Size', type: 'slider', min: 1, max: 300, default: 50 },
+                    { id: 'opacity', label: 'Density', type: 'slider', min: 0, max: 100, default: 30 },
                 ]
             }
         ]
