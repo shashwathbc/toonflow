@@ -20,6 +20,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     } = useEditorStore();
 
     const fabricRef = useRef<Canvas | null>(null);
+    const loadedImageRef = useRef<string | null>(null); // Track which image URL is loaded
 
     // Refs for Event Access
     const activeToolRef = useRef(activeTool);
@@ -33,6 +34,54 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     useEffect(() => { colorRef.current = color; }, [color]);
     useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
     useEffect(() => { opacityRef.current = opacity; }, [opacity]);
+
+    // --- LOAD AI GENERATED IMAGE INTO CANVAS ---
+    useEffect(() => {
+        const imageUrl = pageImages[pageId];
+        const canvas = fabricRef.current;
+
+        // Only load if we have a new image that hasn't been loaded yet
+        if (!canvas || !imageUrl || imageUrl === loadedImageRef.current) return;
+
+        console.log(`[CanvasSegment] Loading AI image for page ${pageId}`);
+
+        // Load the image using Fabric
+        FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' })
+            .then((img) => {
+                if (!img || !fabricRef.current) return;
+
+                // Scale image to fit canvas while maintaining aspect ratio
+                const canvasWidth = fabricRef.current.width || width;
+                const canvasHeight = fabricRef.current.height || height;
+
+                const scaleX = canvasWidth / (img.width || 1);
+                const scaleY = canvasHeight / (img.height || 1);
+                const scale = Math.min(scaleX, scaleY);
+
+                img.set({
+                    scaleX: scale,
+                    scaleY: scale,
+                    left: (canvasWidth - (img.width || 0) * scale) / 2,
+                    top: (canvasHeight - (img.height || 0) * scale) / 2,
+                    selectable: true,
+                    evented: true,
+                });
+
+                // Add to canvas
+                fabricRef.current.add(img);
+                fabricRef.current.sendObjectToBack(img);
+                fabricRef.current.requestRenderAll();
+
+                // Save to history
+                saveHistory(fabricRef.current);
+                loadedImageRef.current = imageUrl;
+
+                console.log(`[CanvasSegment] AI image loaded successfully for page ${pageId}`);
+            })
+            .catch((err) => {
+                console.error('[CanvasSegment] Failed to load AI image:', err);
+            });
+    }, [pageImages[pageId], pageId]);
 
     // History Stacks
     const history = useRef<string[]>([]);
@@ -53,7 +102,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     useEffect(() => {
         if (activePage !== pageId) return;
         const canvas = fabricRef.current;
-        if (!canvas || history.current.length === 0) return;
+        if (!canvas || history.current.length == 0) return;
 
         isHistoryLocked.current = true;
         const prevState = history.current.pop();
@@ -301,22 +350,42 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     // Determine if we should block touch scrolling (only in drawing mode)
     const isDrawingModeActive = isEditMode && ['pencil', 'pen', 'paint', 'watercolor', 'airbrush', 'eraser', 'decoration', 'brush'].includes(activeCategory || activeTool);
 
+    const isActive = activePage === pageId;
+    const isActiveEdit = isActive && isEditMode;
+
     return (
         <div
-            className={`relative transition-all duration-200 ${activePage === pageId ? 'z-10' : ''}`}
+            className="relative"
             style={{ width, height, marginBottom: '20px' }}
             onClick={() => setActivePage(pageId)}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
         >
-            <div className={`absolute -left-10 top-0 text-xs font-bold px-2 py-1 rounded transition-colors ${activePage === pageId ? 'text-blue-400 bg-zinc-800' : 'text-zinc-600'}`}>
+            {/* Page Number Badge */}
+            <div
+                className={`
+                    absolute -left-10 top-0
+                    text-xs font-bold px-2 py-1 rounded
+                    transition-colors duration-200
+                    ${isActive ? 'text-cyan-400 bg-zinc-800' : 'text-zinc-600'}
+                `}
+            >
                 {pageId}
             </div>
 
+            {/* Canvas Container - Clean White */}
             <div
-                className={`w-full h-full bg-white shadow-sm ${activePage === pageId && isEditMode ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-zinc-800' : ''}`}
+                className={`
+                    w-full h-full bg-white
+                    transition-shadow duration-200
+                    ${isActiveEdit
+                        ? 'ring-2 ring-cyan-500 ring-offset-2 ring-offset-zinc-900'
+                        : isActive
+                            ? 'shadow-lg'
+                            : 'shadow-md'}
+                `}
                 style={{
-                    touchAction: isDrawingModeActive ? 'none' : 'pan-y' // Allow vertical scroll unless drawing
+                    touchAction: isDrawingModeActive ? 'none' : 'pan-y'
                 }}
             >
                 <FabricCanvas

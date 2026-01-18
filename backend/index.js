@@ -79,23 +79,29 @@ app.post('/api/generate', async (req, res) => {
 
     console.log(`Generating image for prompt: "${finalPrompt}"`);
 
-    // Call Hugging Face API
-    const imageBlob = await hf.textToImage({
-      model: MODEL,
-      inputs: finalPrompt,
-      parameters: {
-        width: width,
-        height: height,
-      }
-    });
+    // Use Pollinations.ai - FREE, NO AUTH REQUIRED
+    const encodedPrompt = encodeURIComponent(finalPrompt);
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true`;
 
-    // Convert Blob to Buffer
-    const arrayBuffer = await imageBlob.arrayBuffer();
+    console.log(`[Pollinations] Fetching from: ${pollinationsUrl}`);
+
+    // Fetch the image from Pollinations
+    const response = await fetch(pollinationsUrl);
+
+    if (!response.ok) {
+      throw new Error(`Pollinations returned ${response.status}`);
+    }
+
+    // Get image as buffer and convert to base64
+    const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-
-    // Convert to base64 data URL
     const base64Image = buffer.toString('base64');
-    const imageUrl = `data:image/jpeg;base64,${base64Image}`;
+
+    // Determine content type from response
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const imageUrl = `data:${contentType};base64,${base64Image}`;
+
+    console.log(`[Pollinations] Image generated successfully (${buffer.length} bytes)`);
 
     // Return the generated image as data URL
     res.json({ imageUrl });
