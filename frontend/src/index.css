@@ -199,6 +199,32 @@ All colors MUST be HSL.
   }
 }
 
+@keyframes jelly {
+  0% {
+    transform: scale(1, 1);
+  }
+
+  25% {
+    transform: scale(1.25, 0.75);
+  }
+
+  50% {
+    transform: scale(0.75, 1.25);
+  }
+
+  75% {
+    transform: scale(1.15, 0.85);
+  }
+
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+.animate-jelly:hover {
+  animation: jelly 0.5s both;
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
@@ -269,6 +295,49 @@ All colors MUST be HSL.
 
 .animate-float {
   animation: float 3s ease-in-out infinite;
+}
+
+/* Floating Bubbles Animation */
+@keyframes float-up {
+  0% {
+    transform: translateY(100vh) translateX(0) scale(0.5);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: translateY(50vh) translateX(20px) scale(1);
+    opacity: 0.6;
+  }
+
+  90% {
+    opacity: 0.2;
+  }
+
+  100% {
+    transform: translateY(-10vh) translateX(-20px) scale(0.8);
+    opacity: 0;
+  }
+}
+
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, hsl(222.2 47.4% 11.2% / 0.1), hsl(222.2 47.4% 11.2% / 0.05));
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(1px);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.dark .bubble {
+  background: radial-gradient(circle at 30% 30%, hsl(270 100% 65% / 0.3), hsl(270 100% 65% / 0.05));
+  box-shadow: 0 4px 20px hsl(270 100% 65% / 0.2);
+  border: 1px solid hsl(270 100% 65% / 0.1);
 }
 
 /* ===== Toonflow Logo Styles ===== */

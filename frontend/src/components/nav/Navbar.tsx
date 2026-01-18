@@ -44,9 +44,9 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="logo-container hover:opacity-90 transition-opacity">
-            <span className="logo-toonflow">Toonflow</span>
-            <span className="logo-studio">Studio</span>
-            <span className="logo-paint">Paint</span>
+            <span className="logo-toonflow animate-jelly">Toonflow</span>
+            <span className="logo-studio animate-jelly">Studio</span>
+            <span className="logo-paint animate-jelly">Paint</span>
           </Link>
 
           {/* Navigation Links - Desktop */}
