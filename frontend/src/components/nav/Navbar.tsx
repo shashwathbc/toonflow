@@ -39,12 +39,14 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50">
+    <nav className="border-b border-border/50 bg-card/90 backdrop-blur-md sticky top-0 z-50 shadow-lg shadow-black/20">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="font-bold text-xl hover:text-primary transition-colors">
-            Toonflow
+          <Link to="/" className="logo-container hover:opacity-90 transition-opacity">
+            <span className="logo-toonflow">Toonflow</span>
+            <span className="logo-studio">Studio</span>
+            <span className="logo-paint">Paint</span>
           </Link>
 
           {/* Navigation Links - Desktop */}

@@ -76,10 +76,52 @@ const Editor: React.FC = () => {
   };
 
   const handleGeneratePage = async () => {
+    if (!cmdPrompt.trim()) {
+      toast({ title: "Error", description: "Please enter a prompt", variant: "destructive" });
+      return;
+    }
+
     setIsGeneratingPage(true);
-    // Simulate API call
-    setTimeout(() => setIsGeneratingPage(false), 2000);
-    toast({ title: "Generated", description: "Mock generation complete" });
+
+    try {
+      const response = await fetch('http://localhost:5050/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterPrompt: cmdPrompt,
+          characterName: sceneName || undefined,
+          style: style,
+          width: aspect === '16:9' ? 1280 : aspect === '1:1' ? 1024 : 768,
+          height: aspect === '16:9' ? 720 : aspect === '1:1' ? 1024 : 1024,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Generation failed');
+      }
+
+      const data = await response.json();
+
+      if (data.imageUrl) {
+        // Store the generated image in the editor store for the target page
+        const { setPageImage } = useEditorStore.getState();
+        setPageImage(targetPage, data.imageUrl);
+
+        toast({ title: "Success!", description: `Panel generated for page ${targetPage}` });
+      } else {
+        throw new Error('No image returned from API');
+      }
+    } catch (error: any) {
+      console.error('Generation error:', error);
+      toast({
+        title: "Generation Failed",
+        description: error.message || 'Something went wrong',
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingPage(false);
+    }
   };
 
   return (
