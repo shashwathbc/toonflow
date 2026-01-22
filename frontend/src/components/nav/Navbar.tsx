@@ -8,11 +8,13 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { User, LogOut, Menu } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
+import { useScrollDetection } from "@/hooks/useScrollDetection";
 
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const isScrolled = useScrollDetection(50);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -39,7 +41,19 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="border-b border-border/50 bg-card/90 backdrop-blur-md sticky top-0 z-50 shadow-lg shadow-black/20">
+    <nav
+      className={`
+        fixed top-0 left-0 right-0 z-50
+        transition-all duration-500 ease-in-out
+        ${isScrolled
+          ? 'bg-black/15 backdrop-blur-lg border-b border-white/10'
+          : 'bg-transparent backdrop-blur-md border-b border-white/5'
+        }
+      `}
+      style={{
+        backdropFilter: isScrolled ? 'blur(16px)' : 'blur(10px)',
+      }}
+    >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -53,25 +67,61 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-6">
             <Link
               to="/"
-              className={`transition-colors ${isActive('/') ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`
+                transition-all duration-300 ease-in-out
+                text-white/90 hover:text-white
+                ${isActive('/')
+                  ? 'px-4 py-2 rounded-lg border-2 border-white/60 bg-white/10 backdrop-blur-sm shadow-[0_0_20px_rgba(255,255,255,0.4)] font-medium text-white'
+                  : 'hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
+                }
+                relative
+                ${!isActive('/') ? 'after:absolute after:bottom-[-4px] after:left-0 after:right-0 after:h-[2px] after:bg-white/0 after:transition-all after:duration-300 hover:after:bg-white/40' : ''}
+              `}
             >
               Home
             </Link>
             <Link
               to="/about"
-              className={`transition-colors ${isActive('/about') ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`
+                transition-all duration-300 ease-in-out
+                text-white/90 hover:text-white
+                ${isActive('/about')
+                  ? 'px-4 py-2 rounded-lg border-2 border-white/60 bg-white/10 backdrop-blur-sm shadow-[0_0_20px_rgba(255,255,255,0.4)] font-medium text-white'
+                  : 'hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
+                }
+                relative
+                ${!isActive('/about') ? 'after:absolute after:bottom-[-4px] after:left-0 after:right-0 after:h-[2px] after:bg-white/0 after:transition-all after:duration-300 hover:after:bg-white/40' : ''}
+              `}
             >
               About
             </Link>
             <Link
               to="/projects"
-              className={`transition-colors ${isActive('/projects') ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`
+                transition-all duration-300 ease-in-out
+                text-white/90 hover:text-white
+                ${isActive('/projects')
+                  ? 'px-4 py-2 rounded-lg border-2 border-white/60 bg-white/10 backdrop-blur-sm shadow-[0_0_20px_rgba(255,255,255,0.4)] font-medium text-white'
+                  : 'hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
+                }
+                relative
+                ${!isActive('/projects') ? 'after:absolute after:bottom-[-4px] after:left-0 after:right-0 after:h-[2px] after:bg-white/0 after:transition-all after:duration-300 hover:after:bg-white/40' : ''}
+              `}
             >
               Projects
             </Link>
             <Link
               to="/contact"
-              className={`transition-colors ${isActive('/contact') ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`
+                transition-all duration-300 ease-in-out
+                text-white/90 hover:text-white
+                ${isActive('/contact')
+                  ? 'px-4 py-2 rounded-lg border-2 border-white/60 bg-white/10 backdrop-blur-sm shadow-[0_0_20px_rgba(255,255,255,0.4)] font-medium text-white'
+                  : 'hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
+                }
+                relative
+                ${!isActive('/contact') ? 'after:absolute after:bottom-[-4px] after:left-0 after:right-0 after:h-[2px] after:bg-white/0 after:transition-all after:duration-300 hover:after:bg-white/40' : ''}
+              `}
             >
               Contact
             </Link>
@@ -89,25 +139,45 @@ const Navbar = () => {
                 <div className="flex flex-col gap-4 mt-6">
                   <Link
                     to="/"
-                    className={`transition-colors ${isActive('/') ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`
+                      transition-all duration-300 ease-in-out
+                      text-white/90 hover:text-white
+                      ${isActive('/') ? 'font-medium text-white' : ''}
+                      hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]
+                    `}
                   >
                     Home
                   </Link>
                   <Link
                     to="/about"
-                    className={`transition-colors ${isActive('/about') ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`
+                      transition-all duration-300 ease-in-out
+                      text-white/90 hover:text-white
+                      ${isActive('/about') ? 'font-medium text-white' : ''}
+                      hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]
+                    `}
                   >
                     About
                   </Link>
                   <Link
                     to="/projects"
-                    className={`transition-colors ${isActive('/projects') ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`
+                      transition-all duration-300 ease-in-out
+                      text-white/90 hover:text-white
+                      ${isActive('/projects') ? 'font-medium text-white' : ''}
+                      hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]
+                    `}
                   >
                     Projects
                   </Link>
                   <Link
                     to="/contact"
-                    className={`transition-colors ${isActive('/contact') ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`
+                      transition-all duration-300 ease-in-out
+                      text-white/90 hover:text-white
+                      ${isActive('/contact') ? 'font-medium text-white' : ''}
+                      hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]
+                    `}
                   >
                     Contact
                   </Link>

@@ -56,67 +56,67 @@ All colors MUST be HSL.
   }
 
   .dark {
-    /* ===== TOONFLOW STUDIO PAINT - MANGA STUDIO THEME ===== */
+    /* ===== TOONFLOW STUDIO PAINT - BLACK & WHITE INK THEME ===== */
 
-    /* Primary background: near-black #0B0B0E */
-    --background: 240 15% 4%;
+    /* Pure black background - matching logo */
+    --background: 0 0% 0%;
     --foreground: 0 0% 100%;
 
-    /* Secondary panels: charcoal gray #14141A */
-    --card: 240 18% 9%;
+    /* Cards: Very dark for depth */
+    --card: 0 0% 5%;
     --card-foreground: 0 0% 100%;
 
-    /* Popover with glass effect */
-    --popover: 240 20% 7%;
+    /* Popover: Near black */
+    --popover: 0 0% 3%;
     --popover-foreground: 0 0% 100%;
 
-    /* Electric violet primary accent */
-    --primary: 270 100% 65%;
-    --primary-foreground: 0 0% 100%;
+    /* Primary: Pure white for maximum contrast */
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
 
-    /* Charcoal secondary */
-    --secondary: 240 15% 12%;
+    /* Secondary: Dark gray */
+    --secondary: 0 0% 10%;
     --secondary-foreground: 0 0% 100%;
 
-    /* Muted: soft gray #A1A1AA */
-    --muted: 240 12% 14%;
-    --muted-foreground: 240 5% 65%;
+    /* Muted: Medium gray for subtle elements */
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 70%;
 
-    /* Cyan accent for highlights */
-    --accent: 185 100% 50%;
-    --accent-foreground: 240 15% 4%;
+    /* Accent: Off-white for highlights */
+    --accent: 0 0% 95%;
+    --accent-foreground: 0 0% 0%;
 
-    /* Muted red for errors */
-    --destructive: 0 65% 50%;
+    /* Destructive: Keep red for errors but desaturated */
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Success: soft neon green */
-    --success: 145 80% 50%;
-    --success-foreground: 240 15% 4%;
+    /* Success: Light gray instead of green */
+    --success: 0 0% 85%;
+    --success-foreground: 0 0% 0%;
 
-    /* Minimal borders - rely on contrast */
-    --border: 240 10% 15%;
-    --input: 240 15% 10%;
-    --ring: 270 100% 65%;
+    /* Borders: Dark gray for subtle separation */
+    --border: 0 0% 20%;
+    --input: 0 0% 10%;
+    --ring: 0 0% 100%;
 
-    /* Sidebar with premium dark feel */
-    --sidebar-background: 240 18% 5%;
+    /* Sidebar: Pure black theme */
+    --sidebar-background: 0 0% 0%;
     --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 270 100% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 15% 12%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 10%;
     --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 240 10% 12%;
-    --sidebar-ring: 270 100% 65%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 0 0% 100%;
 
-    /* Canvas colors - electric violet/cyan */
-    --canvas-active: 270 100% 65%;
-    --canvas-glow: 270 100% 75%;
-    --canvas-border: 240 10% 18%;
+    /* Canvas: White active elements on black */
+    --canvas-active: 0 0% 100%;
+    --canvas-glow: 0 0% 90%;
+    --canvas-border: 0 0% 20%;
 
-    /* Toolbar glow effect */
-    --toolbar-glow: 270 100% 65%;
-    --hover-glow: 185 100% 50%;
+    /* Toolbar: White glow effects */
+    --toolbar-glow: 0 0% 100%;
+    --hover-glow: 0 0% 90%;
   }
 }
 
@@ -145,8 +145,8 @@ All colors MUST be HSL.
 
 .dark .toolbar-btn:hover,
 .dark button[class*="ghost"]:hover {
-  box-shadow: 0 0 12px hsl(270 100% 65% / 0.3),
-    0 0 24px hsl(270 100% 65% / 0.1);
+  box-shadow: 0 0 12px hsl(0 0% 100% / 0.2),
+    0 0 24px hsl(0 0% 100% / 0.1);
 }
 
 /* Ink spreading hover effect */
@@ -176,9 +176,9 @@ All colors MUST be HSL.
   height: 2px;
   background: linear-gradient(90deg,
       transparent 0%,
-      hsl(270 100% 65% / 0.3) 20%,
-      hsl(270 100% 65% / 0.5) 50%,
-      hsl(270 100% 65% / 0.3) 80%,
+      hsl(0 0% 100% / 0.3) 20%,
+      hsl(0 0% 100% / 0.5) 50%,
+      hsl(0 0% 100% / 0.3) 80%,
       transparent 100%);
   border: none;
   margin: 1rem 0;
@@ -189,13 +189,13 @@ All colors MUST be HSL.
 
   0%,
   100% {
-    box-shadow: 0 0 0 2px hsl(270 100% 65% / 0.3),
-      0 0 20px hsl(270 100% 75% / 0.15);
+    box-shadow: 0 0 0 2px hsl(0 0% 100% / 0.3),
+      0 0 20px hsl(0 0% 100% / 0.15);
   }
 
   50% {
-    box-shadow: 0 0 0 3px hsl(270 100% 65% / 0.5),
-      0 0 30px hsl(270 100% 75% / 0.25);
+    box-shadow: 0 0 0 3px hsl(0 0% 100% / 0.5),
+      0 0 30px hsl(0 0% 100% / 0.25);
   }
 }
 
@@ -287,7 +287,7 @@ All colors MUST be HSL.
 .animate-shimmer {
   background: linear-gradient(90deg,
       transparent 0%,
-      hsl(270 100% 65% / 0.1) 50%,
+      hsl(0 0% 100% / 0.1) 50%,
       transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 2s linear infinite;
@@ -335,9 +335,9 @@ All colors MUST be HSL.
 }
 
 .dark .bubble {
-  background: radial-gradient(circle at 30% 30%, hsl(270 100% 65% / 0.3), hsl(270 100% 65% / 0.05));
-  box-shadow: 0 4px 20px hsl(270 100% 65% / 0.2);
-  border: 1px solid hsl(270 100% 65% / 0.1);
+  background: radial-gradient(circle at 30% 30%, hsl(0 0% 100% / 0.3), hsl(0 0% 100% / 0.05));
+  box-shadow: 0 4px 20px hsl(0 0% 100% / 0.2);
+  border: 1px solid hsl(0 0% 100% / 0.1);
 }
 
 /* ===== Toonflow Logo Styles ===== */
@@ -580,4 +580,25 @@ h1 {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Big Scrollbar for Canvas Area */
+.canvas-scrollbar::-webkit-scrollbar {
+  width: 20px;
+  height: 20px;
+}
+
+.canvas-scrollbar::-webkit-scrollbar-track {
+  background: hsl(240 15% 8%);
+}
+
+.canvas-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(240 10% 30%);
+  border: 4px solid hsl(240 15% 8%);
+  /* Padding effect */
+  border-radius: 99px;
+}
+
+.canvas-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(270 100% 65%);
 }

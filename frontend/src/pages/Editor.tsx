@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import WorkspaceLayout from '@/features/layout/WorkspaceLayout';
+import { useEditorShortcuts } from '@/hooks/useEditorShortcuts';
+import ResizableLayout from '@/components/editor/layout/ResizableLayout';
+import ToolSidebar from '@/components/editor/tools/ToolSidebar';
 import WebtoonCanvas from '@/features/canvas/WebtoonCanvas';
 import AISidebar from '@/features/ai-sidebar/AISidebar';
 import RightSidebarContainer from '@/components/editor/RightSidebarContainer';
@@ -26,12 +28,15 @@ async function fetchCharacters(): Promise<ToonaryCharacter[]> {
 }
 
 const Editor: React.FC = () => {
+  useEditorShortcuts(); // Enable global shortcuts
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const chapterNumber = searchParams.get('chapter');
 
   // Store sync
   const {
-    pages, color, opacity, brushSize
+    pages, color, opacity, brushSize, setPages, setPageImage
     // Removed: hardness, stabilize, setHardness, setStabilize (deprecated in favor of sub-tool settings)
   } = useEditorStore();
 
@@ -48,6 +53,25 @@ const Editor: React.FC = () => {
   const [aspect, setAspect] = useState<"1:1" | "3:4" | "16:9">("3:4");
   const [isGeneratingPage, setIsGeneratingPage] = useState(false);
   const [targetPage, setTargetPage] = useState<number>(1);
+
+  // Load intro images if this is the intro chapter (chapter 1)
+  useEffect(() => {
+    // Intro chapter is chapter 1 (the first chapter before Chapter 1: The Exile Begins)
+    const isIntroChapter = chapterNumber === '1';
+
+    if (isIntroChapter) {
+      // Create 12 numbered pages for intro
+      const introPages = Array.from({ length: 12 }, (_, i) => i + 1);
+      setPages(introPages);
+
+      // Load each intro image
+      introPages.forEach((pageNum) => {
+        const imageNum = String(pageNum).padStart(2, '0');
+        const imageUrl = `/intro/${imageNum}.jpg`;
+        setPageImage(pageNum, imageUrl);
+      });
+    }
+  }, [chapterNumber, setPages, setPageImage]);
 
   // Load characters
   useEffect(() => {
@@ -125,8 +149,9 @@ const Editor: React.FC = () => {
   };
 
   return (
-    <WorkspaceLayout
-      aiSidebar={
+    <ResizableLayout
+      toolSidebar={<ToolSidebar />}
+      leftPanel={
         <AISidebar
           // Character Props
           characters={characters}
@@ -152,10 +177,10 @@ const Editor: React.FC = () => {
           handleGeneratePage={handleGeneratePage}
         />
       }
-      rightSidebar={<RightSidebarContainer />}
+      rightPanel={<RightSidebarContainer />}
     >
       <WebtoonCanvas />
-    </WorkspaceLayout>
+    </ResizableLayout>
   );
 };
 

@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Save, Trash2 } from "lucide-react";
+import { Loader2, Save, Trash2, Sparkles } from "lucide-react";
 
 export interface ToonaryCharacter {
     id: string;
@@ -73,108 +73,108 @@ export function CharacterBuilder({
     };
 
     return (
-        <div className="flex flex-col h-full bg-background border-l w-80">
-            <div className="p-4 border-b">
-                <h2 className="font-semibold text-lg">Character Builder</h2>
-                <p className="text-xs text-muted-foreground">Create consistent characters</p>
-            </div>
-
-            {/* Top Section: Inputs & Preview (Scrollable if content exceeds space, but generally static) */}
-            <div className="p-4 space-y-4 border-b shrink-0">
-                {/* Generator Inputs */}
-                <div className="space-y-3">
-                    <div className="space-y-1">
-                        <Label>Name</Label>
-                        <Input
-                            placeholder="Character Name (e.g. Hero)"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <Label>Appearance Prompt</Label>
-                        <Input
-                            placeholder="e.g. red cape, glowing eyes"
-                            value={prompt}
-                            onChange={e => setPrompt(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <Label>Style</Label>
-                        <Select value={style} onValueChange={setStyle}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="manga_bw">Manga B/W</SelectItem>
-                                <SelectItem value="anime_color">Anime Color</SelectItem>
-                                <SelectItem value="sketch">Sketch</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <Button
-                        className="w-full"
-                        onClick={handleGenerate}
-                        disabled={isGenerating || !prompt}
-                    >
-                        {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Generate Preview
-                    </Button>
+        <div className="flex flex-col h-full space-y-4 animate-in fade-in slide-in-from-right-2 duration-200">
+            {/* Generator Inputs */}
+            <div className="space-y-4">
+                <div className="space-y-2">
+                    <label className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Name</label>
+                    <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full bg-zinc-800 border-zinc-700 rounded-md text-sm p-2 focus:ring-1 focus:ring-blue-500 outline-none text-zinc-200 placeholder:text-zinc-600"
+                        placeholder="e.g. Hero"
+                    />
                 </div>
 
-                {/* Preview Area */}
-                {previewUrl && (
-                    <div className="border rounded-lg p-2 bg-muted/50">
-                        <Label className="mb-2 block">Preview</Label>
-                        <div className="relative aspect-square w-full bg-white mb-2 rounded border overflow-hidden">
-                            <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
-                        </div>
-                        <Button onClick={handleSaveClick} disabled={isSaving || !name} size="sm" className="w-full">
-                            {isSaving ? "Saving..." : "Save Character"}
-                        </Button>
-                    </div>
-                )}
+                <div className="space-y-2">
+                    <label className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Appearance Prompt</label>
+                    <textarea
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        className="w-full bg-zinc-800 border-zinc-700 rounded-md text-sm p-2 min-h-[80px] resize-none focus:ring-1 focus:ring-blue-500 outline-none text-zinc-200 placeholder:text-zinc-600"
+                        placeholder="e.g. red cape, glowing eyes"
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Style</label>
+                    <select
+                        value={style}
+                        onChange={(e) => setStyle(e.target.value)}
+                        className="w-full bg-zinc-800 border-zinc-700 rounded-md text-sm p-2 focus:ring-1 focus:ring-blue-500 outline-none text-zinc-200"
+                    >
+                        <option value="manga_bw">Manga B/W</option>
+                        <option value="anime_color">Anime Color</option>
+                        <option value="sketch">Sketch</option>
+                    </select>
+                </div>
+
+                <Button
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !prompt}
+                >
+                    {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Generate Preview
+                </Button>
             </div>
 
-            {/* Bottom Section: Saved Characters (Independent Scroll) */}
-            <div className="min-h-0 bg-zinc-900/30">
-                <div className="space-y-4">
-                    <h3 className="font-medium sticky top-0 bg-background/95 backdrop-blur py-2 z-10 border-b">
-                        Saved Characters
-                    </h3>
+            {/* Preview & Save */}
+            {previewUrl && (
+                <div className="mt-4 border-t border-zinc-800 pt-4 space-y-3">
+                    <p className="text-xs text-zinc-500 font-semibold uppercase">Preview</p>
+                    <div className="relative aspect-square w-full bg-black/40 rounded-lg border border-zinc-700 overflow-hidden">
+                        <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+                    </div>
+                    <Button
+                        onClick={handleSaveClick}
+                        disabled={isSaving || !name}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    >
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Save Character
+                    </Button>
+                </div>
+            )}
 
+            {/* Saved Characters List */}
+            <div className="mt-6 border-t border-zinc-800 pt-4">
+                <p className="text-xs text-zinc-500 mb-3 font-semibold uppercase">Saved Characters</p>
+                <ScrollArea className="h-[200px] w-full pr-2">
                     <div className="grid grid-cols-2 gap-2">
                         {characters.map(char => (
-                            <Card
+                            <div
                                 key={char.id}
-                                className={`cursor-pointer transition-colors hover:bg-muted ${selectedCharacterId === char.id ? "ring-2 ring-primary" : ""}`}
+                                className={`
+                                    relative group cursor-pointer rounded-lg border border-zinc-800 overflow-hidden bg-zinc-900/50 hover:border-blue-500/50 transition-all
+                                    ${selectedCharacterId === char.id ? "ring-1 ring-blue-500 border-blue-500" : ""}
+                                `}
                                 onClick={() => onSelectCharacter(char.id)}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, char)}
                             >
-                                <CardContent className="p-2 flex flex-col items-center gap-2">
-                                    <div className="w-full aspect-square bg-white rounded overflow-hidden border">
-                                        <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover" />
-                                    </div>
-                                    <div className="w-full flex justify-between items-center">
-                                        <span className="text-xs font-medium truncate max-w-[80px]" title={char.name}>{char.name}</span>
-                                        <Button variant="ghost" size="icon" className="h-5 w-5 hover:bg-destructive/20 hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(char.id); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                <div className="aspect-square w-full">
+                                    <img src={char.imageUrl} alt={char.name} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" />
+                                </div>
+                                <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-[2px] p-2 flex justify-between items-center">
+                                    <span className="text-[10px] text-zinc-200 font-medium truncate max-w-[60px]">{char.name}</span>
+                                    <button
+                                        className="text-zinc-400 hover:text-red-400"
+                                        onClick={(e) => { e.stopPropagation(); onDelete(char.id); }}
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                </div>
+                            </div>
                         ))}
                     </div>
-                    {characters.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground opacity-50">
-                            <p className="text-xs text-center">No characters saved yet.</p>
-                        </div>
-                    )}
-                </div>
+                </ScrollArea>
+                {characters.length === 0 && (
+                    <div className="text-center py-8 text-zinc-600 text-xs italic">
+                        No characters saved
+                    </div>
+                )}
             </div>
         </div>
     );

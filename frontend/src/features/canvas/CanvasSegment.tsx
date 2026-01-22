@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import FabricCanvas from '@/components/editor/FabricCanvas';
 import { useEditorStore } from '@/store/editorStore';
-import { Canvas, FabricImage, PencilBrush, CircleBrush, SprayBrush, Group, Textbox, Line } from 'fabric';
+import { Canvas, FabricImage, PencilBrush, CircleBrush, SprayBrush, Group, Textbox, Line, Rect, Ellipse } from 'fabric';
 import { createSmartBubble, BubbleType, autoFitText } from './utils/bubbleFactory';
 import { CanvasBrushManager } from './utils/BrushManager';
 
@@ -16,7 +16,9 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         activePage, setActivePage, pageImages, setPageImage,
         activeTool, activeCategory, activeBrushId, getStartBrushConfig,
         color, brushSize, opacity,
-        isEditMode, undoTrigger, redoTrigger
+        isEditMode, undoTrigger, redoTrigger,
+        // Layer System
+        layers, activeLayerId
     } = useEditorStore();
 
     const fabricRef = useRef<Canvas | null>(null);
@@ -28,12 +30,17 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     const colorRef = useRef(color);
     const brushSizeRef = useRef(brushSize);
     const opacityRef = useRef(opacity);
+    // Layer Refs
+    const activeLayerIdRef = useRef(activeLayerId);
+    const layersRef = useRef(layers);
 
     useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
     useEffect(() => { activeCategoryRef.current = activeCategory; }, [activeCategory]);
     useEffect(() => { colorRef.current = color; }, [color]);
     useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
     useEffect(() => { opacityRef.current = opacity; }, [opacity]);
+    useEffect(() => { activeLayerIdRef.current = activeLayerId; }, [activeLayerId]);
+    useEffect(() => { layersRef.current = layers; }, [layers]);
 
     // --- LOAD AI GENERATED IMAGE INTO CANVAS ---
     useEffect(() => {
@@ -58,6 +65,11 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
                 const scaleY = canvasHeight / (img.height || 1);
                 const scale = Math.min(scaleX, scaleY);
 
+                // Assign to 'Layer 0' or specific Image Layer if exists, else generic
+                // For now, let's look for a layer of type 'image'
+                const imageLayer = layersRef.current.find(l => l.type === 'image') || layersRef.current[0];
+                const targetLayerId = imageLayer ? imageLayer.id : 'default';
+
                 img.set({
                     scaleX: scale,
                     scaleY: scale,
@@ -65,6 +77,8 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
                     top: (canvasHeight - (img.height || 0) * scale) / 2,
                     selectable: true,
                     evented: true,
+                    // @ts-ignore
+                    data: { ...img.data, layerId: targetLayerId }
                 });
 
                 // Add to canvas
@@ -81,7 +95,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
             .catch((err) => {
                 console.error('[CanvasSegment] Failed to load AI image:', err);
             });
-    }, [pageImages[pageId], pageId]);
+    }, [pageImages[pageId], pageId, layers]); // Added layers dep just in case, though usually stable enough
 
     // History Stacks
     const history = useRef<string[]>([]);
@@ -146,19 +160,103 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
 
     const handleDrop = async (e: React.DragEvent) => {
         e.preventDefault();
+        e.stopPropagation();
+
         const canvas = fabricRef.current;
         if (!canvas || !isEditMode) return;
 
-        const assetType = e.dataTransfer.getData('assetType');
-        const bubbleType = e.dataTransfer.getData('bubbleType');
+        // Prevent multiple drops if event fires rapidly (though unlikely with stopPropagation)
+        if ((canvas as any).isProcessingDrop) return;
+        (canvas as any).isProcessingDrop = true;
 
-        if (assetType === 'bubble' && bubbleType) {
+        try {
+            let assetType = e.dataTransfer.getData('assetType');
+            let bubbleType = e.dataTransfer.getData('bubbleType');
+
+            // Fallback: Try parsing JSON if direct keys failed
+            if (!assetType) {
+                try {
+                    const jsonStr = e.dataTransfer.getData('application/json');
+                    if (jsonStr) {
+                        const parsed = JSON.parse(jsonStr);
+                        if (parsed.type === 'bubble') {
+                            assetType = 'bubble';
+                            bubbleType = parsed.bubbleType;
+                        }
+                    }
+                } catch (err) { /* ignore */ }
+            }
+
+            const charData = e.dataTransfer.getData('application/toonary-character');
+            const draggedUrl = e.dataTransfer.getData('text/plain');
+
             const pointer = canvas.getScenePoint(e.nativeEvent);
-            const bubbleGroup = createSmartBubble(canvas, bubbleType as BubbleType, pointer.x, pointer.y);
-            canvas.add(bubbleGroup);
-            canvas.setActiveObject(bubbleGroup);
-            saveHistory(canvas);
-            canvas.requestRenderAll();
+
+            // 1. SMART BUBBLES
+            if (assetType === 'bubble' && bubbleType) {
+                const bubbleGroup = createSmartBubble(canvas, bubbleType as BubbleType, pointer.x, pointer.y);
+                // @ts-ignore
+                bubbleGroup.set('data', { ...bubbleGroup.data, layerId: activeLayerIdRef.current });
+                canvas.add(bubbleGroup);
+                canvas.setActiveObject(bubbleGroup);
+                saveHistory(canvas);
+                canvas.requestRenderAll();
+                return;
+            }
+
+            // 2. CHARACTER / IMAGE ASSETS
+            let imageUrlToLoad = '';
+
+            // Strict Priority: Custom Image -> Character -> Default URL
+            if (assetType === 'image') {
+                imageUrlToLoad = e.dataTransfer.getData('imageUrl');
+            } else if (charData) {
+                try {
+                    const char = JSON.parse(charData);
+                    imageUrlToLoad = char.imageUrl;
+                } catch (err) { }
+            } else if (draggedUrl && (draggedUrl.startsWith('http') || draggedUrl.startsWith('data:'))) {
+                // Check if it's not a JSON string (sometimes text/plain contains JSON reference)
+                if (!draggedUrl.trim().startsWith('{')) {
+                    imageUrlToLoad = draggedUrl;
+                }
+            }
+
+            if (imageUrlToLoad) {
+                // Check if this image was JUST added (naive debounce)
+                // @ts-ignore
+                if (canvas.lastDroppedUrl === imageUrlToLoad && (Date.now() - (canvas.lastDroppedTime || 0) < 500)) {
+                    console.log("Duplicate drop prevented");
+                    return;
+                }
+
+                // @ts-ignore
+                canvas.lastDroppedUrl = imageUrlToLoad;
+                // @ts-ignore
+                canvas.lastDroppedTime = Date.now();
+
+                const img = await FabricImage.fromURL(imageUrlToLoad, { crossOrigin: 'anonymous' });
+                if (!img || !canvas) return;
+
+                // Scale down if huge
+                if (img.width && img.width > 500) {
+                    img.scaleToWidth(400);
+                }
+
+                img.set({
+                    left: pointer.x - (img.getScaledWidth() / 2),
+                    top: pointer.y - (img.getScaledHeight() / 2),
+                    // @ts-ignore
+                    data: { layerId: activeLayerIdRef.current }
+                });
+
+                canvas.add(img);
+                canvas.setActiveObject(img);
+                saveHistory(canvas);
+                canvas.requestRenderAll();
+            }
+        } finally {
+            (canvas as any).isProcessingDrop = false;
         }
     };
 
@@ -172,6 +270,12 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     const updateInteraction = (canvas: Canvas) => {
         if (!canvas) return;
 
+        // Current Layer State
+        const currentLayers = layersRef.current;
+        const currentActiveLayerId = activeLayerIdRef.current;
+        const layerMap = new Map(currentLayers.map(l => [l.id, l]));
+        const activeLayer = layerMap.get(currentActiveLayerId);
+
         // Edit Mode Global Check
         if (!isEditMode) {
             canvas.isDrawingMode = false;
@@ -182,17 +286,34 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
             return;
         }
 
-        // Logic to determine if we should be drawing
-        // If activeTool is a utility (Select, Hand, etc), we are NOT drawing.
-        // If activeTool is a Category ID (pen, pencil, etc) OR 'brush' legacy, we ARE drawing.
+        // --- LAYER VISIBILITY & LOCKING LOGIC ---
+        canvas.forEachObject(obj => {
+            // @ts-ignore
+            const objLayerId = obj.data?.layerId;
+            const layer = layerMap.get(objLayerId);
+
+            if (layer) {
+                obj.visible = layer.visible;
+                const isLayerEditable = !layer.locked && (layer.id === currentActiveLayerId) && layer.visible;
+                obj.selectable = isLayerEditable;
+                obj.evented = isLayerEditable;
+            } else {
+                obj.selectable = false;
+                obj.evented = false;
+            }
+        });
+
+        // DRAWING LOGIC
         const NON_DRAWING_TOOLS = ['select', 'pan', 'text', 'crop', 'fill', 'picker', 'shape-rect', 'shape-ellipse', 'line', 'panel-frame', 'wand'];
         const shouldDraw = !NON_DRAWING_TOOLS.includes(activeTool);
 
-        if (shouldDraw) {
-            canvas.selection = false;
-            canvas.allowTouchScrolling = false; // Block scrolling while drawing
+        // Only allow drawing if active layer is VALID, VISIBLE, and UNLOCKED
+        const canDrawOnActiveLayer = activeLayer && activeLayer.visible && !activeLayer.locked;
 
-            // Force touch-action on DOM elements
+        if (shouldDraw && canDrawOnActiveLayer) {
+            canvas.selection = false;
+            canvas.allowTouchScrolling = false;
+
             if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.touchAction = 'none';
             if (canvas.lowerCanvasEl) canvas.lowerCanvasEl.style.touchAction = 'none';
 
@@ -201,8 +322,6 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
 
             // USE BRUSH MANAGER
             const config = getStartBrushConfig(activeBrushId);
-
-            // Runtime config with global overrides
             const runtimeConfig = {
                 ...config,
                 color: activeTool === 'eraser' ? 'white' : color,
@@ -212,27 +331,34 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
 
             CanvasBrushManager.configureBrush(canvas, runtimeConfig as any);
 
-            if (canvas.freeDrawingBrush) {
-                // Double check color logic for eraser
-                if (activeTool === 'eraser') {
-                    canvas.freeDrawingBrush.color = 'white';
-                }
-                console.log(`[CanvasSegment] Brush Configured: ID=${activeBrushId}, Color=${canvas.freeDrawingBrush.color}`);
-            }
-
         } else {
-            // Select Mode
-            canvas.isDrawingMode = false;
-            canvas.selection = true;
-            canvas.allowTouchScrolling = true; // Enable native scrolling behavior on touch
+            // Non-Drawing Mode OR Layer is Locked/Hidden
+            const isShapeOrText = ['text', 'shape-rect', 'shape-ellipse', 'line', 'fill'].includes(activeTool);
 
-            // Force touch-action on DOM elements to allow panning
+            canvas.isDrawingMode = false;
+
+            // If layer is locked/hidden, disable selection too unless we are just selecting? 
+            // Actually, keep selection enabled for 'select' tool if broadly allowed, but objects are locked individually above.
+            canvas.selection = !isShapeOrText && activeTool === 'select';
+
+            canvas.allowTouchScrolling = true;
             if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.touchAction = 'pan-y';
             if (canvas.lowerCanvasEl) canvas.lowerCanvasEl.style.touchAction = 'pan-y';
 
-            canvas.forEachObject(o => { o.selectable = true; o.evented = true; });
-            canvas.defaultCursor = 'default';
-            canvas.hoverCursor = 'move';
+            // Cursor Logic
+            if (!canDrawOnActiveLayer && shouldDraw) {
+                canvas.defaultCursor = 'not-allowed'; // Show forbidden cursor if trying to draw on locked layer
+            } else if (activeTool === 'text') {
+                canvas.defaultCursor = 'text';
+            } else if (activeTool === 'fill') {
+                canvas.defaultCursor = 'cell';
+            } else if (activeTool.startsWith('shape-')) {
+                canvas.defaultCursor = 'crosshair';
+            } else {
+                canvas.defaultCursor = 'default';
+            }
+
+            canvas.hoverCursor = activeTool === 'select' ? 'move' : canvas.defaultCursor;
         }
     };
 
@@ -246,46 +372,184 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         // Initial Config
         updateInteraction(canvas);
 
+        // --- SHAPE & TEXT & FILL EVENT HANDLERS ---
+        let isDrawingShape = false;
+        let shapeOrigin = { x: 0, y: 0 };
+        let activeShape: any = null;
+
+        canvas.on('mouse:down', (opt) => {
+            const tool = activeToolRef.current;
+            if (!tool || tool === 'select' || tool === 'pan' || !isEditMode) return;
+
+            const pointer = canvas.getScenePoint(opt.e);
+            const layerId = activeLayerIdRef.current;
+
+            // 1. TEXT TOOL
+            if (tool === 'text') {
+                if (!opt.target) { // Only create if not clicking on existing object
+                    const text = new Textbox('Type here', {
+                        left: pointer.x,
+                        top: pointer.y,
+                        fontSize: 20,
+                        fontFamily: 'sans-serif',
+                        fill: colorRef.current,
+                        width: 150
+                    });
+                    // @ts-ignore
+                    text.set('data', { layerId });
+                    canvas.add(text);
+                    canvas.setActiveObject(text);
+                    text.enterEditing();
+                    saveHistory(canvas);
+                }
+                return;
+            }
+
+            // 2. FILL TOOL (Vector Fill)
+            if (tool === 'fill') {
+                if (opt.target) {
+                    // Fill the target object
+                    // Check if it's a type we can fill (rect, circle, path, etc)
+                    // Not grouping or image?
+                    const t = opt.target;
+                    // @ts-ignore
+                    if (t.set && t.type !== 'image' && t.type !== 'group') {
+                        t.set('fill', colorRef.current);
+                        canvas.requestRenderAll();
+                        saveHistory(canvas);
+                    } else if (t.type === 'group') {
+                        // Optional: Fill all children? Or just return.
+                        // For Smart Bubbles, we might want to fill the shape.
+                        // @ts-ignore
+                        if (t.data?.type === 'smartBubble') {
+                            // Find the shape (index 0 usually, or search)
+                            // @ts-ignore
+                            const shape = (t as Group).getObjects().find(o => o.type !== 'textbox');
+                            if (shape) {
+                                shape.set('fill', colorRef.current);
+                                canvas.requestRenderAll();
+                                saveHistory(canvas);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+
+            // 3. SHAPE TOOLS (Rect, Ellipse, Line)
+            if (tool === 'shape-rect' || tool === 'shape-ellipse' || tool === 'line') {
+                isDrawingShape = true;
+                shapeOrigin = { x: pointer.x, y: pointer.y };
+
+                const commonProps = {
+                    left: pointer.x,
+                    top: pointer.y,
+                    originX: 'left',
+                    originY: 'top',
+                    width: 0,
+                    height: 0,
+                    fill: tool === 'line' ? undefined : colorRef.current,
+                    stroke: tool === 'line' ? colorRef.current : 'black',
+                    strokeWidth: tool === 'line' ? brushSizeRef.current : 0,
+                    selectable: true,
+                    // @ts-ignore
+                    data: { layerId }
+                };
+
+                if (tool === 'shape-rect') {
+                    activeShape = new Rect(commonProps as any);
+                } else if (tool === 'shape-ellipse') {
+                    activeShape = new Ellipse({ ...commonProps, rx: 0, ry: 0 } as any);
+                } else if (tool === 'line') {
+                    // Line needs explicit coordinates [x1, y1, x2, y2]
+                    activeShape = new Line([pointer.x, pointer.y, pointer.x, pointer.y], {
+                        ...commonProps,
+                        strokeLineCap: 'round',
+                        strokeLineJoin: 'round',
+                        fill: undefined // Lines don't have fill usually
+                    } as any);
+                }
+
+                canvas.add(activeShape);
+            }
+        });
+
+        canvas.on('mouse:move', (opt) => {
+            if (!isDrawingShape || !activeShape) return;
+
+            const pointer = canvas.getScenePoint(opt.e);
+
+            if (activeToolRef.current === 'shape-rect') {
+                const w = Math.abs(pointer.x - shapeOrigin.x);
+                const h = Math.abs(pointer.y - shapeOrigin.y);
+
+                activeShape.set({
+                    width: w,
+                    height: h,
+                    // Handle negative direction
+                    left: Math.min(pointer.x, shapeOrigin.x),
+                    top: Math.min(pointer.y, shapeOrigin.y)
+                });
+            } else if (activeToolRef.current === 'shape-ellipse') {
+                const rx = Math.abs(pointer.x - shapeOrigin.x) / 2;
+                const ry = Math.abs(pointer.y - shapeOrigin.y) / 2;
+
+                activeShape.set({
+                    rx: rx,
+                    ry: ry,
+                    left: Math.min(pointer.x, shapeOrigin.x),
+                    top: Math.min(pointer.y, shapeOrigin.y),
+                    originX: 'left',
+                    originY: 'top',
+                    width: rx * 2,
+                    height: ry * 2
+                });
+            } else if (activeToolRef.current === 'line') {
+                // Update line end point
+                activeShape.set({
+                    x2: pointer.x,
+                    y2: pointer.y
+                });
+                // Force re-calc
+                activeShape.setCoords();
+            }
+
+            canvas.requestRenderAll();
+        });
+
+        canvas.on('mouse:up', () => {
+            if (isDrawingShape) {
+                isDrawingShape = false;
+                // Finalize shape
+                if (activeShape) {
+                    activeShape.setCoords();
+                    canvas.setActiveObject(activeShape);
+                    saveHistory(canvas);
+                }
+                activeShape = null;
+            }
+        });
+
         // Listeners
         canvas.off('path:created');
         canvas.on('path:created', (e: any) => {
             console.log("Path created. Total Objects:", canvas.getObjects().length);
 
-            // G-PEN STRAIGHT LINE LOGIC
-            // Check category instead of tool ID now
-            if (activeCategoryRef.current === 'pen') {
-                // We might want to restrict straight line logic only if a specific sub-option is on, 
-                // but for now let's keep it for 'pen' category as per previous behavior
-                const path = e.path;
-                if (path && path.path && path.path.length > 1) {
-                    const cmds = path.path;
-                    const startX = cmds[0][1];
-                    const startY = cmds[0][2];
-                    const lastCmd = cmds[cmds.length - 1];
-                    const endX = lastCmd[lastCmd.length - 2];
-                    const endY = lastCmd[lastCmd.length - 1];
+            const path = e.path;
+            if (path) {
+                // Assign to active layer
+                // @ts-ignore
+                path.set('data', { ...path.data, layerId: activeLayerIdRef.current });
 
-                    if (typeof startX === 'number' && typeof endX === 'number') {
-                        // Only convert if it looks like a straight line attempt? 
-                        // For now keeping simple: always convert for 'pen' category if that was the rule.
-                        // Actually, G-Pen usually isn't straight line only. 
-                        // The user asked for "G-Pen Straight Line Correction" specifically in previous task.
-                        // Maybe we should check if activeBrushId is 'g-pen'?
-                        // For now, retaining 'pen' category check to match previous 'activeTool === pen' logic.
-
-                        const line = new Line([startX, startY, endX, endY], {
-                            stroke: colorRef.current,
-                            strokeWidth: brushSizeRef.current,
-                            strokeLineCap: 'round',
-                            strokeLineJoin: 'round',
-                            selectable: false,
-                            evented: false,
-                        });
-                        canvas.remove(path);
-                        canvas.add(line);
-                    }
+                // Immediately respect visibility
+                const currentLayer = layersRef.current.find(l => l.id === activeLayerIdRef.current);
+                if (currentLayer) {
+                    path.visible = currentLayer.visible;
                 }
             }
+
+            // G-PEN LOGIC REMOVED - Drawing is now freehand.
+            // Explicit 'Line' tool handles straight lines.
 
             canvas.requestRenderAll();
             saveHistory(canvas);
@@ -356,7 +620,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     return (
         <div
             className="relative"
-            style={{ width, height, marginBottom: '20px' }}
+            style={{ width, height }}
             onClick={() => setActivePage(pageId)}
             onDrop={handleDrop}
             onDragOver={handleDragOver}

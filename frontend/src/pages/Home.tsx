@@ -6,6 +6,7 @@ import Navbar from "@/components/nav/Navbar";
 import Footer from "@/components/nav/Footer";
 import LivingCanvas from "@/components/home/LivingCanvas";
 import BubbleBackground from "@/components/ui/BubbleBackground";
+import CinematicHero from "@/components/ui/CinematicHero";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -25,8 +26,14 @@ const Home = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Hero Section */}
-      <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
+      {/* Fullscreen Optimized Video Hero */}
+      <CinematicHero
+        videoSrc={["/rec.mp4", "/vid2.mp4", "/vid3.mp4"]}
+        posterSrc="/video-poster.png"
+      />
+
+      {/* Create Manga Faster Section - Below Video */}
+      <section className="relative py-20 bg-background overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/10" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent" />
         <BubbleBackground />

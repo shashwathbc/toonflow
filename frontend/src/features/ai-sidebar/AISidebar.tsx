@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { CharacterBuilder, ToonaryCharacter } from "@/components/editor/CharacterBuilder";
-import { ChevronDown, ChevronRight, Sparkles, User, Image as ImageIcon } from 'lucide-react';
+import { AssetLibrary } from "./AssetLibrary";
+import { ChevronDown, ChevronRight, Sparkles, User, Image as ImageIcon, FolderOpen } from 'lucide-react';
 import { useEditorStore } from '@/store/editorStore';
 
 interface AISidebarProps {
@@ -54,23 +55,32 @@ const AISidebar: React.FC<AISidebarProps> = ({
     isGeneratingPage,
     handleGeneratePage
 }) => {
-    const [activeSection, setActiveSection] = useState<'chars' | 'assistant'>('chars');
+    const [activeSection, setActiveSection] = useState<'chars' | 'assistant' | 'assets'>('chars');
 
     return (
-        <div className="flex flex-col h-full bg-zinc-900 text-zinc-200">
+        <div className="flex flex-col h-full glass-panel text-zinc-200">
             {/* Tab Switcher */}
             <div className="flex border-b border-zinc-800">
                 <button
                     onClick={() => setActiveSection('chars')}
                     className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeSection === 'chars' ? 'text-blue-400 border-b-2 border-blue-400 bg-zinc-800/50' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    title="Characters"
                 >
-                    <User size={14} /> Characters
+                    <User size={16} />
                 </button>
                 <button
                     onClick={() => setActiveSection('assistant')}
                     className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeSection === 'assistant' ? 'text-purple-400 border-b-2 border-purple-400 bg-zinc-800/50' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    title="AI Assistant"
                 >
-                    <Sparkles size={14} /> AI Assist
+                    <Sparkles size={16} />
+                </button>
+                <button
+                    onClick={() => setActiveSection('assets')}
+                    className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeSection === 'assets' ? 'text-emerald-400 border-b-2 border-emerald-400 bg-zinc-800/50' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    title="Assets"
+                >
+                    <FolderOpen size={16} />
                 </button>
             </div>
 
@@ -164,6 +174,12 @@ const AISidebar: React.FC<AISidebarProps> = ({
                         <PreviewSection targetPage={targetPage} />
                     </div>
                 )}
+
+                {/* Assets Section */}
+                {activeSection === 'assets' && (
+                    <AssetLibrary />
+                )}
+
             </div>
         </div>
     );

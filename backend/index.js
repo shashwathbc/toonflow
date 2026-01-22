@@ -118,7 +118,8 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Start server - bind to 0.0.0.0 to allow network access
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
+  console.log(`Network access: http://192.168.1.4:${PORT}`);
 });
