@@ -91,6 +91,38 @@ const WebtoonCanvas: React.FC = () => {
         setIsPanning(false);
     };
 
+    const handleUploadWebtoon = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.onchange = (e: Event) => {
+            const files = (e.target as HTMLInputElement).files;
+            if (files) {
+                // Handle file upload - you can implement the upload logic here
+                console.log('Files to upload:', files);
+                // TODO: Implement upload logic to add images as new pages
+            }
+        };
+        input.click();
+    };
+
+    const handleDownloadPage = () => {
+        // Download all pages as images
+        const link = document.createElement('a');
+        pages.forEach((pageId, index) => {
+            // Get the canvas element for each page
+            const canvasElement = document.querySelector(`canvas[data-page-id="${pageId}"]`) as HTMLCanvasElement;
+            if (canvasElement) {
+                setTimeout(() => {
+                    link.href = canvasElement.toDataURL('image/png');
+                    link.download = `page-${pageId}.png`;
+                    link.click();
+                }, index * 100); // Stagger downloads
+            }
+        });
+    };
+
     return (
         <div
             ref={containerRef}
@@ -119,8 +151,15 @@ const WebtoonCanvas: React.FC = () => {
                         <DraggableCanvasSegment key={pageId} pageId={pageId} />
                     ))}
 
+
                     {/* Footer / Extend Button area */}
-                    <div className="w-full bg-zinc-100 p-4 flex justify-center border-t border-dashed border-zinc-300 text-zinc-500 text-sm hover:bg-zinc-200 cursor-pointer transition-colors">
+                    <div
+                        className="w-full bg-zinc-100 p-4 flex justify-center border-t border-dashed border-zinc-300 text-zinc-500 text-sm hover:bg-zinc-200 cursor-pointer transition-colors"
+                        onClick={() => {
+                            const newPageId = Math.max(...pages, 0) + 1;
+                            setPages([...pages, newPageId]);
+                        }}
+                    >
                         + Add Page / Extend Canvas
                     </div>
                 </Reorder.Group>

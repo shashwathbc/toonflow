@@ -6,7 +6,7 @@ import Navbar from "@/components/nav/Navbar";
 import Footer from "@/components/nav/Footer";
 import LivingCanvas from "@/components/home/LivingCanvas";
 import BubbleBackground from "@/components/ui/BubbleBackground";
-import CinematicHero from "@/components/ui/CinematicHero";
+import VideoBackground from "@/components/ui/VideoBackground";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -26,13 +26,22 @@ const Home = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Fullscreen Optimized Video Hero */}
-      <CinematicHero
-        videoSrc={["/rec.mp4", "/vid2.mp4", "/vid3.mp4"]}
-        posterSrc="/video-poster.png"
-      />
 
-      {/* Create Manga Faster Section - Below Video */}
+      {/* Video Hero Section - Cinematic Background */}
+      <section className="relative bg-black overflow-hidden h-[60vh] md:h-[70vh] lg:h-[80vh]">
+        {/* Video Background - Responsive & Centered */}
+        <div className="absolute inset-0 z-0">
+          <VideoBackground
+            videos={["/vid2.mp4", "/vid3.mp4"]}
+            className="w-full h-full object-cover"
+          />
+          {/* Dark cosmic overlay - soft gradients */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-background" />
+          <div className="absolute inset-0 bg-gradient-to-r from-indigo-950/20 via-transparent to-indigo-950/20" />
+        </div>
+      </section>
+
+      {/* Create Manga Faster Section */}
       <section className="relative py-20 bg-background overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/10" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent" />

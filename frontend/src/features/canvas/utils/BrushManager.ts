@@ -1,4 +1,4 @@
-import { Canvas, PencilBrush, CircleBrush, SprayBrush, PatternBrush, EraserBrush } from 'fabric';
+import { Canvas, PencilBrush, CircleBrush, SprayBrush } from 'fabric';
 import { BrushConfig } from '@/config/brushRegistry';
 
 export class CanvasBrushManager {

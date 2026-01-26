@@ -31,6 +31,13 @@ export const useEditorShortcuts = () => {
                 return;
             }
 
+            // Redo (Ctrl+Y alternative)
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                triggerRedo();
+                return;
+            }
+
             // Save (Mock)
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
                 e.preventDefault();

@@ -74,7 +74,7 @@ const LivingCanvas = () => {
                             subtitle="Auto-palette generation"
                             icon={<Palette className="w-8 h-8 text-pink-400" />}
                             color="pink"
-                            backgroundImage="/assets/showcase/color-harmony.png"
+                            videoSrc="/rec.mp4"
                         />
                     </div>
 
@@ -107,13 +107,14 @@ const LivingCanvas = () => {
     );
 };
 
-const CanvasCard = ({ title, subtitle, icon, color, image, backgroundImage, className }: {
+const CanvasCard = ({ title, subtitle, icon, color, image, backgroundImage, videoSrc, className }: {
     title: string,
     subtitle: string,
     icon: React.ReactNode,
     color: string,
     image?: string,
     backgroundImage?: string,
+    videoSrc?: string,
     className?: string
 }) => {
     const ref = useRef<HTMLDivElement>(null);
@@ -187,8 +188,25 @@ const CanvasCard = ({ title, subtitle, icon, color, image, backgroundImage, clas
                 className
             )}
         >
+            {/* Video Background */}
+            {videoSrc && (
+                <div className="absolute inset-0 z-0">
+                    <video
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110"
+                    >
+                        <source src={videoSrc} type="video/mp4" />
+                    </video>
+                    {/* Subtle dark overlay for text readability only */}
+                    <div className="absolute inset-0 bg-black/30" />
+                </div>
+            )}
+
             {/* Background Image with Overlay */}
-            {backgroundImage && (
+            {!videoSrc && backgroundImage && (
                 <div className="absolute inset-0 z-0">
                     <img
                         src={backgroundImage}

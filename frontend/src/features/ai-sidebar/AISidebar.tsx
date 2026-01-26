@@ -32,6 +32,9 @@ interface AISidebarProps {
 
     isGeneratingPage: boolean;
     handleGeneratePage: () => void;
+
+    // Autofill support
+    onSwitchToAssistant?: (callback: () => void) => void;
 }
 
 const AISidebar: React.FC<AISidebarProps> = ({
@@ -53,9 +56,17 @@ const AISidebar: React.FC<AISidebarProps> = ({
     aspect,
     setAspect,
     isGeneratingPage,
-    handleGeneratePage
+    handleGeneratePage,
+    onSwitchToAssistant
 }) => {
     const [activeSection, setActiveSection] = useState<'chars' | 'assistant' | 'assets'>('chars');
+
+    // Expose method to switch to assistant tab (for autofill)
+    React.useEffect(() => {
+        if (onSwitchToAssistant) {
+            onSwitchToAssistant(() => setActiveSection('assistant'));
+        }
+    }, [onSwitchToAssistant]);
 
     return (
         <div className="flex flex-col h-full glass-panel text-zinc-200">
@@ -105,12 +116,23 @@ const AISidebar: React.FC<AISidebarProps> = ({
                             <label className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Target Page</label>
                             <select
                                 value={targetPage}
-                                onChange={(e) => setTargetPage(Number(e.target.value))}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (value === 'new') {
+                                        // Create new page
+                                        const newPageId = Math.max(...(totalPages > 0 ? Array.from({ length: totalPages }, (_, i) => i + 1) : [0]), 0) + 1;
+                                        setTargetPage(newPageId);
+                                        // Note: The actual page will be created when image is generated
+                                    } else {
+                                        setTargetPage(Number(value));
+                                    }
+                                }}
                                 className="w-full bg-zinc-800 border-zinc-700 rounded-md text-sm p-2 focus:ring-1 focus:ring-purple-500 outline-none"
                             >
                                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
                                     <option key={pageNum} value={pageNum}>Page {pageNum}</option>
                                 ))}
+                                <option value="new" className="text-emerald-400 font-semibold">+ Create New Page</option>
                             </select>
                         </div>
 

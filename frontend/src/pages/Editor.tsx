@@ -148,9 +148,50 @@ const Editor: React.FC = () => {
     }
   };
 
+  const handleAutofillPrompt = (prompt: string) => {
+    setCmdPrompt(prompt);
+    // Switch left sidebar to assistant tab if callback is available
+    if (switchToAssistantRef.current) {
+      switchToAssistantRef.current();
+    }
+  };
+
+  const switchToAssistantRef = React.useRef<(() => void) | null>(null);
+
+  const handleUploadWebtoon = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = (e: Event) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files) {
+        console.log('Files to upload:', files);
+        // TODO: Implement upload logic to add images as new pages
+      }
+    };
+    input.click();
+  };
+
+  const handleDownloadPages = () => {
+    const link = document.createElement('a');
+    pages.forEach((pageId, index) => {
+      const canvasElement = document.querySelector(`canvas[data-page-id="${pageId}"]`) as HTMLCanvasElement;
+      if (canvasElement) {
+        setTimeout(() => {
+          link.href = canvasElement.toDataURL('image/png');
+          link.download = `page-${pageId}.png`;
+          link.click();
+        }, index * 100);
+      }
+    });
+  };
+
   return (
     <ResizableLayout
       toolSidebar={<ToolSidebar />}
+      onUploadWebtoon={handleUploadWebtoon}
+      onDownloadPages={handleDownloadPages}
       leftPanel={
         <AISidebar
           // Character Props
@@ -175,9 +216,10 @@ const Editor: React.FC = () => {
           setAspect={setAspect}
           isGeneratingPage={isGeneratingPage}
           handleGeneratePage={handleGeneratePage}
+          onSwitchToAssistant={(callback) => { switchToAssistantRef.current = callback; }}
         />
       }
-      rightPanel={<RightSidebarContainer />}
+      rightPanel={<RightSidebarContainer onAutofillPrompt={handleAutofillPrompt} />}
     >
       <WebtoonCanvas />
     </ResizableLayout>
