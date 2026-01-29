@@ -19,7 +19,13 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Routes
 import characterRoutes from './routes/characters.js';
+import inpaintRoutes from './routes/inpaint.js';
+
 app.use('/api/characters', characterRoutes);
+app.use('/api/inpaint', inpaintRoutes);
+app.use('/public', express.static(path.join(process.cwd(), 'public')));
+app.use('/temp', express.static(path.join(process.cwd(), 'public/temp'))); // Shortcut for temp
+
 
 // Constants
 const PORT = process.env.PORT || 5050;

@@ -158,6 +158,78 @@ class AIService {
             throw new Error("AI Generation Failed: " + error.message);
         }
     }
+
+    /**
+     * Inpaint a selected area of an image.
+     * @param {string} baseImage - To Data URL or URL of base image
+     * @param {string} maskImage - To Data URL of mask (White=Edit, Black=Protect)
+     * @param {string} prompt - User prompt
+     * @param {string} style - Style
+     */
+    async generateInpainting(baseImage, maskImage, prompt, style) {
+        this.ensureInitialized();
+
+        if (this.replicate) {
+            return this.generateInpaintReplicate(baseImage, maskImage, prompt, style);
+        }
+
+        // Fallback or Error
+        throw new Error("Inpainting requires Replicate API token currently.");
+    }
+
+    async generateInpaintReplicate(baseImage, maskImage, prompt, style) {
+        const INPAINT_MODEL = "stability-ai/stable-diffusion-inpainting";
+        const INPAINT_VERSION = "c28b92a7ecd66eee8aefcd8e5695f01265fdd13a90ee07e45dd8d3885da37cbb"; // SD Inpainting
+
+        let stylePrompt = "";
+        if (style === "manga_bw") {
+            stylePrompt = "manga style, black and white, line art, ink drawing, high contrast";
+        } else if (style === "webtoon_color") { // Corrected from plan to match UI
+            stylePrompt = "webtoon style, vibrant colors, digital art, manhwa";
+        } else {
+            stylePrompt = "anime style, vibrant colors, cel shaded";
+        }
+
+        const finalPrompt = `${stylePrompt}, ${prompt}, high quality, detailed, seamless blending`.trim();
+
+        console.log(`[AIService] Inpainting with Replicate (${INPAINT_MODEL}): ${finalPrompt}`);
+
+        try {
+            const output = await this.replicate.run(
+                INPAINT_MODEL,
+                {
+                    input: {
+                        prompt: finalPrompt,
+                        image: baseImage,
+                        mask: maskImage,
+                        negative_prompt: "text, watermark, low quality, artifacts, blurry, distorted, ugly",
+                        num_inference_steps: 30,
+                        guidance_scale: 7.5
+                    }
+                }
+            );
+
+            // Handle output format
+            let imageUrl;
+            if (Array.isArray(output) && output.length > 0) {
+                imageUrl = output[0];
+            } else if (typeof output === 'string') {
+                imageUrl = output;
+            } else {
+                imageUrl = String(output);
+            }
+
+            console.log("[AIService] Inpaint Replicate URL:", imageUrl);
+
+            const response = await fetch(imageUrl);
+            const arrayBuffer = await response.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+
+        } catch (error) {
+            console.error("[AIService] Replicate Inpaint Error:", error);
+            throw new Error("Replicate Inpainting Failed: " + error.message);
+        }
+    }
 }
 
 export const aiService = new AIService();

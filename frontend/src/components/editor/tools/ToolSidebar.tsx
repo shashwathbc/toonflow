@@ -1,11 +1,13 @@
 
 import React from 'react';
-import { PenTool, Paintbrush, Eraser, Move, MousePointer2, Image as ImageIcon, Type, Square, MessageCircle, Wand2, Minus } from 'lucide-react';
+import { PenTool, Paintbrush, Eraser, Move, MousePointer2, Image as ImageIcon, Type, Square, MessageCircle, Wand2, Minus, ScanLine, Lasso } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/store/editorStore';
 
 const TOOLS = [
-    { id: 'select', icon: MousePointer2, label: 'Select' },
+    { id: 'select', icon: MousePointer2, label: 'Move / Edit' },
+    { id: 'selection-rect', icon: ScanLine, label: 'Rect Select' },
+    { id: 'selection-lasso', icon: Lasso, label: 'Lasso Select' },
     { id: 'pan', icon: Move, label: 'Pan' },
     { id: 'pen', icon: PenTool, label: 'Pen' },
     { id: 'paint', icon: Paintbrush, label: 'Paint' },
@@ -17,6 +19,7 @@ const TOOLS = [
     { id: 'bubbles', icon: MessageCircle, label: 'Bubbles' },
     { id: 'image', icon: ImageIcon, label: 'Import' },
 ];
+
 
 const ToolSidebar = () => {
     const { activeTool, setActiveTool, activeCategory } = useEditorStore();

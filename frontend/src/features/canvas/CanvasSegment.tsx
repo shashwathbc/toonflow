@@ -1,9 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import FabricCanvas from '@/components/editor/FabricCanvas';
 import { useEditorStore } from '@/store/editorStore';
 import { Canvas, FabricImage, PencilBrush, CircleBrush, SprayBrush, Group, Textbox, Line, Rect, Ellipse } from 'fabric';
 import { createSmartBubble, BubbleType, autoFitText } from './utils/bubbleFactory';
 import { CanvasBrushManager } from './utils/BrushManager';
+import { SelectionManager, SelectionType } from './utils/SelectionManager';
+import { ContextMenu } from '@/components/editor/ContextMenu';
+import { AIInpaintModal } from '@/components/editor/AIInpaintModal';
+import { requestInpainting } from '@/api/inpaintApi';
 
 interface CanvasSegmentProps {
     pageId: number;
@@ -23,6 +27,19 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
 
     const fabricRef = useRef<Canvas | null>(null);
     const loadedImageRef = useRef<string | null>(null); // Track which image URL is loaded
+
+    // Selection & AI State
+    const selectionManagerRef = useRef<SelectionManager | null>(null);
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean } | null>(null);
+    const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [selectionBounds, setSelectionBounds] = useState<{ left: number, top: number, width: number, height: number } | null>(null);
+
+    // ... (refs)
+
+    // ... (useEffect imports)
+
+
 
     // Refs for Event Access
     const activeToolRef = useRef(activeTool);
@@ -304,7 +321,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         });
 
         // DRAWING LOGIC
-        const NON_DRAWING_TOOLS = ['select', 'pan', 'text', 'crop', 'fill', 'picker', 'shape-rect', 'shape-ellipse', 'line', 'panel-frame', 'wand'];
+        const NON_DRAWING_TOOLS = ['select', 'pan', 'text', 'crop', 'fill', 'picker', 'shape-rect', 'shape-ellipse', 'line', 'panel-frame', 'wand', 'selection-rect', 'selection-lasso'];
         const shouldDraw = !NON_DRAWING_TOOLS.includes(activeTool);
 
         // Only allow drawing if active layer is VALID, VISIBLE, and UNLOCKED
@@ -313,7 +330,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         if (shouldDraw && canDrawOnActiveLayer) {
             canvas.selection = false;
             canvas.allowTouchScrolling = false;
-
+            // ... (keep existing drawing setup)
             if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.touchAction = 'none';
             if (canvas.lowerCanvasEl) canvas.lowerCanvasEl.style.touchAction = 'none';
 
@@ -332,14 +349,14 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
             CanvasBrushManager.configureBrush(canvas, runtimeConfig as any);
 
         } else {
-            // Non-Drawing Mode OR Layer is Locked/Hidden
+            // Non-Drawing Mode
             const isShapeOrText = ['text', 'shape-rect', 'shape-ellipse', 'line', 'fill'].includes(activeTool);
+            const isSelectionTool = ['selection-rect', 'selection-lasso'].includes(activeTool);
 
             canvas.isDrawingMode = false;
 
-            // If layer is locked/hidden, disable selection too unless we are just selecting? 
-            // Actually, keep selection enabled for 'select' tool if broadly allowed, but objects are locked individually above.
-            canvas.selection = !isShapeOrText && activeTool === 'select';
+            // Standard Fabric Selection (for 'select' tool)
+            canvas.selection = !isShapeOrText && !isSelectionTool && activeTool === 'select';
 
             canvas.allowTouchScrolling = true;
             if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.touchAction = 'pan-y';
@@ -347,12 +364,12 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
 
             // Cursor Logic
             if (!canDrawOnActiveLayer && shouldDraw) {
-                canvas.defaultCursor = 'not-allowed'; // Show forbidden cursor if trying to draw on locked layer
+                canvas.defaultCursor = 'not-allowed';
             } else if (activeTool === 'text') {
                 canvas.defaultCursor = 'text';
             } else if (activeTool === 'fill') {
                 canvas.defaultCursor = 'cell';
-            } else if (activeTool.startsWith('shape-')) {
+            } else if (activeTool.startsWith('shape-') || isSelectionTool) {
                 canvas.defaultCursor = 'crosshair';
             } else {
                 canvas.defaultCursor = 'default';
@@ -364,6 +381,11 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
 
     const onCanvasReady = (canvas: Canvas) => {
         fabricRef.current = canvas;
+        selectionManagerRef.current = new SelectionManager(canvas, (hasSelection, bounds) => {
+            setSelectionBounds(hasSelection ? bounds : null);
+            if (!hasSelection) setContextMenu(null);
+        });
+
 
         // Init History
         history.current.push(JSON.stringify(canvas));
@@ -372,17 +394,50 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         // Initial Config
         updateInteraction(canvas);
 
-        // --- SHAPE & TEXT & FILL EVENT HANDLERS ---
+        // Disable default context menu on canvas wrapper
+        if (canvas.upperCanvasEl) {
+            canvas.upperCanvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
+        }
+
+        // --- SHAPE & TEXT & FILL & SELECTION EVENT HANDLERS ---
         let isDrawingShape = false;
         let shapeOrigin = { x: 0, y: 0 };
         let activeShape: any = null;
 
         canvas.on('mouse:down', (opt) => {
+            const e = opt.e as MouseEvent;
+            const pointer = canvas.getScenePoint(e);
+
+            // 0. CONTEXT MENU (Right Click)
+            if (e.button === 2) {
+                // Check if click is inside active selection
+                if (selectionManagerRef.current && selectionManagerRef.current.isPointInSelection(pointer)) {
+                    setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        visible: true
+                    });
+                }
+                return;
+
+            } else {
+                // Close context menu on left click
+                setContextMenu(null);
+            }
+
             const tool = activeToolRef.current;
             if (!tool || tool === 'select' || tool === 'pan' || !isEditMode) return;
-
-            const pointer = canvas.getScenePoint(opt.e);
             const layerId = activeLayerIdRef.current;
+
+            // 0.5 SELECTION TOOLS
+            if (tool === 'selection-rect') {
+                isDrawingShape = true;
+                selectionManagerRef.current?.startSelection('rectangle', pointer);
+                return;
+            } else if (tool === 'selection-lasso') {
+                // Not fully implemented yet
+                return;
+            }
 
             // 1. TEXT TOOL
             if (tool === 'text') {
@@ -408,21 +463,15 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
             // 2. FILL TOOL (Vector Fill)
             if (tool === 'fill') {
                 if (opt.target) {
-                    // Fill the target object
-                    // Check if it's a type we can fill (rect, circle, path, etc)
-                    // Not grouping or image?
                     const t = opt.target;
                     // @ts-ignore
-                    if (t.set && t.type !== 'image' && t.type !== 'group') {
+                    if (t.set && t.type !== 'image' && t.type !== 'group' && !t.isSelectionMask) {
                         t.set('fill', colorRef.current);
                         canvas.requestRenderAll();
                         saveHistory(canvas);
                     } else if (t.type === 'group') {
-                        // Optional: Fill all children? Or just return.
-                        // For Smart Bubbles, we might want to fill the shape.
                         // @ts-ignore
                         if (t.data?.type === 'smartBubble') {
-                            // Find the shape (index 0 usually, or search)
                             // @ts-ignore
                             const shape = (t as Group).getObjects().find(o => o.type !== 'textbox');
                             if (shape) {
@@ -461,12 +510,11 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
                 } else if (tool === 'shape-ellipse') {
                     activeShape = new Ellipse({ ...commonProps, rx: 0, ry: 0 } as any);
                 } else if (tool === 'line') {
-                    // Line needs explicit coordinates [x1, y1, x2, y2]
                     activeShape = new Line([pointer.x, pointer.y, pointer.x, pointer.y], {
                         ...commonProps,
                         strokeLineCap: 'round',
                         strokeLineJoin: 'round',
-                        fill: undefined // Lines don't have fill usually
+                        fill: undefined
                     } as any);
                 }
 
@@ -475,9 +523,18 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         });
 
         canvas.on('mouse:move', (opt) => {
-            if (!isDrawingShape || !activeShape) return;
-
+            const tool = activeToolRef.current;
+            if (!isDrawingShape) return;
             const pointer = canvas.getScenePoint(opt.e);
+
+            // Selection Update
+            if (tool === 'selection-rect' && selectionManagerRef.current) {
+                selectionManagerRef.current.updateSelection(pointer);
+                canvas.requestRenderAll();
+                return;
+            }
+
+            if (!activeShape) return;
 
             if (activeToolRef.current === 'shape-rect') {
                 const w = Math.abs(pointer.x - shapeOrigin.x);
@@ -486,7 +543,6 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
                 activeShape.set({
                     width: w,
                     height: h,
-                    // Handle negative direction
                     left: Math.min(pointer.x, shapeOrigin.x),
                     top: Math.min(pointer.y, shapeOrigin.y)
                 });
@@ -510,7 +566,6 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
                     x2: pointer.x,
                     y2: pointer.y
                 });
-                // Force re-calc
                 activeShape.setCoords();
             }
 
@@ -520,7 +575,14 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
         canvas.on('mouse:up', () => {
             if (isDrawingShape) {
                 isDrawingShape = false;
-                // Finalize shape
+
+                const tool = activeToolRef.current;
+
+                if (tool === 'selection-rect') {
+                    selectionManagerRef.current?.finishSelection();
+                    return;
+                }
+
                 if (activeShape) {
                     activeShape.setCoords();
                     canvas.setActiveObject(activeShape);
@@ -529,6 +591,7 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
                 activeShape = null;
             }
         });
+
 
         // Listeners
         canvas.off('path:created');
@@ -617,6 +680,105 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
     const isActive = activePage === pageId;
     const isActiveEdit = isActive && isEditMode;
 
+    // Context Menu Trigger (modified to use button coordinates)
+    const handleEditButtonClick = (e: React.MouseEvent) => {
+        e.stopPropagation(); // prevent clearing selection
+        if (!selectionBounds) return;
+
+        // Position menu near the button
+        const btnRect = (e.target as HTMLElement).getBoundingClientRect();
+        setContextMenu({
+            x: btnRect.left,
+            y: btnRect.bottom + 5,
+            visible: true
+        });
+    };
+
+    // --- CONTEXT MENU ACTIONS ---
+    const handleRemoveSelection = () => {
+
+        const canvas = fabricRef.current;
+        const manager = selectionManagerRef.current;
+        if (!canvas || !manager || !manager.hasSelection()) return;
+
+        const obj = manager.getSelectionObject();
+        if (obj instanceof Rect) {
+            // White patch to "remove" content
+            const clearRect = new Rect({
+                left: obj.left,
+                top: obj.top,
+                width: obj.getScaledWidth(),
+                height: obj.getScaledHeight(),
+                fill: 'white',
+                selectable: false,
+                evented: false,
+            });
+            // @ts-ignore
+            clearRect.set('data', { layerId: activeLayerIdRef.current });
+
+            canvas.add(clearRect);
+            manager.clearSelection();
+            saveHistory(canvas);
+        }
+    };
+
+    const handleGenerateInpaint = async (prompt: string, style: 'manga_bw' | 'webtoon_color' | 'anime_color') => {
+        const canvas = fabricRef.current;
+        const manager = selectionManagerRef.current;
+        if (!canvas || !manager) return;
+
+        try {
+            setIsGenerating(true);
+
+            // 1. Get Base Image (Canvas) & Mask
+            const selectionObj = manager.getSelectionObject();
+            if (selectionObj) selectionObj.visible = false; // Hide selection overlay
+
+            const baseImage = canvas.toDataURL({ format: 'png', multiplier: 1 });
+            const maskImage = manager.getMaskDataURL();
+
+            if (selectionObj) selectionObj.visible = true;
+
+            if (!maskImage) throw new Error("Failed to generate mask");
+
+            // 2. Send to API
+            const result = await requestInpainting({
+                baseImage,
+                mask: maskImage,
+                prompt,
+                style
+            });
+
+            // 3. Load Result
+            if (result.imageUrl) {
+                const img = await FabricImage.fromURL(result.imageUrl, { crossOrigin: 'anonymous' });
+                if (img) {
+                    img.set({
+                        left: 0,
+                        top: 0,
+                        selectable: true,
+                        evented: true,
+                        // @ts-ignore
+                        data: { layerId: activeLayerIdRef.current }
+                    });
+
+                    canvas.add(img);
+                    canvas.requestRenderAll();
+                    saveHistory(canvas);
+                }
+            }
+
+            setIsAIModalOpen(false);
+            manager.clearSelection();
+
+        } catch (error: any) {
+            console.error("Inpainting failed", error);
+            alert("Failed to generate: " + (error.message || "Unknown error"));
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     return (
         <div
             className="relative"
@@ -663,6 +825,56 @@ const CanvasSegment: React.FC<CanvasSegmentProps> = ({ pageId, width = 800, heig
                     }}
                 />
             </div>
+
+            {/* UI Overlays */}
+
+            {/* FLOATING ACTION TOOLBAR FOR SELECTION */}
+            {selectionBounds && (
+                <div
+                    className="absolute z-40 transform -translate-x-1/2"
+                    style={{
+                        left: selectionBounds.left + (selectionBounds.width / 2),
+                        top: Math.max(0, selectionBounds.top - 50), // Position above selection
+                    }}
+                >
+                    <button
+                        onClick={handleEditButtonClick}
+                        className="bg-zinc-900 text-white px-4 py-2 rounded-full shadow-xl border border-zinc-700 font-medium text-sm flex items-center gap-2 hover:bg-zinc-800 transition-colors animate-in zoom-in-50 duration-200"
+                    >
+                        <span>Edit Selection</span>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    </button>
+                </div>
+            )}
+
+            {contextMenu && contextMenu.visible && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    onClose={() => setContextMenu(null)}
+                    items={[
+                        {
+                            label: 'Remove Area',
+                            onClick: handleRemoveSelection,
+                            danger: true
+                        },
+                        {
+                            label: 'Edit with AI',
+                            onClick: () => setIsAIModalOpen(true),
+                            icon: <span className="text-cyan-400">✨</span>
+                        }
+                    ]}
+                />
+            )}
+
+            <AIInpaintModal
+                isOpen={isAIModalOpen}
+                onClose={() => setIsAIModalOpen(false)}
+                onGenerate={handleGenerateInpaint}
+                isGenerating={isGenerating}
+            />
         </div>
     );
 };
