@@ -1,0 +1,188 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Auth Helpers ─────────────────────────────────────────────────────────
+    function isAuthenticated() { return request.auth != null; }
+    function isOwner(userId) { return request.auth.uid == userId; }
+
+    // Validate string lengths to protect against spam attacks
+    function isValidText(text, maxLen) {
+      return text is string && text.size() > 0 && text.size() <= maxLen;
+    }
+
+    // Super-admin: identified by email token from Google OAuth.
+    function isSuperAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == "shashwathbc@gmail.com";
+    }
+
+    // Regular admin: present in admin_roles collection (granted by super admin),
+    // OR has Firebase custom claim set via Admin SDK.
+    function isAdmin() {
+      return isSuperAdmin()
+        || (request.auth != null && request.auth.token.admin == true)
+        || (request.auth != null && exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid)));
+    }
+
+    // ── 1. Users & Profiles ──────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId) && request.resource.data.keys().hasAll(['uid', 'email']);
+      allow update: if isOwner(userId);
+
+      match /reading_progress/{webtoonId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ── 2. Comments & Subcomments ────────────────────────────────────────────
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated()
+        && isOwner(request.resource.data.userId)
+        && isValidText(request.resource.data.content, 2000);
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    match /subcomments/{subcommentId} {
+      allow read: if true;
+      allow create: if isAuthenticated()
+        && isOwner(request.resource.data.userId)
+        && request.resource.data.parentCommentId != null
+        && isValidText(request.resource.data.content, 1000);
+      allow update, delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    // ── 3. Bookmarks ─────────────────────────────────────────────────────────
+    match /bookmarks/{bookmarkId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      allow update: if false;
+    }
+
+    // ── 4. Discussions ────────────────────────────────────────────────────────
+    match /discussions/{threadId} {
+      allow read: if true;
+      allow create: if isValidText(request.resource.data.title, 200)
+        && isValidText(request.resource.data.body, 5000)
+        && request.resource.data.upvotes == 0
+        && request.resource.data.commentCount == 0
+        && request.resource.data.isPinned == false;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes'])
+        && request.resource.data.upvotes == resource.data.upvotes + 1;
+      allow delete: if false;
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isValidText(request.resource.data.body, 5000)
+          && request.resource.data.upvotes == 0;
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes'])
+          && request.resource.data.upvotes == resource.data.upvotes + 1;
+        allow delete: if false;
+      }
+    }
+
+    // ── 5. Likes / Reactions ─────────────────────────────────────────────────
+    match /likes/{likeId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      allow update: if false;
+    }
+
+    // ── 6. Waitlist ───────────────────────────────────────────────────────────
+    match /waitlist/{entryId} {
+      allow create: if request.resource.data.keys().hasAll(["email", "createdAt"])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 3
+        && request.resource.data.email.size() <= 254;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── 7. Feedback ───────────────────────────────────────────────────────────
+    match /feedback/{entryId} {
+      allow create: if request.resource.data.keys().hasAll(["type", "message", "createdAt"])
+        && request.resource.data.type in ["question", "issue"]
+        && isValidText(request.resource.data.message, 2000);
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── 8. Admin Roles ────────────────────────────────────────────────────────
+    match /admin_roles/{uid} {
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow create, update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── 9. Creator Studio Series ──────────────────────────────────────────────
+    match /studio_series/{seriesId} {
+      allow read: if resource.data.isPublished == true
+        || (isAuthenticated() && isOwner(resource.data.authorId))
+        || isAdmin();
+      allow create: if isAuthenticated() && isOwner(request.resource.data.authorId);
+      allow update: if isAuthenticated() && isOwner(resource.data.authorId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.authorId);
+
+      match /chapters/{chapterId} {
+        allow read: if get(/databases/$(database)/documents/studio_series/$(seriesId)).data.isPublished == true
+          || (isAuthenticated() && get(/databases/$(database)/documents/studio_series/$(seriesId)).data.authorId == request.auth.uid)
+          || isAdmin();
+        allow create, update, delete: if isAuthenticated()
+          && get(/databases/$(database)/documents/studio_series/$(seriesId)).data.authorId == request.auth.uid;
+      }
+    }
+
+    // ── 10. Novels (Toonflow Studio) ──────────────────────────────────────────
+    match /novels/{novelId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isOwner(request.resource.data.authorId);
+      allow update: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid || isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid || isAdmin()
+      );
+
+      match /chapters/{chapterId} {
+        allow read: if true;
+        allow create, update, delete: if isAuthenticated()
+          && get(/databases/$(database)/documents/novels/$(novelId)).data.authorId == request.auth.uid;
+      }
+    }
+
+    // ── 11. Webtoons (Toonflow Studio) ────────────────────────────────────────
+    match /webtoons/{webtoonId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isOwner(request.resource.data.authorId);
+      allow update: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid || isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid || isAdmin()
+      );
+
+      match /episodes/{episodeId} {
+        allow read: if true;
+        allow create, update, delete: if isAuthenticated()
+          && get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId == request.auth.uid;
+      }
+    }
+
+    // ── 12. Novel AI Chats — private to novel owner ────────────────────────────
+    match /novel_ai_chats/{novelId}/messages/{msgId} {
+      allow read, write: if isAuthenticated()
+        && get(/databases/$(database)/documents/novels/$(novelId)).data.authorId == request.auth.uid;
+    }
+
+    // ── 13. Reading History — private to owner ────────────────────────────────
+    match /readingHistory/{uid}/items/{itemId} {
+      allow read, write: if isAuthenticated() && isOwner(uid);
+    }
+  }
+}

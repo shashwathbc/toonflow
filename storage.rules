@@ -1,0 +1,55 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isUnder10MB() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+
+    function isUnder25MB() {
+      return request.resource.size < 25 * 1024 * 1024;
+    }
+
+    // User avatars
+    match /users/{uid}/avatar/{file} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isImage() && isUnder10MB();
+    }
+
+    // User banners
+    match /users/{uid}/banner/{file} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isImage() && isUnder10MB();
+    }
+
+    // Novel covers
+    match /novels/{novelId}/cover/{file} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder10MB();
+    }
+
+    // Webtoon covers
+    match /webtoons/{webtoonId}/cover/{file} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder10MB();
+    }
+
+    // Webtoon episode panels (up to 25MB per image)
+    match /webtoons/{webtoonId}/episodes/{episodeId}/{file} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && isUnder25MB();
+    }
+  }
+}
