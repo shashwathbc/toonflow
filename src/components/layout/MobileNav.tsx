@@ -1,130 +1,149 @@
 'use client'
 
-import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { X, Home, BookOpen, Search, Plus, LayoutDashboard, Shield } from 'lucide-react'
-import { useAppStore } from '@/store/useAppStore'
+import { Home, BookOpen, Search, Plus, LayoutDashboard, User } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useAuth } from '@/hooks/useAuth'
+import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils/cn'
-
-const NAV_ITEMS = [
-  { href: '/', label: 'Home', icon: <Home size={18} /> },
-  { href: '/originals', label: 'Originals', icon: <BookOpen size={18} /> },
-  { href: '/browse', label: 'Browse', icon: <Search size={18} /> },
-]
+import * as Avatar from '@radix-ui/react-avatar'
+import { UserDropdownContent } from './UserMenu'
 
 export default function MobileNav() {
   const pathname = usePathname()
-  const { mobileNavOpen, setMobileNavOpen } = useAppStore()
-  const { isAuthenticated, isAdmin } = useAuth()
+  const { isAuthenticated, userProfile } = useAuth()
+  const { setLoginModalOpen } = useAppStore()
 
-  // Close on route change
-  useEffect(() => {
-    setMobileNavOpen(false)
-  }, [pathname, setMobileNavOpen])
-
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileNavOpen(false)
+  const handleAuthRequiredClick = (e: React.MouseEvent, targetUrl: string) => {
+    if (!isAuthenticated) {
+      e.preventDefault()
+      setLoginModalOpen(true)
     }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [setMobileNavOpen])
+  }
 
-  if (!mobileNavOpen) return null
+  const initials = userProfile?.displayName
+    ?.split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) ?? '??'
+
+  const items = [
+    {
+      href: '/',
+      label: 'Home',
+      icon: <Home size={20} />,
+      isActive: pathname === '/',
+    },
+    {
+      href: '/originals',
+      label: 'Originals',
+      icon: <BookOpen size={20} />,
+      isActive: pathname.startsWith('/originals'),
+    },
+    {
+      href: '/browse',
+      label: 'Browse',
+      icon: <Search size={20} />,
+      isActive: pathname.startsWith('/browse'),
+    },
+    {
+      href: '/create',
+      label: 'Create',
+      icon: <Plus size={20} />,
+      isActive: pathname.startsWith('/create'),
+      onClick: (e: React.MouseEvent) => handleAuthRequiredClick(e, '/create'),
+    },
+    {
+      href: isAuthenticated ? '/dashboard' : '#',
+      label: isAuthenticated ? 'Dashboard' : 'Login',
+      isActive: isAuthenticated
+        ? pathname.startsWith('/dashboard') || pathname.startsWith('/profile')
+        : false,
+      onClick: (e: React.MouseEvent) => {
+        if (!isAuthenticated) {
+          e.preventDefault()
+          setLoginModalOpen(true)
+        }
+      },
+      customRender: isAuthenticated ? (
+        <Avatar.Root className="w-6 h-6 rounded-full overflow-hidden bg-accent/20 flex items-center justify-center border border-transparent hover:border-white transition-colors">
+          <Avatar.Image
+            src={userProfile?.photoURL ?? undefined}
+            alt={userProfile?.displayName ?? 'User avatar'}
+            className="w-full h-full object-cover"
+          />
+          <Avatar.Fallback className="text-[10px] font-bold text-accent">
+            {initials}
+          </Avatar.Fallback>
+        </Avatar.Root>
+      ) : (
+        <User size={20} />
+      ),
+    },
+  ]
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-        aria-hidden="true"
-        onClick={() => setMobileNavOpen(false)}
-      />
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 bg-bg/90 backdrop-blur-lg border-t border-bg-border h-14 md:hidden flex items-center justify-around px-2 pb-safe"
+      aria-label="Mobile navigation bar"
+    >
+      {items.map((item, idx) => {
+        const content = item.customRender ?? item.icon
 
-      {/* Drawer */}
-      <nav
-        id="mobile-nav"
-        className="fixed inset-y-0 right-0 z-50 w-72 bg-bg-card border-l border-bg-border flex flex-col animate-slide-up"
-        aria-label="Mobile navigation"
-        role="dialog"
-        aria-modal="true"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 h-14 border-b border-bg-border">
-          <span className="font-bold text-text">
-            TOONFLOW <span className="text-accent">STUDIO</span>
-          </span>
-          <button
-            onClick={() => setMobileNavOpen(false)}
-            className="btn-ghost p-2 rounded-lg"
-            aria-label="Close navigation menu"
-          >
-            <X size={20} aria-hidden="true" />
-          </button>
-        </div>
-
-        {/* Nav items */}
-        <ul className="flex flex-col p-3 gap-1 flex-1" role="list">
-          {NAV_ITEMS.map(({ href, label, icon }) => {
-            const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
+        // If it's the last item (profile/user menu) and the user is authenticated, render it as a DropdownMenu trigger
+        if (idx === items.length - 1 && isAuthenticated) {
+          return (
+            <DropdownMenu.Root key={idx}>
+              <DropdownMenu.Trigger asChild>
+                <button
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-accent/10 text-accent'
-                      : 'text-text-secondary hover:text-text hover:bg-bg-elevated'
+                    'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'
                   )}
-                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={item.label}
                 >
-                  <span aria-hidden="true">{icon}</span>
-                  {label}
-                </Link>
-              </li>
-            )
-          })}
+                  <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
+                    {content}
+                  </span>
+                  {item.isActive && (
+                    <span
+                      className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+              </DropdownMenu.Trigger>
+              <UserDropdownContent side="top" align="end" sideOffset={12} />
+            </DropdownMenu.Root>
+          )
+        }
 
-          {isAuthenticated && (
-            <>
-              <li>
-                <Link
-                  href="/create"
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors"
-                >
-                  <span aria-hidden="true"><Plus size={18} /></span>
-                  Create
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/dashboard"
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors"
-                >
-                  <span aria-hidden="true"><LayoutDashboard size={18} /></span>
-                  Dashboard
-                </Link>
-              </li>
-            </>
-          )}
-
-          {isAdmin && (
-            <li>
-              <Link
-                href="/admin"
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors"
-              >
-                <span aria-hidden="true"><Shield size={18} /></span>
-                Admin Panel
-              </Link>
-            </li>
-          )}
-        </ul>
-      </nav>
-    </>
+        return (
+          <Link
+            key={idx}
+            href={item.href}
+            onClick={item.onClick}
+            className={cn(
+              'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'
+            )}
+            aria-label={item.label}
+            aria-current={item.isActive ? 'page' : undefined}
+          >
+            <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
+              {content}
+            </span>
+            {item.isActive && (
+              <span
+                className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
+                aria-hidden="true"
+              />
+            )}
+          </Link>
+        )
+      })}
+    </nav>
   )
 }

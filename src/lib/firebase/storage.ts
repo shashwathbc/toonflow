@@ -78,9 +78,13 @@ export async function uploadNovelBanner(
   return promise
 }
 
-export async function uploadWebtoonCover(webtoonId: string, file: File): Promise<string> {
+export async function uploadWebtoonCover(
+  webtoonId: string,
+  file: File,
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
-  const { promise } = uploadFile(`webtoons/${webtoonId}/cover/cover.${ext}`, file)
+  const { promise } = uploadFile(`webtoons/${webtoonId}/cover/cover.${ext}`, file, onProgress)
   return promise
 }
 

@@ -41,6 +41,20 @@ function fromDoc<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
   return { id: snap.id, ...snap.data() } as T
 }
 
+function compareTimestamps(a: unknown, b: unknown): number {
+  const getSeconds = (ts: unknown) => {
+    if (!ts) return 0
+    if (typeof ts === 'object') {
+      if (ts !== null && 'seconds' in ts) return (ts as { seconds: number }).seconds
+      if (ts instanceof Date) return Math.floor(ts.getTime() / 1000)
+    }
+    if (typeof ts === 'number') return Math.floor(ts / 1000)
+    if (typeof ts === 'string') return Math.floor(new Date(ts).getTime() / 1000)
+    return 0
+  }
+  return getSeconds(b) - getSeconds(a)
+}
+
 // ── Users ──────────────────────────────────────────────────
 
 export async function createUserDocument(
@@ -147,9 +161,11 @@ export async function getTrendingNovels(limitCount = TRENDING_LIMIT): Promise<No
 }
 
 export async function getNovelsByAuthor(uid: string): Promise<Novel[]> {
-  const q = query(collection(db, 'novels'), where('authorId', '==', uid), orderBy('createdAt', 'desc'))
+  const q = query(collection(db, 'novels'), where('authorId', '==', uid))
   const snaps = await getDocs(q)
-  return snaps.docs.map((d) => fromDoc<Novel>(d))
+  const novels = snaps.docs.map((d) => fromDoc<Novel>(d))
+  novels.sort((a, b) => compareTimestamps(a.createdAt, b.createdAt))
+  return novels
 }
 
 // ── Chapters ────────────────────────────────────────────────
@@ -260,9 +276,11 @@ export async function getTrendingWebtoons(limitCount = TRENDING_LIMIT): Promise<
 }
 
 export async function getWebtoonsByAuthor(uid: string): Promise<Webtoon[]> {
-  const q = query(collection(db, 'webtoons'), where('authorId', '==', uid), orderBy('createdAt', 'desc'))
+  const q = query(collection(db, 'webtoons'), where('authorId', '==', uid))
   const snaps = await getDocs(q)
-  return snaps.docs.map((d) => fromDoc<Webtoon>(d))
+  const webtoons = snaps.docs.map((d) => fromDoc<Webtoon>(d))
+  webtoons.sort((a, b) => compareTimestamps(a.createdAt, b.createdAt))
+  return webtoons
 }
 
 // ── Episodes ────────────────────────────────────────────────
@@ -554,12 +572,15 @@ export function subscribeToNovels(
 ): () => void {
   const q = query(
     collection(db, 'novels'),
-    where('authorId', '==', authorId),
-    orderBy('updatedAt', 'desc')
+    where('authorId', '==', authorId)
   )
   return onSnapshot(
     q,
-    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Novel))),
+    (snap) => {
+      const novels = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Novel))
+      novels.sort((a, b) => compareTimestamps(a.updatedAt, b.updatedAt))
+      callback(novels)
+    },
     onError
   )
 }
@@ -616,4 +637,129 @@ export async function clearNovelAIChat(novelId: string): Promise<void> {
   const batch = writeBatch(db)
   snaps.docs.forEach((d) => batch.delete(d.ref))
   await batch.commit()
+}
+
+// ── Webtoon Listeners & Management ──────────────────────
+
+export function subscribeToWebtoons(
+  authorId: string,
+  callback: (webtoons: Webtoon[]) => void,
+  onError?: (error: FirestoreError) => void
+): () => void {
+  const q = query(
+    collection(db, 'webtoons'),
+    where('authorId', '==', authorId)
+  )
+  return onSnapshot(
+    q,
+    (snap) => {
+      const webtoons = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Webtoon))
+      webtoons.sort((a, b) => compareTimestamps(a.updatedAt, b.updatedAt))
+      callback(webtoons)
+    },
+    onError
+  )
+}
+
+export function subscribeToEpisodes(
+  webtoonId: string,
+  callback: (episodes: Episode[]) => void,
+  onError?: (error: FirestoreError) => void
+): () => void {
+  const q = query(
+    collection(db, 'webtoons', webtoonId, 'episodes')
+  )
+  return onSnapshot(
+    q,
+    (snap) => {
+      const episodes = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Episode))
+      episodes.sort((a, b) => (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0))
+      callback(episodes)
+    },
+    onError
+  )
+}
+
+export async function deleteWebtoon(id: string): Promise<void> {
+  const episodes = await getEpisodesByWebtoon(id)
+  const batch = writeBatch(db)
+  episodes.forEach((ep) => {
+    batch.delete(doc(db, 'webtoons', id, 'episodes', ep.id))
+  })
+  batch.delete(doc(db, 'webtoons', id))
+  await batch.commit()
+}
+
+export async function publishWebtoon(id: string): Promise<void> {
+  await updateDoc(doc(db, 'webtoons', id), {
+    status: 'ongoing',
+    publishedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function unpublishWebtoon(id: string): Promise<void> {
+  await updateDoc(doc(db, 'webtoons', id), {
+    status: 'draft',
+    publishedAt: null,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function updateEpisode(
+  webtoonId: string,
+  episodeId: string,
+  data: Partial<Episode>
+): Promise<void> {
+  await updateDoc(doc(db, 'webtoons', webtoonId, 'episodes', episodeId), data)
+  await updateDoc(doc(db, 'webtoons', webtoonId), { updatedAt: serverTimestamp() })
+}
+
+export async function deleteEpisode(webtoonId: string, episodeId: string): Promise<void> {
+  await deleteDoc(doc(db, 'webtoons', webtoonId, 'episodes', episodeId))
+  await updateDoc(doc(db, 'webtoons', webtoonId), {
+    episodeCount: increment(-1),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function reorderEpisodes(
+  webtoonId: string,
+  episodeIds: string[]
+): Promise<void> {
+  const batch = writeBatch(db)
+  episodeIds.forEach((episodeId, index) => {
+    batch.update(doc(db, 'webtoons', webtoonId, 'episodes', episodeId), {
+      episodeNumber: index + 1,
+    })
+  })
+  await batch.commit()
+  await updateDoc(doc(db, 'webtoons', webtoonId), { updatedAt: serverTimestamp() })
+}
+
+export async function duplicateEpisode(
+  webtoonId: string,
+  episodeId: string,
+  afterNumber: number
+): Promise<string> {
+  const snap = await getDoc(doc(db, 'webtoons', webtoonId, 'episodes', episodeId))
+  if (!snap.exists()) throw new Error('Episode not found')
+  const data = snap.data() as Episode
+  const ref = await addDoc(collection(db, 'webtoons', webtoonId, 'episodes'), {
+    title: `${data.title} (Copy)`,
+    panels: data.panels ?? [],
+    thumbnailURL: data.thumbnailURL ?? null,
+    episodeNumber: afterNumber + 0.5,
+    isPremium: false,
+    coinCost: 0,
+    viewCount: 0,
+    status: 'draft',
+    publishedAt: null,
+    createdAt: serverTimestamp(),
+  })
+  await updateDoc(doc(db, 'webtoons', webtoonId), {
+    episodeCount: increment(1),
+    updatedAt: serverTimestamp(),
+  })
+  return ref.id
 }

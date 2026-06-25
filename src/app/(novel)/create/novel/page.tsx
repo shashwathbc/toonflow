@@ -28,6 +28,7 @@ import {
   Filter,
   ChevronDown,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
@@ -114,13 +115,13 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
       {/* Cover */}
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
         {novel.coverURL ? (
-          <Image
+        <Image
             src={novel.coverURL}
-            alt={novel.title || 'Novel cover'}
-            fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          />
+          alt={novel.title || 'Novel cover'}
+          fill
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+        />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
             <BookOpen size={32} className="text-white/20" aria-hidden="true" />
@@ -184,7 +185,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
             className="w-7 h-7 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white"
             aria-label="Novel actions"
             aria-haspopup="menu"
-            aria-expanded={menuOpen}
+            {...(menuOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
           >
             <MoreVertical size={14} className="text-white" aria-hidden="true" />
           </button>
@@ -470,7 +471,7 @@ export default function NovelDashboardPage() {
               onClick={() => setSortOpen((v) => !v)}
               className="btn-ghost gap-2 text-sm border border-bg-border"
               aria-haspopup="listbox"
-              aria-expanded={sortOpen}
+              {...(sortOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
               aria-label={`Sort by: ${sortLabel}`}
             >
               <SortAsc size={14} aria-hidden="true" />
@@ -481,21 +482,30 @@ export default function NovelDashboardPage() {
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} aria-hidden="true" />
                 <div role="listbox" className="absolute right-0 top-10 w-44 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 overflow-hidden animate-scale-in">
-                  {SORT_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      role="option"
-                      aria-selected={sort === opt.value}
-                      onClick={() => { setSort(opt.value); setSortOpen(false) }}
-                      className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
-                        sort === opt.value
-                          ? 'text-white bg-white/10 font-medium'
-                          : 'text-white/70 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                  {SORT_OPTIONS.map((opt) => {
+                    const isSelected = sort === opt.value
+                    return isSelected ? (
+                      <button
+                        key={opt.value}
+                        role="option"
+                        aria-selected="true"
+                        onClick={() => { setSort(opt.value); setSortOpen(false) }}
+                        className="w-full text-left px-3 py-2.5 text-sm transition-colors text-white bg-white/10 font-medium"
+                      >
+                        {opt.label}
+                      </button>
+                    ) : (
+                      <button
+                        key={opt.value}
+                        role="option"
+                        aria-selected="false"
+                        onClick={() => { setSort(opt.value); setSortOpen(false) }}
+                        className="w-full text-left px-3 py-2.5 text-sm transition-colors text-white/70 hover:bg-white/10 hover:text-white"
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
                 </div>
               </>
             )}
@@ -512,23 +522,33 @@ export default function NovelDashboardPage() {
             const count = f.value === 'all'
               ? novels.length
               : novels.filter((n) => n.status === f.value).length
-            return (
+            const isSelected = filter === f.value
+            return isSelected ? (
               <button
                 key={f.value}
                 role="tab"
-                aria-selected={filter === f.value}
+                aria-selected="true"
                 onClick={() => setFilter(f.value)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap focus-visible:ring-2 focus-visible:ring-white rounded-t ${
-                  filter === f.value
-                    ? 'border-white text-white'
-                    : 'border-transparent text-white/50 hover:text-white/80'
-                }`}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap focus-visible:ring-2 focus-visible:ring-white rounded-t border-white text-white"
               >
                 {f.label}
                 {count > 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                    filter === f.value ? 'bg-white text-bg' : 'bg-white/10 text-white/60'
-                  }`}>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white text-bg">
+                    {count}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <button
+                key={f.value}
+                role="tab"
+                aria-selected="false"
+                onClick={() => setFilter(f.value)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap focus-visible:ring-2 focus-visible:ring-white rounded-t border-transparent text-white/50 hover:text-white/80"
+              >
+                {f.label}
+                {count > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">
                     {count}
                   </span>
                 )}
@@ -557,10 +577,16 @@ export default function NovelDashboardPage() {
             <p className="text-sm text-white/50 max-w-xs mb-6">
               Start your writing journey. Create your first novel and build your audience on Toonflow.
             </p>
-            <button onClick={() => setShowCreate(true)} className="btn-accent">
-              <Plus size={15} aria-hidden="true" />
-              Create your first novel
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button onClick={() => setShowCreate(true)} className="btn-accent">
+                <Plus size={15} aria-hidden="true" />
+                Create your first novel
+              </button>
+              <Link href="/create/seed" className="btn-ghost border border-bg-border text-sm flex items-center justify-center gap-2">
+                <Sparkles size={14} aria-hidden="true" />
+                Seed Ravana Demo
+              </Link>
+            </div>
           </div>
         ) : filtered.length === 0 ? (
           /* No results */

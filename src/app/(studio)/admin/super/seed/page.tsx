@@ -13,7 +13,7 @@ import {
 } from '@/lib/firebase/firestore'
 import { BookOpen, Film, CheckCircle2, XCircle, Loader2, Sparkles, ArrowLeft } from 'lucide-react'
 
-const COVER_URL = '/images/ravana-cover.jpg'
+const COVER_URL = '/images/ravana-cover.png'
 
 const NOVEL_DATA = {
   title: 'Ravana: The Immortal War',
@@ -125,14 +125,14 @@ const EPISODE_1 = {
   status: 'published' as const,
   panels: [
     {
-      url: '/images/ravana-cover.jpg',
+      url: '/images/ravana-cover.png',
       width: 900,
       height: 1350,
       order: 0,
       altText: 'Ravana stands before his ten-headed divine form as Lanka burns behind him',
     },
   ],
-  thumbnailURL: '/images/ravana-cover.jpg',
+  thumbnailURL: '/images/ravana-cover.png',
 }
 
 type StepStatus = 'idle' | 'running' | 'done' | 'error'

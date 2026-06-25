@@ -57,6 +57,19 @@ export default function CreateHubPage() {
           </div>
         </Link>
       </div>
+
+      {/* Demo Seed Section */}
+      <div className="mt-12 max-w-2xl bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h3 className="font-semibold text-white">Want to explore instantly?</h3>
+          <p className="text-xs text-text-secondary mt-1">
+            Seed a pre-made project with dummy chapters/episodes to test out editing and the AI assistant.
+          </p>
+        </div>
+        <Link href="/create/seed" className="btn-accent text-xs whitespace-nowrap px-4 py-2">
+          Seed Ravana Demo
+        </Link>
+      </div>
     </div>
   )
 }

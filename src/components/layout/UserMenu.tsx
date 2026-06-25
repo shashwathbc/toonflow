@@ -35,15 +35,6 @@ export default function UserMenu() {
     )
   }
 
-  const handleLogout = async () => {
-    try {
-      await logout()
-      toast.success('Signed out successfully')
-    } catch {
-      toast.error('Failed to sign out')
-    }
-  }
-
   const initials = userProfile?.displayName
     ?.split(' ')
     .map((n) => n[0])
@@ -74,52 +65,78 @@ export default function UserMenu() {
         </button>
       </DropdownMenu.Trigger>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          className={cn(
-            'z-50 min-w-48 bg-bg-card border border-bg-border rounded-xl p-1.5 shadow-xl',
-            'data-[state=open]:animate-fade-in'
-          )}
-          sideOffset={8}
-          align="end"
-          role="menu"
-          aria-label="User account menu"
-        >
-          {/* User info */}
-          <div className="px-2 py-2 mb-1 border-b border-bg-border">
-            <p className="text-sm font-semibold text-text truncate">
-              {userProfile?.displayName ?? 'User'}
-            </p>
-            <p className="text-xs text-text-muted truncate">{userProfile?.email}</p>
-          </div>
-
-          <MenuItem href={`/profile/${userProfile?.uid}`} icon={<User size={14} />} label="Profile" />
-          {userProfile?.isCreator && (
-            <MenuItem href="/dashboard" icon={<LayoutDashboard size={14} />} label="Dashboard" />
-          )}
-          {isAdmin && (
-            <MenuItem href="/admin" icon={<Shield size={14} />} label="Admin Panel" />
-          )}
-          {isSuperAdmin && (
-            <MenuItem href="/admin/super" icon={<Star size={14} />} label="Super Admin" />
-          )}
-
-          <DropdownMenu.Separator className="my-1 h-px bg-bg-border" />
-
-          <DropdownMenu.Item
-            className={cn(
-              'flex items-center gap-2 px-2 py-1.5 text-sm text-danger rounded-lg cursor-pointer',
-              'hover:bg-danger/10 focus-visible:bg-danger/10 outline-none'
-            )}
-            onSelect={handleLogout}
-            role="menuitem"
-          >
-            <LogOut size={14} aria-hidden="true" />
-            Sign out
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
+      <UserDropdownContent side="bottom" align="end" sideOffset={8} />
     </DropdownMenu.Root>
+  )
+}
+
+export function UserDropdownContent({
+  side = 'bottom',
+  align = 'end',
+  sideOffset = 8,
+}: {
+  side?: 'top' | 'right' | 'bottom' | 'left'
+  align?: 'start' | 'center' | 'end'
+  sideOffset?: number
+}) {
+  const { userProfile, isAdmin, isSuperAdmin } = useAuth()
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      toast.success('Signed out successfully')
+    } catch {
+      toast.error('Failed to sign out')
+    }
+  }
+
+  return (
+    <DropdownMenu.Portal>
+      <DropdownMenu.Content
+        className={cn(
+          'z-50 min-w-48 bg-bg-card border border-bg-border rounded-xl p-1.5 shadow-xl',
+          'data-[state=open]:animate-fade-in'
+        )}
+        side={side}
+        sideOffset={sideOffset}
+        align={align}
+        role="menu"
+        aria-label="User account menu"
+      >
+        {/* User info */}
+        <div className="px-2 py-2 mb-1 border-b border-bg-border">
+          <p className="text-sm font-semibold text-text truncate">
+            {userProfile?.displayName ?? 'User'}
+          </p>
+          <p className="text-xs text-text-muted truncate">{userProfile?.email}</p>
+        </div>
+
+        <MenuItem href={`/profile/${userProfile?.uid}`} icon={<User size={14} />} label="Profile" />
+        {userProfile?.isCreator && (
+          <MenuItem href="/dashboard" icon={<LayoutDashboard size={14} />} label="Dashboard" />
+        )}
+        {isAdmin && (
+          <MenuItem href="/admin" icon={<Shield size={14} />} label="Admin Panel" />
+        )}
+        {isSuperAdmin && (
+          <MenuItem href="/admin/super" icon={<Star size={14} />} label="Super Admin" />
+        )}
+
+        <DropdownMenu.Separator className="my-1 h-px bg-bg-border" />
+
+        <DropdownMenu.Item
+          className={cn(
+            'flex items-center gap-2 px-2 py-1.5 text-sm text-danger rounded-lg cursor-pointer',
+            'hover:bg-danger/10 focus-visible:bg-danger/10 outline-none'
+          )}
+          onSelect={handleLogout}
+          role="menuitem"
+        >
+          <LogOut size={14} aria-hidden="true" />
+          Sign out
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Portal>
   )
 }
 

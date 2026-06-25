@@ -370,7 +370,7 @@ export function CreateNovelModal({
                 className="input-base"
                 placeholder="Your novel's title"
                 aria-describedby={errors.title ? 'title-error' : undefined}
-                aria-invalid={errors.title ? 'true' : 'false'}
+                {...(errors.title ? { 'aria-invalid': 'true' } : { 'aria-invalid': 'false' })}
               />
               {errors.title && (
                 <p id="title-error" className="mt-1 text-xs text-danger" role="alert">
@@ -429,7 +429,7 @@ export function CreateNovelModal({
                 className="input-base resize-none"
                 placeholder="Describe your story — or use ✨ Generate above"
                 aria-describedby={errors.synopsis ? 'synopsis-error' : undefined}
-                aria-invalid={errors.synopsis ? 'true' : 'false'}
+                {...(errors.synopsis ? { 'aria-invalid': 'true' } : { 'aria-invalid': 'false' })}
               />
               {errors.synopsis && (
                 <p id="synopsis-error" className="mt-1 text-xs text-danger" role="alert">
@@ -451,7 +451,7 @@ export function CreateNovelModal({
                       onClick={() => setGenreOpen((v) => !v)}
                       className="input-base flex items-center justify-between cursor-pointer"
                       aria-haspopup="listbox"
-                      aria-expanded={genreOpen ? 'true' : 'false'}
+                      {...(genreOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
                     >
                       <span className={field.value.length === 0 ? 'text-white/40' : 'text-white'}>
                         {field.value.length === 0
@@ -472,26 +472,33 @@ export function CreateNovelModal({
                           <div className="grid grid-cols-2 p-2 gap-1">
                             {GENRES.map((genre) => {
                               const selected = field.value.includes(genre)
-                              return (
+                              return selected ? (
                                 <button
                                   key={genre}
                                   type="button"
                                   role="option"
-                                  aria-selected={selected ? 'true' : 'false'}
+                                  aria-selected="true"
                                   onClick={() => {
-                                    if (selected) {
-                                      field.onChange(field.value.filter((g) => g !== genre))
-                                    } else if (field.value.length < 5) {
+                                    field.onChange(field.value.filter((g) => g !== genre))
+                                  }}
+                                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm capitalize transition-colors bg-white text-bg font-medium"
+                                >
+                                  <Check size={12} aria-hidden="true" />
+                                  {genre}
+                                </button>
+                              ) : (
+                                <button
+                                  key={genre}
+                                  type="button"
+                                  role="option"
+                                  aria-selected="false"
+                                  onClick={() => {
+                                    if (field.value.length < 5) {
                                       field.onChange([...field.value, genre])
                                     }
                                   }}
-                                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm capitalize transition-colors ${
-                                    selected
-                                      ? 'bg-white text-bg font-medium'
-                                      : 'text-white/70 hover:bg-white/10 hover:text-white'
-                                  }`}
+                                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm capitalize transition-colors text-white/70 hover:bg-white/10 hover:text-white"
                                 >
-                                  {selected && <Check size={12} aria-hidden="true" />}
                                   {genre}
                                 </button>
                               )

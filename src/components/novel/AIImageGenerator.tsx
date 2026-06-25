@@ -156,7 +156,7 @@ export function AIImageGenerator({
               key={s.value}
               type="button"
               onClick={() => setStyle(s.value)}
-              aria-pressed={style === s.value ? 'true' : 'false'}
+              {...(style === s.value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
               className={cn(
                 'text-[11px] px-2.5 py-1 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white',
                 style === s.value

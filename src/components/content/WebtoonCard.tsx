@@ -24,19 +24,13 @@ export default function WebtoonCard({ webtoon, size = 'md' }: WebtoonCardProps) 
     >
       {/* Cover */}
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
-        {webtoon.coverURL ? (
-          <Image
-            src={webtoon.coverURL}
-            alt={`Cover art for ${webtoon.title}`}
-            fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-bg-elevated">
-            <span className="text-text-muted text-xs text-center px-2">No Cover</span>
-          </div>
-        )}
+        <Image
+          src={webtoon.coverURL || '/images/ravana-cover.png'}
+          alt={`Cover art for ${webtoon.title}`}
+          fill
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
+        />
         {webtoon.status !== 'draft' && (
           <div className="absolute top-2 left-2">
             <Badge

@@ -8,6 +8,7 @@ const withPWA = require('next-pwa')({
 })
 
 const nextConfig = {
+  devIndicators: false,
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },

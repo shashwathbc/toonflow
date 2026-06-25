@@ -49,7 +49,7 @@ function ToolbarBtn({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      aria-pressed={isActive ? 'true' : 'false'}
+      {...(isActive ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
       title={label}
       className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white disabled:opacity-30 ${
         isActive

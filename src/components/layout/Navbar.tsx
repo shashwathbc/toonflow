@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Plus, Search, Menu } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils/cn'
@@ -17,7 +17,7 @@ const NAV_LINKS = [
 export default function Navbar() {
   const pathname = usePathname()
   const { isAuthenticated } = useAuth()
-  const { setMobileNavOpen, setLoginModalOpen } = useAppStore()
+  const { setLoginModalOpen } = useAppStore()
 
   const handleCreate = () => {
     if (!isAuthenticated) {
@@ -77,7 +77,7 @@ export default function Navbar() {
           {isAuthenticated ? (
             <Link
               href="/create"
-              className="btn-accent text-sm py-1.5 px-3"
+              className="hidden md:inline-flex btn-accent text-sm py-1.5 px-3"
               aria-label="Create new content"
             >
               <Plus size={16} aria-hidden="true" />
@@ -86,7 +86,7 @@ export default function Navbar() {
           ) : (
             <button
               onClick={handleCreate}
-              className="btn-accent text-sm py-1.5 px-3"
+              className="hidden md:inline-flex btn-accent text-sm py-1.5 px-3"
               aria-label="Create — sign in required"
             >
               <Plus size={16} aria-hidden="true" />
@@ -104,18 +104,9 @@ export default function Navbar() {
           </Link>
 
           {/* User menu or auth buttons */}
-          <UserMenu />
-
-          {/* Mobile nav toggle */}
-          <button
-            className="btn-ghost p-2 rounded-lg md:hidden"
-            onClick={() => setMobileNavOpen(true)}
-            aria-label="Open navigation menu"
-            aria-expanded="false"
-            aria-controls="mobile-nav"
-          >
-            <Menu size={20} aria-hidden="true" />
-          </button>
+          <div className="hidden md:block">
+            <UserMenu />
+          </div>
         </div>
       </nav>
     </header>
