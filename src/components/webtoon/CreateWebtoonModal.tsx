@@ -309,7 +309,7 @@ export function CreateWebtoonModal({
                   type="text"
                   placeholder="Enter webtoon title…"
                   className="input-base w-full text-sm"
-                  aria-invalid={errors.title ? 'true' : 'false'}
+                  {...(errors.title ? { 'aria-invalid': 'true' } : { 'aria-invalid': 'false' })}
                   {...register('title')}
                 />
                 {errors.title && (
@@ -350,7 +350,7 @@ export function CreateWebtoonModal({
                     placeholder="Provide a compelling synopsis of your story…"
                     rows={4}
                     className="input-base w-full text-sm pr-10 resize-none"
-                    aria-invalid={errors.synopsis ? 'true' : 'false'}
+                    {...(errors.synopsis ? { 'aria-invalid': 'true' } : { 'aria-invalid': 'false' })}
                     {...register('synopsis')}
                   />
                   {synopsisLoading && (
@@ -394,33 +394,34 @@ export function CreateWebtoonModal({
                       />
                       <div
                         role="listbox"
+                        aria-label="Select genres"
                         aria-multiselectable="true"
                         className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 p-2 grid grid-cols-2 gap-1"
                       >
                         {GENRES.map((g) => {
                           const isSelected = selectedGenres.includes(g)
-                          return (
+                          return isSelected ? (
                             <button
                               key={g}
                               type="button"
                               role="option"
-                              aria-selected={isSelected ? 'true' : 'false'}
-                              onClick={() => {
-                                if (isSelected) {
-                                  setValue(
-                                    'genres',
-                                    selectedGenres.filter((x) => x !== g)
-                                  )
-                                } else if (selectedGenres.length < 5) {
-                                  setValue('genres', [...selectedGenres, g])
-                                }
-                              }}
-                              className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/5 ${
-                                isSelected ? 'text-accent font-semibold bg-accent/5' : 'text-white/60'
-                              }`}
+                              aria-selected="true"
+                              onClick={() => setValue('genres', selectedGenres.filter((x) => x !== g))}
+                              className="flex items-center justify-between px-3 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/5 text-accent font-semibold bg-accent/5"
                             >
                               <span className="capitalize">{g.replace('-', ' ')}</span>
-                              {isSelected && <Check size={12} aria-hidden="true" />}
+                              <Check size={12} aria-hidden="true" />
+                            </button>
+                          ) : (
+                            <button
+                              key={g}
+                              type="button"
+                              role="option"
+                              aria-selected="false"
+                              onClick={() => { if (selectedGenres.length < 5) setValue('genres', [...selectedGenres, g]) }}
+                              className="flex items-center justify-between px-3 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/5 text-white/60"
+                            >
+                              <span className="capitalize">{g.replace('-', ' ')}</span>
                             </button>
                           )
                         })}

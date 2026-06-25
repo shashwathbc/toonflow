@@ -189,3 +189,13 @@
 - Tab interfaces use proper ARIA role/tablist/tabpanel
 - focus-visible:ring-2 on all interactive elements
 - Minimum 4.5:1 contrast maintained throughout
+
+
+## 2026-06-25 — Fix 11 ARIA/CSS lint problems
+
+- `CreateWebtoonModal.tsx`: Changed `aria-invalid` from JSX expression to spread-object pattern (matches CreateNovelModal, avoids axe static-analysis false positive); split `aria-selected` genre buttons into two static renders (`"true"`/`"false"`); added `aria-label="Select genres"` to `role="listbox"` div
+- `(novel)/create/novel/page.tsx`: Added `aria-label="Sort order options"` to sort `role="listbox"` div
+- `(novel)/create/webtoon/page.tsx`: Added `aria-label="Sort order options"` to sort `role="listbox"` div
+- `CreateNovelModal.tsx`: Added `aria-label="Select genres"` to `role="listbox"` div
+- `globals.css`: Wrapped `scrollbar-width`/`scrollbar-color` in `@supports (scrollbar-width: thin)` block to suppress compat warnings (webkit fallback retained)
+- `EpisodeSidebar.tsx`: Removed `style` prop from `<li>`; apply dnd-kit transform/transition imperatively via `useEffect` + merged ref (`useRef` + `useCallback`); moved opacity/z-index to Tailwind conditional classes

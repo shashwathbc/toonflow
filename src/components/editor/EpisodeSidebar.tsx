@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -69,22 +69,27 @@ function SortableEpisodeRow({
     isDragging,
   } = useSortable({ id: episode.id })
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-    zIndex: isDragging ? 10 : undefined,
-  }
+  const nodeRef = useRef<HTMLLIElement>(null)
+
+  const setRefs = useCallback((node: HTMLLIElement | null) => {
+    setNodeRef(node)
+    nodeRef.current = node
+  }, [setNodeRef])
+
+  useEffect(() => {
+    if (!nodeRef.current) return
+    nodeRef.current.style.transform = CSS.Transform.toString(transform) ?? ''
+    nodeRef.current.style.transition = transition ?? ''
+  }, [transform, transition])
 
   const panelsCount = episode.panels?.length ?? 0
 
   return (
     <li
-      ref={setNodeRef}
-      style={style}
+      ref={setRefs}
       className={`group relative rounded-lg transition-colors ${
-        isActive ? 'bg-white/10' : 'hover:bg-white/5'
-      }`}
+        isDragging ? 'opacity-40 z-10' : 'opacity-100'
+      } ${isActive ? 'bg-white/10' : 'hover:bg-white/5'}`}
     >
       <div className="flex items-start gap-1 p-2">
         {/* Drag handle */}

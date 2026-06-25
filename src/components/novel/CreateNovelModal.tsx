@@ -466,6 +466,7 @@ export function CreateNovelModal({
                         <div className="fixed inset-0 z-10" onClick={() => setGenreOpen(false)} aria-hidden="true" />
                         <div
                           role="listbox"
+                          aria-label="Select genres"
                           aria-multiselectable="true"
                           className="absolute top-full mt-1 left-0 right-0 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 max-h-52 overflow-y-auto"
                         >

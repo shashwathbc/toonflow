@@ -481,7 +481,7 @@ export default function NovelDashboardPage() {
             {sortOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} aria-hidden="true" />
-                <div role="listbox" className="absolute right-0 top-10 w-44 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 overflow-hidden animate-scale-in">
+                <div role="listbox" aria-label="Sort order options" className="absolute right-0 top-10 w-44 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 overflow-hidden animate-scale-in">
                   {SORT_OPTIONS.map((opt) => {
                     const isSelected = sort === opt.value
                     return isSelected ? (
