@@ -32,8 +32,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             error && 'border-danger focus:border-danger focus:ring-danger',
             className
           )}
-          aria-invalid={error ? 'true' : undefined}
-          aria-required={props.required ? 'true' : undefined}
+          {...(error ? { 'aria-invalid': 'true' } : {})}
+          {...(props.required ? { 'aria-required': 'true' } : {})}
           aria-describedby={[errorId, hintId].filter(Boolean).join(' ') || undefined}
           {...props}
         />

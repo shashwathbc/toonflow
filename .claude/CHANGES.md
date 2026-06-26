@@ -1,5 +1,9 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-06-26 — Fix ARIA Invalid Attribute Value on Profile Page Tab
+
+- `src/app/(main)/profile/[uid]/page.tsx`: Split the profile page tab selection buttons into separate static renderings with explicit `aria-selected="true"` and `aria-selected="false"` to prevent WCAG linting tools from flagging the JSX expression as `"{expression}"`.
+
 ## 2026-06-26 — Full routing performance audit & optimisation
 
 **next.config.js**

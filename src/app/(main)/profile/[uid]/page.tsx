@@ -52,20 +52,28 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
       {/* Tabs placeholder */}
       <div role="tablist" aria-label="Profile sections" className="flex gap-2 border-b border-bg-border mb-6">
-        {['Novels', 'Webtoons', 'Bookmarks'].map((tab, i) => (
-          <button
-            key={tab}
-            role="tab"
-            aria-selected={i === 0}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-              i === 0
-                ? 'border-accent text-accent'
-                : 'border-transparent text-text-secondary hover:text-text'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+        {['Novels', 'Webtoons', 'Bookmarks'].map((tab, i) => {
+          const isSelected = i === 0
+          return isSelected ? (
+            <button
+              key={tab}
+              role="tab"
+              aria-selected="true"
+              className="px-4 py-2 text-sm font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent border-accent text-accent"
+            >
+              {tab}
+            </button>
+          ) : (
+            <button
+              key={tab}
+              role="tab"
+              aria-selected="false"
+              className="px-4 py-2 text-sm font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent border-transparent text-text-secondary hover:text-text"
+            >
+              {tab}
+            </button>
+          )
+        })}
       </div>
 
       <div role="tabpanel" aria-label="Novels">
