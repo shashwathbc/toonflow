@@ -49,17 +49,23 @@ interface EpisodeSidebarProps {
 interface SortableEpisodeRowProps {
   episode: Episode
   isActive: boolean
+  pendingDeleteId: string | null
   onSelect: () => void
   onDuplicate: () => void
-  onDelete: () => void
+  onRequestDelete: () => void
+  onConfirmDelete: () => void
+  onCancelDelete: () => void
 }
 
 function SortableEpisodeRow({
   episode,
   isActive,
+  pendingDeleteId,
   onSelect,
   onDuplicate,
-  onDelete,
+  onRequestDelete,
+  onConfirmDelete,
+  onCancelDelete,
 }: SortableEpisodeRowProps) {
   const {
     attributes,
@@ -128,23 +134,46 @@ function SortableEpisodeRow({
           </p>
         </button>
 
-        {/* Actions (shown on hover) */}
-        <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => { e.stopPropagation(); onDuplicate() }}
-            className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
-            aria-label={`Duplicate episode ${episode.episodeNumber}`}
-          >
-            <Copy size={11} aria-hidden="true" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
-            aria-label={`Delete episode ${episode.episodeNumber}`}
-          >
-            <Trash2 size={11} aria-hidden="true" />
-          </button>
-        </div>
+        {/* Actions */}
+        {pendingDeleteId === episode.id ? (
+          <div className="flex-shrink-0 flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onConfirmDelete() }}
+              className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-danger/20 text-danger hover:bg-danger/30 transition-colors focus-visible:ring-1 focus-visible:ring-danger"
+              aria-label="Confirm delete episode"
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onCancelDelete() }}
+              className="px-1.5 py-0.5 rounded text-[10px] text-white/50 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              aria-label="Cancel delete"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDuplicate() }}
+              className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              aria-label={`Duplicate episode ${episode.episodeNumber}`}
+            >
+              <Copy size={11} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
+              className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              aria-label={`Delete episode ${episode.episodeNumber}`}
+            >
+              <Trash2 size={11} aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
     </li>
   )
@@ -160,6 +189,7 @@ export function EpisodeSidebar({
 }: EpisodeSidebarProps) {
   const [creating, setCreating] = useState(false)
   const [localOrder, setLocalOrder] = useState<string[]>([])
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const orderedEpisodes = localOrder.length > 0
     ? [...episodes].sort(
@@ -205,8 +235,8 @@ export function EpisodeSidebar({
     }
   }
 
-  async function handleDelete(episode: Episode) {
-    if (!confirm(`Delete "${episode.title || 'this episode'}"? This cannot be undone.`)) return
+  async function handleConfirmDelete(episode: Episode) {
+    setPendingDeleteId(null)
     try {
       await deleteEpisode(webtoonId, episode.id)
       toast.success('Episode deleted')
@@ -326,9 +356,12 @@ export function EpisodeSidebar({
                     key={episode.id}
                     episode={episode}
                     isActive={episode.id === activeEpisodeId}
+                    pendingDeleteId={pendingDeleteId}
                     onSelect={() => onSelectEpisode(episode)}
                     onDuplicate={() => handleDuplicate(episode)}
-                    onDelete={() => handleDelete(episode)}
+                    onRequestDelete={() => setPendingDeleteId(episode.id)}
+                    onConfirmDelete={() => handleConfirmDelete(episode)}
+                    onCancelDelete={() => setPendingDeleteId(null)}
                   />
                 ))}
               </ul>

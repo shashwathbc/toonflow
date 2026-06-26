@@ -5,5 +5,5 @@ export function now(): number {
 }
 
 export function nowTimestamp(): FirestoreTimestamp {
-  return { seconds: Date.now() / 1000, nanoseconds: 0 }
+  return { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 }
 }

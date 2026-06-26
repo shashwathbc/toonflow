@@ -98,7 +98,7 @@ function FilterChip({ children, active }: { children: React.ReactNode; active?: 
           ? 'bg-accent/10 text-accent border-accent/30'
           : 'bg-bg text-text-secondary border-bg-border hover:border-accent/30 hover:text-text'
       }`}
-      aria-pressed={active === true ? 'true' : 'false'}
+      {...(active ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
     >
       {children}
     </button>

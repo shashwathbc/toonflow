@@ -49,17 +49,23 @@ interface ChapterSidebarProps {
 interface SortableChapterRowProps {
   chapter: Chapter
   isActive: boolean
+  pendingDeleteId: string | null
   onSelect: () => void
   onDuplicate: () => void
-  onDelete: () => void
+  onRequestDelete: () => void
+  onConfirmDelete: () => void
+  onCancelDelete: () => void
 }
 
 function SortableChapterRow({
   chapter,
   isActive,
+  pendingDeleteId,
   onSelect,
   onDuplicate,
-  onDelete,
+  onRequestDelete,
+  onConfirmDelete,
+  onCancelDelete,
 }: SortableChapterRowProps) {
   const {
     attributes,
@@ -123,23 +129,46 @@ function SortableChapterRow({
           </p>
         </button>
 
-        {/* Actions (shown on hover) */}
-        <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => { e.stopPropagation(); onDuplicate() }}
-            className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
-            aria-label={`Duplicate chapter ${chapter.chapterNumber}`}
-          >
-            <Copy size={11} aria-hidden="true" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
-            aria-label={`Delete chapter ${chapter.chapterNumber}`}
-          >
-            <Trash2 size={11} aria-hidden="true" />
-          </button>
-        </div>
+        {/* Actions */}
+        {pendingDeleteId === chapter.id ? (
+          <div className="flex-shrink-0 flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onConfirmDelete() }}
+              className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-danger/20 text-danger hover:bg-danger/30 transition-colors focus-visible:ring-1 focus-visible:ring-danger"
+              aria-label="Confirm delete chapter"
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onCancelDelete() }}
+              className="px-1.5 py-0.5 rounded text-[10px] text-white/50 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              aria-label="Cancel delete"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDuplicate() }}
+              className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              aria-label={`Duplicate chapter ${chapter.chapterNumber}`}
+            >
+              <Copy size={11} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
+              className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              aria-label={`Delete chapter ${chapter.chapterNumber}`}
+            >
+              <Trash2 size={11} aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
     </li>
   )
@@ -155,6 +184,7 @@ export function ChapterSidebar({
 }: ChapterSidebarProps) {
   const [creating, setCreating] = useState(false)
   const [localOrder, setLocalOrder] = useState<string[]>([])
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const orderedChapters = localOrder.length > 0
     ? [...chapters].sort(
@@ -200,8 +230,8 @@ export function ChapterSidebar({
     }
   }
 
-  async function handleDelete(chapter: Chapter) {
-    if (!confirm(`Delete "${chapter.title || 'this chapter'}"? This cannot be undone.`)) return
+  async function handleConfirmDelete(chapter: Chapter) {
+    setPendingDeleteId(null)
     try {
       await deleteChapter(novelId, chapter.id)
       toast.success('Chapter deleted')
@@ -321,9 +351,12 @@ export function ChapterSidebar({
                     key={chapter.id}
                     chapter={chapter}
                     isActive={chapter.id === activeChapterId}
+                    pendingDeleteId={pendingDeleteId}
                     onSelect={() => onSelectChapter(chapter)}
                     onDuplicate={() => handleDuplicate(chapter)}
-                    onDelete={() => handleDelete(chapter)}
+                    onRequestDelete={() => setPendingDeleteId(chapter.id)}
+                    onConfirmDelete={() => handleConfirmDelete(chapter)}
+                    onCancelDelete={() => setPendingDeleteId(null)}
                   />
                 ))}
               </ul>

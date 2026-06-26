@@ -36,8 +36,8 @@ import {
   Sparkles,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { formatDistanceToNow } from 'date-fns'
 import type { Webtoon } from '@/types'
+import { formatCount, formatRelativeTimestamp } from '@/lib/utils/formatters'
 
 type FilterStatus = 'all' | 'draft' | 'published' | 'ongoing' | 'completed' | 'hiatus'
 type SortOrder = 'updated' | 'views' | 'alpha' | 'episodes'
@@ -69,18 +69,6 @@ function statusBadge(status: Webtoon['status']) {
   return map[status] ?? 'bg-white/10 text-white/60'
 }
 
-function formatRelative(ts: Webtoon['updatedAt'] | null | undefined): string {
-  if (!ts) return '—'
-  const seconds = typeof ts === 'object' && 'seconds' in ts ? (ts as { seconds: number }).seconds : 0
-  if (!seconds) return '—'
-  return formatDistanceToNow(new Date(seconds * 1000), { addSuffix: true })
-}
-
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
-}
 
 function WebtoonCardSkeleton() {
   return (
@@ -171,7 +159,7 @@ function WebtoonCard({ webtoon, onOpen, onEdit, onDelete, onPublish, onUnpublish
         </div>
 
         <p className="text-[10px] text-white/35">
-          {formatRelative(webtoon.updatedAt)}
+          {formatRelativeTimestamp(webtoon.updatedAt)}
         </p>
       </div>
 

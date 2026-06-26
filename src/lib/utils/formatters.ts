@@ -1,5 +1,11 @@
 import type { FirestoreTimestamp } from '@/types'
 import { now } from '@/lib/utils/time'
+import { formatDistanceToNow } from 'date-fns'
+
+export function formatRelativeTimestamp(ts: { seconds: number } | null | undefined): string {
+  if (!ts?.seconds) return '—'
+  return formatDistanceToNow(new Date(ts.seconds * 1000), { addSuffix: true })
+}
 
 export function fromTimestamp(ts: FirestoreTimestamp): Date {
   return new Date(ts.seconds * 1000)

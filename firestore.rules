@@ -58,30 +58,35 @@ service cloud.firestore {
     }
 
     // ── 3. Bookmarks ─────────────────────────────────────────────────────────
-    match /bookmarks/{bookmarkId} {
-      allow read: if isOwner(resource.data.userId);
-      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
-      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    // Service uses subcollection path: bookmarks/{uid}/items/{contentId}
+    match /bookmarks/{uid}/items/{contentId} {
+      allow read: if isAuthenticated() && isOwner(uid);
+      allow create: if isAuthenticated() && isOwner(uid);
+      allow delete: if isAuthenticated() && isOwner(uid);
       allow update: if false;
     }
 
     // ── 4. Discussions ────────────────────────────────────────────────────────
     match /discussions/{threadId} {
       allow read: if true;
-      allow create: if isValidText(request.resource.data.title, 200)
+      allow create: if isAuthenticated()
+        && isValidText(request.resource.data.title, 200)
         && isValidText(request.resource.data.body, 5000)
         && request.resource.data.upvotes == 0
         && request.resource.data.commentCount == 0
         && request.resource.data.isPinned == false;
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes'])
+      allow update: if isAuthenticated()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes'])
         && request.resource.data.upvotes == resource.data.upvotes + 1;
       allow delete: if false;
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if isValidText(request.resource.data.body, 5000)
+        allow create: if isAuthenticated()
+          && isValidText(request.resource.data.body, 5000)
           && request.resource.data.upvotes == 0;
-        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes'])
+        allow update: if isAuthenticated()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes'])
           && request.resource.data.upvotes == resource.data.upvotes + 1;
         allow delete: if false;
       }

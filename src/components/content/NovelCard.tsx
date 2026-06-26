@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { Star } from 'lucide-react'
+import { Star, ImageOff } from 'lucide-react'
 import type { Novel } from '@/types'
 import { formatCount } from '@/lib/utils/formatters'
 import Badge from '@/components/ui/Badge'
@@ -24,13 +24,20 @@ export default function NovelCard({ novel, size = 'md' }: NovelCardProps) {
     >
       {/* Cover */}
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
-        <Image
-          src={novel.coverURL || '/images/ravana-cover.png'}
-          alt={`Cover art for ${novel.title}`}
-          fill
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
-        />
+        {novel.coverURL ? (
+          <Image
+            src={novel.coverURL}
+            alt={`Cover art for ${novel.title}`}
+            fill
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-text-muted">
+            <ImageOff size={32} aria-hidden="true" />
+            <span className="text-xs">No Cover</span>
+          </div>
+        )}
         {/* Status badge */}
         {novel.status !== 'draft' && (
           <div className="absolute top-2 left-2">

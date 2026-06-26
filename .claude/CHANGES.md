@@ -269,6 +269,61 @@
 - `globals.css`: Wrapped `scrollbar-width`/`scrollbar-color` in `@supports (scrollbar-width: thin)` block to suppress compat warnings (webkit fallback retained)
 - `EpisodeSidebar.tsx`: Removed `style` prop from `<li>`; apply dnd-kit transform/transition imperatively via `useEffect` + merged ref (`useRef` + `useCallback`); moved opacity/z-index to Tailwind conditional classes
 
+## 2026-06-26 — Comprehensive Project Audit: Security, Bug & Code Quality Fixes
+
+### 🔴 Critical security / correctness fixes
+
+**`src/proxy.ts` (UPDATED — correct middleware filename for this Next.js build)**
+- This custom Next.js build uses `proxy.ts` / `export function proxy` as the middleware convention (not `middleware.ts`). The audit incorrectly created `src/middleware.ts`, causing a conflict error. Deleted `middleware.ts`; all route protection lives in `proxy.ts`.
+- Route protection: auth gate → redirects to `/login?redirect=<path>`; admin gate checks `ROLE_COOKIE_NAME`; super-admin gate checks `EMAIL_COOKIE_NAME === SUPER_ADMIN_EMAIL`.
+
+**`firestore.rules`**
+- `discussions/{threadId}`: `allow create` now requires `isAuthenticated()` — previously any unauthenticated user could write directly to Firestore.
+- `discussions/{threadId}/comments/{commentId}`: same fix — create and update now require authentication.
+- Bookmark path corrected: rules now match the actual subcollection path `bookmarks/{uid}/items/{contentId}` used by the service layer (old flat-collection rule at `bookmarks/{bookmarkId}` never fired for any real bookmark write).
+
+**`storage.rules`**
+- Added `novels/{novelId}/banner/{file}` rule — `uploadNovelBanner` in `storage.ts` uploads to this path but no rule existed, causing production upload failures.
+- Novel and webtoon cover writes now verify the requester is the document's author via `firestore.get(...)`.data.authorId == request.auth.uid.
+
+### 🟠 High fixes
+
+**`src/components/content/WebtoonCard.tsx` + `NovelCard.tsx`**
+- Both cards used `/images/ravana-cover.png` as the fallback src. `public/images/` is empty — all cards without a cover rendered a broken image in production.
+- Fixed: conditional render — if `coverURL` exists, show `<Image>`; otherwise show an inline `ImageOff` icon placeholder (matches existing pattern in other empty states).
+
+**`next.config.js`**
+- Added `poweredByHeader: false` (removes `X-Powered-By: Next.js` response header).
+- Added `async headers()` returning `securityHeaders` on all routes: `X-DNS-Prefetch-Control`, `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
+
+### 🟡 Medium fixes
+
+**`src/lib/utils/time.ts`**
+- `nowTimestamp()` returned `Date.now() / 1000` (a float, e.g. `1750000000.123`) for `seconds`. Firestore timestamps require integer seconds. Fixed to `Math.floor(Date.now() / 1000)`.
+
+**`src/lib/utils/formatters.ts`**
+- Added `formatRelativeTimestamp(ts)` using `date-fns formatDistanceToNow` — consolidates the identical local function that existed in both create pages.
+
+**`src/app/(novel)/create/novel/page.tsx` + `create/webtoon/page.tsx`**
+- Removed locally-duplicated `formatCount()` and `formatRelative()` functions from both files.
+- Now import `formatCount` and `formatRelativeTimestamp` from `@/lib/utils/formatters`.
+
+**`src/components/editor/ChapterSidebar.tsx`**
+- Replaced `window.confirm()` in `handleDelete` with an inline two-step confirmation UI: first click on the trash icon sets `pendingDeleteId`; the row renders "Delete / Cancel" buttons in place of the action icons; confirming calls the actual Firestore delete.
+- Added `type="button"` to all action buttons in `SortableChapterRow`.
+
+**`src/components/editor/EpisodeSidebar.tsx`**
+- Same inline confirmation fix as ChapterSidebar.
+
+**`src/components/novel/CreateNovelModal.tsx`**
+- Fixed `URL.createObjectURL` memory leak: object URLs are now tracked in `coverObjectURL` and `bannerObjectURL` refs; revoked on replacement and on component unmount via `useEffect` cleanup.
+- Removed `console.error(err)` from the `onSubmit` catch block (leaked internal errors to browser console in production).
+
+### 🟢 Low fixes
+
+**Root directory**
+- Deleted `nul` Windows device-name artifact file that appeared as an untracked file in git status.
+
 ## 2026-06-26 — Fix ARIA Invalid Attribute Value in AIAssistant
 
 - `AIAssistant.tsx`: Changed `aria-expanded={showActions}` to the project's standard spread-object pattern `{...(showActions ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}` to resolve invalid ARIA attribute value errors in static validation.

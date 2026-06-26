@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -176,14 +176,30 @@ export function CreateNovelModal({
   const [aiPanel, setAiPanel] = useState<'cover' | 'banner' | null>(null)
   const [synopsisLoading, setSynopsisLoading] = useState(false)
 
+  const coverObjectURL = useRef<string | null>(null)
+  const bannerObjectURL = useRef<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (coverObjectURL.current) URL.revokeObjectURL(coverObjectURL.current)
+      if (bannerObjectURL.current) URL.revokeObjectURL(bannerObjectURL.current)
+    }
+  }, [])
+
   function handleCoverFile(file: File) {
+    if (coverObjectURL.current) URL.revokeObjectURL(coverObjectURL.current)
+    const url = URL.createObjectURL(file)
+    coverObjectURL.current = url
     setPendingCover(file)
-    setCoverURL(URL.createObjectURL(file))
+    setCoverURL(url)
   }
 
   function handleBannerFile(file: File) {
+    if (bannerObjectURL.current) URL.revokeObjectURL(bannerObjectURL.current)
+    const url = URL.createObjectURL(file)
+    bannerObjectURL.current = url
     setPendingBanner(file)
-    setBannerURL(URL.createObjectURL(file))
+    setBannerURL(url)
   }
 
   async function handleSynopsisAI(action: 'generate-synopsis' | 'improve-synopsis' | 'expand-synopsis') {
@@ -272,8 +288,7 @@ export function CreateNovelModal({
         toast.success('Novel created!')
         onCreated(id)
       }
-    } catch (err) {
-      console.error(err)
+    } catch {
       toast.error('Something went wrong. Please try again.')
     }
   }
