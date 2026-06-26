@@ -88,10 +88,10 @@ export default function SignupForm() {
         Continue with Google
       </Button>
 
-      <div className="flex items-center gap-3" role="separator" aria-label="or">
-        <div className="flex-1 h-px bg-bg-border" />
-        <span className="text-xs text-text-muted">or</span>
-        <div className="flex-1 h-px bg-bg-border" />
+      <div className="flex items-center gap-3" aria-hidden="true">
+        <hr className="flex-1 border-bg-border" />
+        <span className="text-xs text-text-muted select-none">or</span>
+        <hr className="flex-1 border-bg-border" />
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>

@@ -6,6 +6,11 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 type Action = 'generate-synopsis' | 'improve-synopsis' | 'expand-synopsis'
 
 export async function POST(request: NextRequest) {
+  const authToken = request.cookies.get('toonflow-auth-token')?.value
+  if (!authToken) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
   try {
     const body = await request.json() as {
       action: Action

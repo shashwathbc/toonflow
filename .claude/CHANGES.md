@@ -1,5 +1,52 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-06-26 — Full routing performance audit & optimisation
+
+**next.config.js**
+- Added `experimental.optimizePackageImports` for `lucide-react`, `framer-motion`, all `@radix-ui/*` packages, `date-fns` — eliminates barrel-import overhead
+- Added `compress: true`, `poweredByHeader: false`
+- Added `images.formats: ['image/avif', 'image/webp']` for next-gen image formats
+
+**Instant loading states — `loading.tsx` created for every route group**
+- `src/app/(main)/loading.tsx` — hero + card grid skeleton (replaces blank screen on Home/Browse/Originals navigation)
+- `src/app/(novel)/loading.tsx` — full three-column editor skeleton (toolbar + chapter sidebar + editor + AI panel)
+- `src/app/(studio)/loading.tsx` — admin content skeleton
+- `src/app/(auth)/loading.tsx` — auth form skeleton
+
+**Error boundaries — `error.tsx` created for every route group**
+- `src/app/error.tsx` (root), `(main)/error.tsx`, `(novel)/error.tsx`, `(studio)/error.tsx`
+- Each shows a contextual retry button instead of cascading to a blank screen
+
+**Static rendering — three public pages now pre-rendered at build time**
+- `(main)/page.tsx`, `(main)/browse/page.tsx`, `(main)/originals/page.tsx` — `export const dynamic = 'force-static'`
+- Served from CDN edge on Vercel; zero server compute per request
+
+**Bundle splitting — dynamic imports replacing static ones**
+- `NovelRichEditor` (TipTap ~200 KB) → `next/dynamic` with `ssr: false` in novel editor
+- `AIAssistant` → `next/dynamic` with `ssr: false`; deferred until after initial paint
+- `AIImageGenerator` → `next/dynamic` with `ssr: false` in webtoon editor
+- `jsPDF` (~230 KB) → async `import('jspdf')` inside `handleExportPDF`; removed from initial route chunk entirely
+- `CreateNovelModal` → `next/dynamic` (not needed on initial novel dashboard render)
+- `CreateWebtoonModal` → `next/dynamic` (not needed on initial webtoon dashboard render)
+
+**Layout memoisation**
+- `Navbar` and `Footer` wrapped with `React.memo` — prevents re-render on parent layout context updates
+
+**Accessibility fixes (pre-existing issues resolved)**
+- Added `type="button"` to 16 buttons across `create/novel/page.tsx`, `create/webtoon/[webtoonId]/page.tsx`, `Navbar.tsx`, `browse/page.tsx`
+- Removed invalid `role="list"` from placeholder grid divs in `(main)/page.tsx`, `browse/page.tsx`, `originals/page.tsx` (no `role="listitem"` children)
+- Fixed `aria-pressed` from boolean expression to string literal in `FilterChip`
+
+## 2026-06-26 — Global time utility; replace all Date.now() call sites
+
+- Created `src/lib/utils/time.ts` with `now()` (ms timestamp) and `nowTimestamp()` (Firestore `{seconds, nanoseconds}` shape)
+- Replaced all `Date.now()` usages in: `AIAssistant.tsx`, `EpisodeSidebar.tsx`, `ChapterSidebar.tsx`, `AIImageGenerator.tsx`, `formatters.ts`
+
+## 2026-06-26 — Fix middleware conflict and PWA dev noise
+
+- Deleted `src/middleware.ts` — Next.js 15 uses `proxy` convention; `src/proxy.ts` already had all the same route-guard logic
+- Refactored `next.config.js` to only apply `withPWA` wrapper in production, eliminating the double `[PWA] PWA support is disabled` console log in dev
+
 ## 2026-06-24 — Novel Creation Module (Session 2)
 
 ### Design system
@@ -191,6 +238,28 @@
 - Minimum 4.5:1 contrast maintained throughout
 
 
+## 2026-06-25 — Full Security, WCAG & UX Audit (Session 3)
+
+### Security fixes
+- `src/middleware.ts` (NEW): Route protection — `/create/**` and `/dashboard/**` require auth cookie; `/admin/**` requires admin role; `/admin/super/**` requires superadmin email. Redirects unauthenticated users to `/login?redirect=<path>`.
+- `src/app/api/ai/novel-assist/route.ts`, `generate-image/route.ts`, `novel-content/route.ts`: Added 401 auth guard — all three AI endpoints previously accepted requests from unauthenticated callers (API cost abuse vector).
+- `src/components/auth/LoginForm.tsx`: Fixed open redirect — `redirect` search param now validated to be a relative path starting with `/` and not `//`. Arbitrary external URLs are rejected.
+- `src/app/api/webhooks/route.ts`: Webhook now verifies Razorpay HMAC-SHA256 signature via `crypto.timingSafeEqual`; returns 401 on mismatch and 503 if `RAZORPAY_WEBHOOK_SECRET` is unset.
+
+### WCAG / Accessibility fixes
+- `src/components/ui/Input.tsx`: Replaced `Math.random()` ID generation with React `useId()` — eliminates SSR hydration mismatch and non-stable IDs. Added `aria-required="true"` (string) when `required` prop is set.
+- `src/app/(novel)/create/novel/[novelId]/page.tsx`: Removed `focus-visible:ring-0` from chapter title input — violation of WCAG 2.4.7 (focus visible). Replaced with `focus-visible:outline-2 focus-visible:outline-white/40`.
+- `src/app/(novel)/create/novel/page.tsx` (DeleteConfirmDialog): Added `useEffect` focus trap (Cancel button auto-focused on open), Escape key handler, and `aria-describedby="delete-dialog-desc"` on dialog container.
+- `src/components/editor/AIAssistant.tsx`: Replaced `window.confirm()` (inaccessible, deprecated) with inline confirmation UI using `confirmClear` state. Also fixed: `type="button"` on all buttons, `aria-expanded` as boolean, `bg-white/8` → `bg-white/10` (invalid Tailwind v3 opacity), inline `animationDelay` style → Tailwind arbitrary `[animation-delay:Xms]`, inline `height: auto` style → DOM ref manipulation via `onInput` handler.
+- `src/components/auth/LoginForm.tsx`, `SignupForm.tsx`: Replaced `role="separator"` on `<div>` (invalid ARIA usage) with `<hr>` elements and `aria-hidden="true"` on the wrapper.
+
+### UX / bug fixes
+- `src/app/(novel)/create/novel/page.tsx`: Added `useEffect` Escape key handler to close sort dropdown. Added `type="button"` to all 5 buttons missing it.
+- `src/components/layout/Footer.tsx`: Removed `/profile` link (broken — no UID available in Server Component). Profile is already accessible via the UserMenu dropdown.
+
+### Code quality / convention fixes
+- `src/app/(novel)/create/novel/page.tsx`, `[novelId]/page.tsx`, `create/webtoon/page.tsx`, `[webtoonId]/page.tsx`: Changed `import { useAuth } from '@/contexts/AuthContext'` → `@/hooks/useAuth` everywhere (CLAUDE.md convention).
+
 ## 2026-06-25 — Fix 11 ARIA/CSS lint problems
 
 - `CreateWebtoonModal.tsx`: Changed `aria-invalid` from JSX expression to spread-object pattern (matches CreateNovelModal, avoids axe static-analysis false positive); split `aria-selected` genre buttons into two static renders (`"true"`/`"false"`); added `aria-label="Select genres"` to `role="listbox"` div
@@ -199,3 +268,7 @@
 - `CreateNovelModal.tsx`: Added `aria-label="Select genres"` to `role="listbox"` div
 - `globals.css`: Wrapped `scrollbar-width`/`scrollbar-color` in `@supports (scrollbar-width: thin)` block to suppress compat warnings (webkit fallback retained)
 - `EpisodeSidebar.tsx`: Removed `style` prop from `<li>`; apply dnd-kit transform/transition imperatively via `useEffect` + merged ref (`useRef` + `useCallback`); moved opacity/z-index to Tailwind conditional classes
+
+## 2026-06-26 — Fix ARIA Invalid Attribute Value in AIAssistant
+
+- `AIAssistant.tsx`: Changed `aria-expanded={showActions}` to the project's standard spread-object pattern `{...(showActions ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}` to resolve invalid ARIA attribute value errors in static validation.

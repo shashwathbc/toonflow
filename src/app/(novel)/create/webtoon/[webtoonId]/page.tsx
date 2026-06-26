@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/useAuth'
 import { useEpisodes } from '@/hooks/useEpisodes'
 import {
   getWebtoonById,
@@ -15,7 +15,12 @@ import {
 } from '@/lib/firebase/firestore'
 import { EpisodeSidebar } from '@/components/editor/EpisodeSidebar'
 import { WebtoonToolbar } from '@/components/editor/WebtoonToolbar'
-import { AIImageGenerator } from '@/components/novel/AIImageGenerator'
+import dynamic from 'next/dynamic'
+
+const AIImageGenerator = dynamic(
+  () => import('@/components/novel/AIImageGenerator').then((m) => ({ default: m.AIImageGenerator })),
+  { ssr: false, loading: () => <div className="w-72 bg-bg-card border-l border-bg-border shrink-0" aria-hidden="true" /> }
+)
 import {
   ImageIcon,
   Loader2,
@@ -285,7 +290,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
       <div className="flex h-screen items-center justify-center bg-bg flex-col gap-4">
         <ImageIcon size={32} className="text-white/20" aria-hidden="true" />
         <p className="text-white/50">Webtoon not found</p>
-        <button onClick={() => router.push('/create/webtoon')} className="btn-accent text-sm">
+        <button type="button" onClick={() => router.push('/create/webtoon')} className="btn-accent text-sm">
           Back to Webtoon Studio
         </button>
       </div>
@@ -414,6 +419,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                           <div className="px-3 py-2 bg-bg-card/95 border-t border-bg-border flex items-center justify-between gap-4 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             <div className="flex items-center gap-1.5">
                               <button
+                                type="button"
                                 onClick={() => movePanel(idx, 'up')}
                                 disabled={idx === 0}
                                 className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20"
@@ -422,6 +428,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                                 <ArrowUp size={13} aria-hidden="true" />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => movePanel(idx, 'down')}
                                 disabled={idx === (activeEpisode.panels ?? []).length - 1}
                                 className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20"
@@ -433,6 +440,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
 
                             <div className="flex items-center gap-2">
                               <button
+                                type="button"
                                 onClick={() => makeThumbnail(panel.url)}
                                 className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 font-medium ${
                                   isThumb
@@ -445,6 +453,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                                 Thumbnail
                               </button>
                               <button
+                                type="button"
                                 onClick={() => removePanel(idx)}
                                 className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger"
                                 aria-label="Remove panel"

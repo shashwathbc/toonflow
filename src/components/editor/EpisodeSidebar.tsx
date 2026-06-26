@@ -34,6 +34,7 @@ import {
   duplicateEpisode,
   reorderEpisodes,
 } from '@/lib/firebase/firestore'
+import { nowTimestamp } from '@/lib/utils/time'
 import type { Episode } from '@/types'
 
 interface EpisodeSidebarProps {
@@ -193,7 +194,7 @@ export function EpisodeSidebar({
         coinCost: 0,
         viewCount: 0,
         status: 'draft',
-        createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 },
+        createdAt: nowTimestamp(),
         publishedAt: null,
       }
       onSelectEpisode(newEpisode)

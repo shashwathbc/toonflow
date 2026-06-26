@@ -21,7 +21,9 @@ type FormData = z.infer<typeof schema>
 export default function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirect = searchParams.get('redirect') ?? '/'
+  const rawRedirect = searchParams.get('redirect') ?? '/'
+  // Prevent open redirect — only allow same-origin relative paths
+  const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/'
   const [googleLoading, setGoogleLoading] = useState(false)
 
   const {
@@ -81,10 +83,10 @@ export default function LoginForm() {
         Continue with Google
       </Button>
 
-      <div className="flex items-center gap-3" role="separator" aria-label="or">
-        <div className="flex-1 h-px bg-bg-border" />
-        <span className="text-xs text-text-muted">or</span>
-        <div className="flex-1 h-px bg-bg-border" />
+      <div className="flex items-center gap-3" aria-hidden="true">
+        <hr className="flex-1 border-bg-border" />
+        <span className="text-xs text-text-muted select-none">or</span>
+        <hr className="flex-1 border-bg-border" />
       </div>
 
       {/* Email form */}

@@ -4,14 +4,19 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/useAuth'
 import { useWebtoons } from '@/hooks/useWebtoons'
 import {
   deleteWebtoon,
   publishWebtoon,
   unpublishWebtoon,
 } from '@/lib/firebase/firestore'
-import { CreateWebtoonModal } from '@/components/webtoon/CreateWebtoonModal'
+import dynamic from 'next/dynamic'
+
+const CreateWebtoonModal = dynamic(
+  () => import('@/components/webtoon/CreateWebtoonModal').then((m) => ({ default: m.CreateWebtoonModal })),
+  { ssr: false }
+)
 import {
   Plus,
   Search,

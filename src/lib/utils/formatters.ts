@@ -1,13 +1,13 @@
 import type { FirestoreTimestamp } from '@/types'
+import { now } from '@/lib/utils/time'
 
 export function fromTimestamp(ts: FirestoreTimestamp): Date {
   return new Date(ts.seconds * 1000)
 }
 
 export function formatRelativeTime(ts: FirestoreTimestamp): string {
-  const now = Date.now()
   const ms = fromTimestamp(ts).getTime()
-  const diff = Math.floor((now - ms) / 1000)
+  const diff = Math.floor((now() - ms) / 1000)
 
   if (diff < 60) return 'just now'
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`

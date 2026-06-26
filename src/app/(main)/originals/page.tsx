@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
 import { Tv2 } from 'lucide-react'
 
+export const dynamic = 'force-static'
+export const revalidate = false
+
 export const metadata: Metadata = {
   title: 'Originals — Exclusive Toonflow Content',
   description: 'Exclusive webtoons and novels created by top creators — only on Toonflow Studio Paint.',
@@ -23,7 +26,6 @@ export default function OriginalsPage() {
         <h2 id="originals-grid-heading" className="sr-only">Originals content grid</h2>
         <div
           className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
-          role="list"
           aria-label="Original content"
         >
           <p className="col-span-full text-text-muted text-sm">No originals published yet. Check back soon!</p>

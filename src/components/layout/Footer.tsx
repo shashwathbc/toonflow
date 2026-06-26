@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
 
@@ -5,7 +6,6 @@ const PLATFORM_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/originals', label: 'Originals' },
   { href: '/browse', label: 'Browse' },
-  { href: '/profile', label: 'Profile' },
 ]
 
 const SUPPORT_LINKS = [
@@ -19,7 +19,7 @@ const LEGAL_LINKS = [
   { href: '/ai-policy', label: 'AI Policy' },
 ]
 
-export default function Footer() {
+function Footer() {
   return (
     <footer
       className="bg-bg border-t border-bg-border mt-16"
@@ -150,3 +150,5 @@ export default function Footer() {
     </footer>
   )
 }
+
+export default memo(Footer)

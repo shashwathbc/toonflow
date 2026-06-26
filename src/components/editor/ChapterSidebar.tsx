@@ -34,6 +34,7 @@ import {
   duplicateChapter,
   reorderChapters,
 } from '@/lib/firebase/firestore'
+import { nowTimestamp } from '@/lib/utils/time'
 import type { Chapter } from '@/types'
 
 interface ChapterSidebarProps {
@@ -188,7 +189,7 @@ export function ChapterSidebar({
         coinCost: 0,
         viewCount: 0,
         status: 'draft',
-        createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 },
+        createdAt: nowTimestamp(),
         publishedAt: null,
       }
       onSelectChapter(newChapter)

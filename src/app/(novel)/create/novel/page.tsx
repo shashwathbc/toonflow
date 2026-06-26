@@ -1,17 +1,22 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/useAuth'
 import { useNovels } from '@/hooks/useNovels'
 import {
   deleteNovel,
   publishNovel,
   unpublishNovel,
 } from '@/lib/firebase/firestore'
-import { CreateNovelModal } from '@/components/novel/CreateNovelModal'
+import dynamic from 'next/dynamic'
+
+const CreateNovelModal = dynamic(
+  () => import('@/components/novel/CreateNovelModal').then((m) => ({ default: m.CreateNovelModal })),
+  { ssr: false }
+)
 import {
   Plus,
   Search,
@@ -139,6 +144,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
           <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); onOpen(novel.id) }}
             className="btn-accent text-xs px-3 py-1.5"
             aria-label={`Open ${novel.title}`}
@@ -181,6 +187,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
       <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
         <div className="relative">
           <button
+            type="button"
             onClick={() => setMenuOpen((v) => !v)}
             className="w-7 h-7 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white"
             aria-label="Novel actions"
@@ -202,6 +209,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
                 className="absolute right-0 top-8 w-44 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 overflow-hidden animate-scale-in"
               >
                 <button
+                  type="button"
                   role="menuitem"
                   onClick={() => { setMenuOpen(false); onOpen(novel.id) }}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
@@ -209,6 +217,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
                   <Edit3 size={13} aria-hidden="true" /> Open Editor
                 </button>
                 <button
+                  type="button"
                   role="menuitem"
                   onClick={() => { setMenuOpen(false); onEdit(novel) }}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
@@ -217,6 +226,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
                 </button>
                 {isPublished ? (
                   <button
+                    type="button"
                     role="menuitem"
                     onClick={() => { setMenuOpen(false); onUnpublish(novel.id) }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
@@ -225,6 +235,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
                   </button>
                 ) : (
                   <button
+                    type="button"
                     role="menuitem"
                     onClick={() => { setMenuOpen(false); onPublish(novel.id) }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
@@ -234,6 +245,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
                 )}
                 <div className="h-px bg-bg-border mx-2" aria-hidden="true" />
                 <button
+                  type="button"
                   role="menuitem"
                   onClick={() => { setMenuOpen(false); onDelete(novel.id, novel.title) }}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-danger hover:bg-danger/10 transition-colors"
@@ -257,12 +269,29 @@ interface DeleteConfirmProps {
 }
 
 function DeleteConfirmDialog({ title, onConfirm, onCancel, loading }: DeleteConfirmProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null)
+
+  // Focus the cancel button on open (safe default focus)
+  useEffect(() => {
+    cancelRef.current?.focus()
+  }, [])
+
+  // Close on Escape
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !loading) onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [loading, onCancel])
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-dialog-title"
+      aria-describedby="delete-dialog-desc"
     >
       <div className="bg-bg-elevated border border-bg-border rounded-2xl p-6 max-w-sm w-full animate-scale-in">
         <div className="flex items-start gap-3 mb-4">
@@ -273,13 +302,15 @@ function DeleteConfirmDialog({ title, onConfirm, onCancel, loading }: DeleteConf
             <h2 id="delete-dialog-title" className="font-semibold text-white text-base">
               Delete Novel
             </h2>
-            <p className="text-sm text-white/60 mt-1">
+            <p id="delete-dialog-desc" className="text-sm text-white/60 mt-1">
               &ldquo;{title || 'Untitled'}&rdquo; and all its chapters will be permanently deleted. This cannot be undone.
             </p>
           </div>
         </div>
         <div className="flex gap-2 justify-end">
           <button
+            type="button"
+            ref={cancelRef}
             onClick={onCancel}
             className="btn-ghost text-sm px-3 py-2"
             disabled={loading}
@@ -287,6 +318,7 @@ function DeleteConfirmDialog({ title, onConfirm, onCancel, loading }: DeleteConf
             Cancel
           </button>
           <button
+            type="button"
             onClick={onConfirm}
             className="btn-danger text-sm px-3 py-2"
             disabled={loading}
@@ -313,6 +345,16 @@ export default function NovelDashboardPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
+
+  // Close sort dropdown on Escape
+  useEffect(() => {
+    if (!sortOpen) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSortOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [sortOpen])
 
   const filtered = useMemo(() => {
     let result = [...novels]
@@ -409,6 +451,7 @@ export default function NovelDashboardPage() {
           </div>
 
           <button
+            type="button"
             onClick={() => setShowCreate(true)}
             className="btn-accent text-xs px-3 py-1.5"
             aria-label="Create new novel"
@@ -468,6 +511,7 @@ export default function NovelDashboardPage() {
           {/* Sort dropdown */}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setSortOpen((v) => !v)}
               className="btn-ghost gap-2 text-sm border border-bg-border"
               aria-haspopup="listbox"
@@ -487,6 +531,7 @@ export default function NovelDashboardPage() {
                     return isSelected ? (
                       <button
                         key={opt.value}
+                        type="button"
                         role="option"
                         aria-selected="true"
                         onClick={() => { setSort(opt.value); setSortOpen(false) }}
@@ -497,6 +542,7 @@ export default function NovelDashboardPage() {
                     ) : (
                       <button
                         key={opt.value}
+                        type="button"
                         role="option"
                         aria-selected="false"
                         onClick={() => { setSort(opt.value); setSortOpen(false) }}
@@ -526,6 +572,7 @@ export default function NovelDashboardPage() {
             return isSelected ? (
               <button
                 key={f.value}
+                type="button"
                 role="tab"
                 aria-selected="true"
                 onClick={() => setFilter(f.value)}
@@ -541,6 +588,7 @@ export default function NovelDashboardPage() {
             ) : (
               <button
                 key={f.value}
+                type="button"
                 role="tab"
                 aria-selected="false"
                 onClick={() => setFilter(f.value)}
@@ -578,7 +626,7 @@ export default function NovelDashboardPage() {
               Start your writing journey. Create your first novel and build your audience on Toonflow.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <button onClick={() => setShowCreate(true)} className="btn-accent">
+              <button type="button" onClick={() => setShowCreate(true)} className="btn-accent">
                 <Plus size={15} aria-hidden="true" />
                 Create your first novel
               </button>

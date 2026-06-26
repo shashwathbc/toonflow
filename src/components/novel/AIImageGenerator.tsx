@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { Wand2, Sparkles, X, Check, Loader2, Copy, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
+import { now } from '@/lib/utils/time'
 
 const STYLES = [
   { value: 'cinematic', label: 'Cinematic' },
@@ -94,7 +95,7 @@ export function AIImageGenerator({
     const ab = new ArrayBuffer(byteString.length)
     const ia = new Uint8Array(ab)
     for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i)
-    const file = new File([ab], `ai-${imageType}-${Date.now()}.webp`, { type: 'image/webp' })
+    const file = new File([ab], `ai-${imageType}-${now()}.webp`, { type: 'image/webp' })
     onAccept(file)
     toast.success('AI image applied!')
   }

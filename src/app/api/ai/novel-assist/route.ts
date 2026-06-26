@@ -37,6 +37,11 @@ Guidelines:
 - When writing prose, match the author's existing style`
 
 export async function POST(request: NextRequest) {
+  const authToken = request.cookies.get('toonflow-auth-token')?.value
+  if (!authToken) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
   try {
     const body: AIRequestBody = await request.json()
     const { message, novelTitle, novelSynopsis, chapterTitle, chapterContent, history } = body

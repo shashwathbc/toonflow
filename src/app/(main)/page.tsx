@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import { BookOpen, Tv2, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 
+export const dynamic = 'force-static'
+export const revalidate = false
+
 export const metadata: Metadata = {
   title: 'Home — Read Webtoons & Manga',
 }
@@ -69,7 +72,7 @@ export default function HomePage() {
             VIEW BROWSE <ArrowRight size={14} aria-hidden="true" />
           </Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4" role="list">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {/* Cards loaded via client component in a future session */}
           <p className="col-span-full text-text-muted text-sm">Loading trending content…</p>
         </div>

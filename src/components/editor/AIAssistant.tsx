@@ -8,13 +8,14 @@ import {
   Loader2,
   Sparkles,
   ChevronRight,
-  X,
   RotateCcw,
   ChevronLeft,
   Wand2,
+  AlertTriangle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { addNovelAIMessage, getNovelAIChatHistory, clearNovelAIChat, type AIMessage } from '@/lib/firebase/firestore'
+import { now, nowTimestamp } from '@/lib/utils/time'
 import type { Novel, Chapter } from '@/types'
 
 const QUICK_ACTIONS = [
@@ -50,7 +51,7 @@ function MessageBubble({ msg }: { msg: AIMessage & { id?: string } }) {
         className={`max-w-[85%] rounded-2xl px-3 py-2.5 text-[13px] leading-relaxed ${
           isUser
             ? 'bg-white text-bg rounded-br-sm'
-            : 'bg-white/8 text-white/90 border border-white/10 rounded-bl-sm'
+            : 'bg-white/10 text-white/90 border border-white/10 rounded-bl-sm'
         }`}
       >
         <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -76,10 +77,10 @@ export function AIAssistant({
   const [sending, setSending] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [showActions, setShowActions] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load chat history
   useEffect(() => {
     if (!novelId) return
     getNovelAIChatHistory(novelId)
@@ -88,7 +89,6 @@ export function AIAssistant({
       .finally(() => setLoadingHistory(false))
   }, [novelId])
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -97,21 +97,23 @@ export function AIAssistant({
     if (!text.trim() || sending) return
 
     const userMsg: AIMessage & { id?: string } = {
-      id: `local-${Date.now()}`,
+      id: `local-${now()}`,
       role: 'user',
       content: text.trim(),
-      createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 },
+      createdAt: nowTimestamp(),
     }
 
     setMessages((prev) => [...prev, userMsg])
     setInput('')
     setSending(true)
 
+    // Reset textarea height after clearing
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+    }
+
     try {
-      const history = messages.slice(-10).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }))
+      const history = messages.slice(-10).map((m) => ({ role: m.role, content: m.content }))
 
       const res = await fetch('/api/ai/novel-assist', {
         method: 'POST',
@@ -127,19 +129,16 @@ export function AIAssistant({
       })
 
       const data = await res.json()
-
       if (!res.ok) throw new Error(data.error ?? 'Request failed')
 
       const assistantMsg: AIMessage & { id?: string } = {
-        id: `local-ai-${Date.now()}`,
+        id: `local-ai-${now()}`,
         role: 'assistant',
         content: data.reply,
-        createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 },
+        createdAt: nowTimestamp(),
       }
 
       setMessages((prev) => [...prev, assistantMsg])
-
-      // Persist both to Firestore (background, don't await)
       addNovelAIMessage(novelId, { role: 'user', content: text.trim() }).catch(() => {})
       addNovelAIMessage(novelId, { role: 'assistant', content: data.reply }).catch(() => {})
     } catch (err: unknown) {
@@ -152,8 +151,8 @@ export function AIAssistant({
     }
   }
 
-  async function handleClear() {
-    if (!confirm('Clear chat history for this novel?')) return
+  async function handleConfirmedClear() {
+    setConfirmClear(false)
     setMessages([])
     await clearNovelAIChat(novelId).catch(() => {})
     toast.success('Chat cleared')
@@ -166,6 +165,15 @@ export function AIAssistant({
     }
   }
 
+  function handleTextareaInput(e: React.FormEvent<HTMLTextAreaElement>) {
+    const el = e.currentTarget
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`
+  }
+
+  // Linters can't evaluate JSX expressions for ARIA — pre-compute the literal string
+  const quickActionsExpanded: 'true' | 'false' = showActions ? 'true' : 'false'
+
   if (collapsed) {
     return (
       <aside
@@ -173,6 +181,7 @@ export function AIAssistant({
         aria-label="AI Assistant (collapsed)"
       >
         <button
+          type="button"
           onClick={onToggleCollapse}
           className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
           aria-label="Expand AI Assistant"
@@ -200,9 +209,10 @@ export function AIAssistant({
           </span>
         </div>
         <div className="flex items-center gap-1">
-          {messages.length > 0 && (
+          {messages.length > 0 && !confirmClear && (
             <button
-              onClick={handleClear}
+              type="button"
+              onClick={() => setConfirmClear(true)}
               className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/30 hover:text-white/70 transition-colors focus-visible:ring-1 focus-visible:ring-white"
               aria-label="Clear chat history"
               title="Clear history"
@@ -211,6 +221,7 @@ export function AIAssistant({
             </button>
           )}
           <button
+            type="button"
             onClick={onToggleCollapse}
             className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
             aria-label="Collapse AI Assistant"
@@ -219,6 +230,35 @@ export function AIAssistant({
           </button>
         </div>
       </div>
+
+      {/* Inline clear confirmation */}
+      {confirmClear && (
+        <div
+          className="mx-3 mt-2 mb-0 bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 flex items-start gap-2"
+          role="alert"
+        >
+          <AlertTriangle size={13} className="text-danger flex-shrink-0 mt-0.5" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-white/80 mb-1.5">Clear all chat history?</p>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={handleConfirmedClear}
+                className="text-[10px] px-2 py-1 rounded-md bg-danger text-white hover:bg-danger/80 transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmClear(false)}
+                className="text-[10px] px-2 py-1 rounded-md bg-white/10 text-white/70 hover:bg-white/20 transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div
@@ -253,16 +293,11 @@ export function AIAssistant({
             <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
               <Bot size={12} className="text-white/70" aria-hidden="true" />
             </div>
-            <div className="bg-white/8 border border-white/10 rounded-2xl rounded-bl-sm px-3 py-2.5">
+            <div className="bg-white/10 border border-white/10 rounded-2xl rounded-bl-sm px-3 py-2.5">
               <div className="flex gap-1 items-center h-4">
-                {[0, 150, 300].map((d) => (
-                  <span
-                    key={d}
-                    className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce"
-                    style={{ animationDelay: `${d}ms` }}
-                    aria-hidden="true"
-                  />
-                ))}
+                <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:0ms]" aria-hidden="true" />
+                <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:150ms]" aria-hidden="true" />
+                <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:300ms]" aria-hidden="true" />
               </div>
             </div>
           </div>
@@ -274,9 +309,10 @@ export function AIAssistant({
       {/* Quick actions */}
       <div className="px-3 pb-1">
         <button
+          type="button"
           onClick={() => setShowActions((v) => !v)}
           className="w-full flex items-center justify-between py-1.5 text-[11px] text-white/40 hover:text-white/70 transition-colors"
-          aria-expanded={showActions}
+          {...(showActions ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
           aria-controls="quick-actions-panel"
         >
           <span className="flex items-center gap-1">
@@ -295,12 +331,13 @@ export function AIAssistant({
             {QUICK_ACTIONS.map((action) => (
               <button
                 key={action.label}
+                type="button"
                 onClick={() => {
                   setShowActions(false)
                   sendMessage(action.prompt)
                 }}
                 disabled={sending}
-                className="text-[10px] px-2.5 py-1 rounded-full bg-white/8 border border-white/10 text-white/60 hover:bg-white/15 hover:text-white transition-colors disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-white"
+                className="text-[10px] px-2.5 py-1 rounded-full bg-white/10 border border-white/10 text-white/60 hover:bg-white/15 hover:text-white transition-colors disabled:opacity-40 focus-visible:ring-1 focus-visible:ring-white"
               >
                 {action.label}
               </button>
@@ -317,18 +354,14 @@ export function AIAssistant({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onInput={handleTextareaInput}
             placeholder="Ask anything about your story…"
             rows={1}
-            className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 resize-none outline-none max-h-32 min-h-[20px] leading-5"
+            className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 resize-none outline-none max-h-32 leading-5"
             aria-label="Message AI assistant"
-            style={{ height: 'auto' }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement
-              target.style.height = 'auto'
-              target.style.height = `${Math.min(target.scrollHeight, 128)}px`
-            }}
           />
           <button
+            type="button"
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || sending}
             className="w-7 h-7 rounded-lg bg-white text-bg flex items-center justify-center transition-all hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-white flex-shrink-0"

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/useAuth'
 import { useChapters } from '@/hooks/useChapters'
 import {
   getNovelById,
@@ -12,14 +12,22 @@ import {
   publishNovel,
   unpublishNovel,
 } from '@/lib/firebase/firestore'
+import dynamic from 'next/dynamic'
 import { ChapterSidebar } from '@/components/editor/ChapterSidebar'
-import { NovelRichEditor } from '@/components/editor/NovelRichEditor'
-import { AIAssistant } from '@/components/editor/AIAssistant'
 import { EditorToolbar } from '@/components/editor/EditorToolbar'
 import { BookOpen, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import jsPDF from 'jspdf'
 import type { Novel, Chapter } from '@/types'
+
+const NovelRichEditor = dynamic(
+  () => import('@/components/editor/NovelRichEditor').then((m) => ({ default: m.NovelRichEditor })),
+  { ssr: false, loading: () => <div className="flex-1 bg-bg-card" aria-hidden="true" /> }
+)
+
+const AIAssistant = dynamic(
+  () => import('@/components/editor/AIAssistant').then((m) => ({ default: m.AIAssistant })),
+  { ssr: false, loading: () => <div className="w-64 bg-bg-card border-l border-bg-border shrink-0" aria-hidden="true" /> }
+)
 
 const AUTOSAVE_DELAY_MS = 5000
 
@@ -175,8 +183,9 @@ export default function NovelEditorPage({ params }: PageProps) {
     }
   }
 
-  const handleExportPDF = useCallback(() => {
+  const handleExportPDF = useCallback(async () => {
     if (!novel) return
+    const { default: jsPDF } = await import('jspdf')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const margin = 20
     const pageWidth = 210
@@ -244,7 +253,7 @@ export default function NovelEditorPage({ params }: PageProps) {
       <div className="flex h-screen items-center justify-center bg-bg flex-col gap-4">
         <BookOpen size={32} className="text-white/20" aria-hidden="true" />
         <p className="text-white/50">Novel not found</p>
-        <button onClick={() => router.push('/create/novel')} className="btn-accent text-sm">
+        <button type="button" onClick={() => router.push('/create/novel')} className="btn-accent text-sm">
           Back to Novel Studio
         </button>
       </div>
@@ -291,7 +300,7 @@ export default function NovelEditorPage({ params }: PageProps) {
                   value={chapterTitle}
                   onChange={(e) => setChapterTitle(e.target.value)}
                   placeholder="Chapter Title"
-                  className="w-full bg-transparent text-xl font-bold text-white placeholder:text-white/20 outline-none focus-visible:ring-0"
+                  className="w-full bg-transparent text-xl font-bold text-white placeholder:text-white/20 outline-none focus-visible:outline-2 focus-visible:outline-white/40 focus-visible:rounded"
                   aria-label="Chapter title"
                   onBlur={() => {
                     if (activeChapter && chapterTitle !== activeChapter.title) {

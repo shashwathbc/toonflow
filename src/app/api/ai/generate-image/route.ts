@@ -4,6 +4,11 @@ import { NextRequest, NextResponse } from 'next/server'
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(request: NextRequest) {
+  const authToken = request.cookies.get('toonflow-auth-token')?.value
+  if (!authToken) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
 

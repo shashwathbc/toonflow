@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Plus, Search } from 'lucide-react'
@@ -14,7 +15,7 @@ const NAV_LINKS = [
   { href: '/browse', label: 'Browse' },
 ]
 
-export default function Navbar() {
+function Navbar() {
   const pathname = usePathname()
   const { isAuthenticated } = useAuth()
   const { setLoginModalOpen } = useAppStore()
@@ -85,6 +86,7 @@ export default function Navbar() {
             </Link>
           ) : (
             <button
+              type="button"
               onClick={handleCreate}
               className="hidden md:inline-flex btn-accent text-sm py-1.5 px-3"
               aria-label="Create — sign in required"
@@ -112,3 +114,5 @@ export default function Navbar() {
     </header>
   )
 }
+
+export default memo(Navbar)
