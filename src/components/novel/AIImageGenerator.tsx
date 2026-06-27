@@ -21,6 +21,7 @@ interface AIImageGeneratorProps {
   imageType: 'cover' | 'banner'
   onAccept: (file: File) => void
   onClose: () => void
+  userId?: string
 }
 
 export function AIImageGenerator({
@@ -29,6 +30,7 @@ export function AIImageGenerator({
   imageType,
   onAccept,
   onClose,
+  userId,
 }: AIImageGeneratorProps) {
   const [prompt, setPrompt] = useState('')
   const [style, setStyle] = useState('cinematic')
@@ -48,13 +50,21 @@ export function AIImageGenerator({
           novelTitle,
           novelSynopsis,
           imageType,
+          userId,
         }),
       })
-      const data = await res.json() as { prompt?: string; error?: string }
-      if (!res.ok) throw new Error(data.error)
+      const data = await res.json() as { prompt?: string; error?: string; insufficientTokens?: boolean }
+      if (!res.ok) {
+        if (data.insufficientTokens) {
+          toast.error(data.error ?? 'Not enough tokens', { duration: 6000 })
+          return
+        }
+        throw new Error(data.error)
+      }
       if (data.prompt) setPrompt(data.prompt)
-    } catch {
-      toast.error('Could not generate prompt — check ANTHROPIC_API_KEY')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not generate prompt'
+      toast.error(msg)
     } finally {
       setLoadingPrompt(false)
     }
@@ -73,11 +83,15 @@ export function AIImageGenerator({
       const res = await fetch('/api/ai/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', prompt: fullPrompt, imageType }),
+        body: JSON.stringify({ action: 'generate', prompt: fullPrompt, imageType, userId }),
       })
-      const data = await res.json() as { imageBase64?: string; error?: string; noKey?: boolean }
+      const data = await res.json() as { imageBase64?: string; error?: string; noKey?: boolean; insufficientTokens?: boolean }
       if (!res.ok) {
         if (data.noKey) setNoKey(true)
+        if (data.insufficientTokens) {
+          toast.error(data.error ?? 'Not enough tokens', { duration: 6000 })
+          return
+        }
         throw new Error(data.error)
       }
       if (data.imageBase64) setImageBase64(data.imageBase64)

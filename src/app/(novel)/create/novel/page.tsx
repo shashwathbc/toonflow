@@ -661,6 +661,7 @@ export default function NovelDashboardPage() {
           authorId={firebaseUser?.uid ?? ''}
           authorName={firebaseUser?.displayName ?? 'Anonymous'}
           authorPhotoURL={firebaseUser?.photoURL ?? null}
+          userId={firebaseUser?.uid}
           onClose={() => setShowCreate(false)}
           onCreated={(id) => {
             setShowCreate(false)
@@ -674,6 +675,7 @@ export default function NovelDashboardPage() {
           authorId={firebaseUser?.uid ?? ''}
           authorName={firebaseUser?.displayName ?? 'Anonymous'}
           authorPhotoURL={firebaseUser?.photoURL ?? null}
+          userId={firebaseUser?.uid}
           editNovel={editNovel}
           onClose={() => setEditNovel(null)}
           onCreated={() => setEditNovel(null)}

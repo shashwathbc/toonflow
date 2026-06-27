@@ -2,6 +2,7 @@ import type { FirestoreTimestamp } from './user'
 
 export type TransactionType =
   | 'coin_purchase'
+  | 'ai_usage'
   | 'chapter_unlock'
   | 'episode_unlock'
   | 'tip'

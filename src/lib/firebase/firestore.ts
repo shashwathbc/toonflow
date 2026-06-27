@@ -31,8 +31,12 @@ import type {
   Comment,
   Report,
   Withdrawal,
+  WithdrawalMethod,
   BookmarkItem,
   ReadingHistoryItem,
+  FollowRecord,
+  Transaction,
+  TransactionType,
   FirestoreTimestamp,
 } from '@/types'
 import { SUPER_ADMIN_EMAIL, TRENDING_LIMIT, BROWSE_LIMIT } from '@/lib/utils/constants'
@@ -125,6 +129,9 @@ export async function createNovel(
     slug: '',
     synopsis: '',
     coverURL: null,
+    bannerURL: null,
+    language: 'en',
+    visibility: 'public',
     status: 'draft',
     genres: [],
     tags: [],
@@ -430,6 +437,7 @@ export async function browseContent(options: BrowseOptions = {}): Promise<Browse
   const buildQuery = (col: string) => {
     const constraints = [
       where('status', 'in', ['published', 'ongoing', 'completed']),
+      where('visibility', '==', 'public'),
     ]
     if (genre) constraints.push(where('genres', 'array-contains', genre))
     if (status && status !== 'all') constraints.push(where('status', '==', status))
@@ -735,6 +743,224 @@ export async function reorderEpisodes(
   })
   await batch.commit()
   await updateDoc(doc(db, 'webtoons', webtoonId), { updatedAt: serverTimestamp() })
+}
+
+// ── Followers ───────────────────────────────────────────────
+
+export async function followUser(followerId: string, followingId: string): Promise<void> {
+  const batch = writeBatch(db)
+  const followRef = doc(db, 'follows', `${followerId}_${followingId}`)
+  batch.set(followRef, {
+    followerId,
+    followingId,
+    createdAt: serverTimestamp(),
+  })
+  batch.update(doc(db, 'users', followingId), { followerCount: increment(1) })
+  batch.update(doc(db, 'users', followerId), { followingCount: increment(1) })
+  await batch.commit()
+}
+
+export async function unfollowUser(followerId: string, followingId: string): Promise<void> {
+  const batch = writeBatch(db)
+  batch.delete(doc(db, 'follows', `${followerId}_${followingId}`))
+  batch.update(doc(db, 'users', followingId), { followerCount: increment(-1) })
+  batch.update(doc(db, 'users', followerId), { followingCount: increment(-1) })
+  await batch.commit()
+}
+
+export async function isFollowing(followerId: string, followingId: string): Promise<boolean> {
+  const snap = await getDoc(doc(db, 'follows', `${followerId}_${followingId}`))
+  return snap.exists()
+}
+
+export async function getFollowers(uid: string, limitCount = 50): Promise<FollowRecord[]> {
+  const q = query(
+    collection(db, 'follows'),
+    where('followingId', '==', uid),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  )
+  const snaps = await getDocs(q)
+  return snaps.docs.map((d) => ({ id: d.id, ...d.data() } as unknown as FollowRecord))
+}
+
+export async function getFollowing(uid: string, limitCount = 50): Promise<FollowRecord[]> {
+  const q = query(
+    collection(db, 'follows'),
+    where('followerId', '==', uid),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  )
+  const snaps = await getDocs(q)
+  return snaps.docs.map((d) => ({ id: d.id, ...d.data() } as unknown as FollowRecord))
+}
+
+// ── Transactions ─────────────────────────────────────────────
+
+export async function createTransaction(
+  data: Omit<Transaction, 'id' | 'createdAt'>
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'transactions'), {
+    ...data,
+    createdAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function getUserTransactions(uid: string, limitCount = 50): Promise<Transaction[]> {
+  const q = query(
+    collection(db, 'transactions'),
+    where('userId', '==', uid),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  )
+  const snaps = await getDocs(q)
+  return snaps.docs.map((d) => fromDoc<Transaction>(d))
+}
+
+export async function deductTokens(
+  uid: string,
+  coins: number,
+  type: TransactionType,
+  description: string
+): Promise<void> {
+  const batch = writeBatch(db)
+  const txRef = doc(collection(db, 'transactions'))
+  batch.set(txRef, {
+    userId: uid,
+    type,
+    amount: 0,
+    coins: -coins,
+    description,
+    createdAt: serverTimestamp(),
+  })
+  batch.update(doc(db, 'users', uid), { balance: increment(-coins) })
+  await batch.commit()
+}
+
+export async function creditTokens(
+  uid: string,
+  coins: number,
+  amount: number,
+  type: TransactionType,
+  description: string
+): Promise<void> {
+  const batch = writeBatch(db)
+  const txRef = doc(collection(db, 'transactions'))
+  batch.set(txRef, {
+    userId: uid,
+    type,
+    amount,
+    coins,
+    description,
+    createdAt: serverTimestamp(),
+  })
+  batch.update(doc(db, 'users', uid), { balance: increment(coins) })
+  await batch.commit()
+}
+
+// ── Withdrawal Requests ───────────────────────────────────────
+
+export async function createWithdrawalRequest(
+  creatorId: string,
+  amount: number,
+  method: WithdrawalMethod,
+  accountDetails: Record<string, string>
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'withdrawals'), {
+    creatorId,
+    amount,
+    method,
+    accountDetails,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function getCreatorWithdrawals(creatorId: string): Promise<Withdrawal[]> {
+  const q = query(
+    collection(db, 'withdrawals'),
+    where('creatorId', '==', creatorId),
+    orderBy('createdAt', 'desc'),
+    limit(50)
+  )
+  const snaps = await getDocs(q)
+  return snaps.docs.map((d) => fromDoc<Withdrawal>(d))
+}
+
+// ── Search ────────────────────────────────────────────────────
+
+export async function searchContent(
+  searchQuery: string,
+  limitCount = 20
+): Promise<{ novels: Novel[]; webtoons: Webtoon[] }> {
+  const q = searchQuery.toLowerCase().trim()
+  if (!q) return { novels: [], webtoons: [] }
+
+  // Firestore doesn't support full-text search natively.
+  // Query by title range (prefix match) as a lightweight substitute.
+  const titleEnd = q.replace(/.$/, (c) => String.fromCharCode(c.charCodeAt(0) + 1))
+
+  const novelQ = query(
+    collection(db, 'novels'),
+    where('status', 'in', ['published', 'ongoing', 'completed']),
+    where('visibility', '==', 'public'),
+    where('title', '>=', q),
+    where('title', '<', titleEnd),
+    limit(limitCount)
+  )
+  const webtoonQ = query(
+    collection(db, 'webtoons'),
+    where('status', 'in', ['published', 'ongoing', 'completed']),
+    where('visibility', '==', 'public'),
+    where('title', '>=', q),
+    where('title', '<', titleEnd),
+    limit(limitCount)
+  )
+
+  const [novelSnaps, webtoonSnaps] = await Promise.all([getDocs(novelQ), getDocs(webtoonQ)])
+  return {
+    novels: novelSnaps.docs.map((d) => fromDoc<Novel>(d)),
+    webtoons: webtoonSnaps.docs.map((d) => fromDoc<Webtoon>(d)),
+  }
+}
+
+// ── Originals ─────────────────────────────────────────────────
+
+export async function getOriginals(limitCount = 20): Promise<{ novels: Novel[]; webtoons: Webtoon[] }> {
+  const [novelSnaps, webtoonSnaps] = await Promise.all([
+    getDocs(query(
+      collection(db, 'novels'),
+      where('isOriginal', '==', true),
+      where('status', 'in', ['published', 'ongoing', 'completed']),
+      orderBy('publishedAt', 'desc'),
+      limit(limitCount)
+    )),
+    getDocs(query(
+      collection(db, 'webtoons'),
+      where('isOriginal', '==', true),
+      where('status', 'in', ['published', 'ongoing', 'completed']),
+      orderBy('publishedAt', 'desc'),
+      limit(limitCount)
+    )),
+  ])
+  return {
+    novels: novelSnaps.docs.map((d) => fromDoc<Novel>(d)),
+    webtoons: webtoonSnaps.docs.map((d) => fromDoc<Webtoon>(d)),
+  }
+}
+
+export async function getFeaturedNovels(limitCount = 6): Promise<Novel[]> {
+  const q = query(
+    collection(db, 'novels'),
+    where('status', 'in', ['published', 'ongoing', 'completed']),
+    where('visibility', '==', 'public'),
+    orderBy('viewCount', 'desc'),
+    limit(limitCount)
+  )
+  const snaps = await getDocs(q)
+  return snaps.docs.map((d) => fromDoc<Novel>(d))
 }
 
 export async function duplicateEpisode(

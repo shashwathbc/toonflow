@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { BookOpen, ImageIcon } from 'lucide-react'
+import { BookOpen, ImageIcon, Wallet, LayoutDashboard } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'Create — Studio Hub',
@@ -58,8 +58,38 @@ export default function CreateHubPage() {
         </Link>
       </div>
 
+      {/* Quick links row */}
+      <div className="mt-8 max-w-2xl grid grid-cols-2 gap-4">
+        <Link
+          href="/wallet"
+          className="card p-4 flex items-center gap-3 hover:border-accent/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label="Open Wallet"
+        >
+          <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+            <Wallet size={18} className="text-accent" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Wallet</p>
+            <p className="text-xs text-text-secondary">Tokens &amp; earnings</p>
+          </div>
+        </Link>
+        <Link
+          href="/dashboard"
+          className="card p-4 flex items-center gap-3 hover:border-accent/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label="Open Dashboard"
+        >
+          <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+            <LayoutDashboard size={18} className="text-white/60" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Dashboard</p>
+            <p className="text-xs text-text-secondary">Stats &amp; analytics</p>
+          </div>
+        </Link>
+      </div>
+
       {/* Demo Seed Section */}
-      <div className="mt-12 max-w-2xl bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="mt-6 max-w-2xl bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
           <h3 className="font-semibold text-white">Want to explore instantly?</h3>
           <p className="text-xs text-text-secondary mt-1">

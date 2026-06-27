@@ -1,22 +1,41 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { chargeTokens } from '@/lib/tokens'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(request: NextRequest) {
   const authToken = request.cookies.get('toonflow-auth-token')?.value
   if (!authToken) {
-    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    console.warn('[/api/ai/generate-image] Missing auth cookie')
+    return NextResponse.json({ error: 'Authentication required — please sign in again' }, { status: 401 })
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('[/api/ai/generate-image] ANTHROPIC_API_KEY is not set')
+    return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured on the server' }, { status: 503 })
   }
 
   try {
     const body = await request.json()
 
     if (body.action === 'prompt') {
-      const { novelTitle, novelSynopsis, imageType } = body as {
+      const { novelTitle, novelSynopsis, imageType, userId } = body as {
         novelTitle: string
         novelSynopsis: string
         imageType: 'cover' | 'banner'
+        userId?: string
+      }
+
+      // Charge 1 token for prompt generation
+      if (userId) {
+        const charge = await chargeTokens(userId, 'image-prompt', `AI image prompt for "${novelTitle}"`)
+        if (!charge.ok) {
+          return NextResponse.json(
+            { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
+            { status: 402 }
+          )
+        }
       }
 
       const isCover = imageType === 'cover'
@@ -51,9 +70,21 @@ Return ONLY the image prompt text.`,
     }
 
     if (body.action === 'generate') {
-      const { prompt, imageType } = body as {
+      const { prompt, imageType, userId } = body as {
         prompt: string
         imageType: 'cover' | 'banner'
+        userId?: string
+      }
+
+      // Charge 15 tokens for image generation
+      if (userId) {
+        const charge = await chargeTokens(userId, 'image-generate', `AI ${imageType} image generation`)
+        if (!charge.ok) {
+          return NextResponse.json(
+            { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
+            { status: 402 }
+          )
+        }
       }
 
       const apiKey = process.env.STABILITY_API_KEY
@@ -91,6 +122,7 @@ Return ONLY the image prompt text.`,
         const errData = await response.json().catch(() => ({}))
         const message =
           (errData as { errors?: string[] }).errors?.[0] ?? `Stability AI error ${response.status}`
+        console.error('[/api/ai/generate-image] Stability AI error:', message)
         return NextResponse.json({ error: message }, { status: response.status })
       }
 
@@ -101,6 +133,7 @@ Return ONLY the image prompt text.`,
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal error'
+    console.error('[/api/ai/generate-image] Error:', message, err)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -1,5 +1,93 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-06-27 — Novel Creation, Publishing, Profile, Wallet & Token Economy
+
+### 1. AI Generation — Error Handling & Logging
+- `src/app/api/ai/novel-content/route.ts`: Added server-side `ANTHROPIC_API_KEY` presence check; logs all errors with `console.error`; returns the actual error message to the client instead of swallowing it.
+- `src/app/api/ai/generate-image/route.ts`: Same treatment; added `ANTHROPIC_API_KEY` guard; logs Stability AI errors clearly.
+- `src/components/novel/CreateNovelModal.tsx`: Shows the real server error message in the toast instead of a generic fallback; handles `insufficientTokens` (402) responses gracefully.
+- `src/components/novel/AIImageGenerator.tsx`: Same — surfaces actual API errors and handles token-insufficient responses without crashing.
+
+### 2. Novel Schema — slug, language, visibility
+- `src/types/novel.ts`: Added `language: string`, `visibility: ContentVisibility ('public' | 'private')`.
+- `src/lib/firebase/firestore.ts` (`createNovel`): Saves `language: 'en'` and `visibility: 'public'` defaults; `bannerURL: null` default added.
+- `src/components/novel/CreateNovelModal.tsx`: Generates `slug` from title + timestamp on creation using the existing `slugify` utility.
+- `src/lib/firebase/firestore.ts` (`browseContent`): Added `where('visibility', '==', 'public')` constraint so private novels never appear in Browse/Home.
+
+### 3. Firestore Service Extensions
+- `src/lib/firebase/firestore.ts`: Added:
+  - **Followers**: `followUser`, `unfollowUser`, `isFollowing`, `getFollowers`, `getFollowing` — atomic batch operations with counter increments.
+  - **Transactions**: `createTransaction`, `getUserTransactions`, `deductTokens`, `creditTokens`.
+  - **Withdrawals**: `createWithdrawalRequest`, `getCreatorWithdrawals`.
+  - **Search**: `searchContent` — prefix-range Firestore query on title.
+  - **Originals**: `getOriginals`, `getFeaturedNovels`.
+
+### 4. Home Page — Dynamic Trending Feed
+- `src/app/(main)/page.tsx`: Removed `force-static`; imports `HomeFeed` client component.
+- `src/app/(main)/HomeFeed.tsx` (new): Client component that loads trending novels and webtoons from Firestore; shows skeletons while loading; graceful empty state with CTA.
+
+### 5. Browse Page — Fully Functional
+- `src/app/(main)/browse/page.tsx`: Wraps `BrowseClient` in `Suspense`.
+- `src/app/(main)/browse/BrowseClient.tsx` (new): Full client-side browse with genre filter, sort, status filter, content-type tabs, debounced search (prefix match), clear-filters button, skeleton loading, empty states, WCAG-compliant ARIA attributes.
+
+### 6. Profile Page — Real Data + Followers + Edit
+- `src/app/(main)/profile/[uid]/page.tsx`: Delegates to `ProfilePageClient`.
+- `src/app/(main)/profile/[uid]/ProfilePageClient.tsx` (new): Full client component:
+  - Loads `UserProfile`, novels, webtoons, bookmarks from Firestore.
+  - Shows banner, avatar, stats grid (followers/following/novels/webtoons/views/likes).
+  - Tabs: Novels, Webtoons, Bookmarks (own profile), About.
+  - `FollowButton`: atomic follow/unfollow with optimistic counter update.
+  - `EditProfileModal`: upload avatar/banner, edit display name, bio, website, Twitter, Instagram; saves via `updateUserProfile` + Firebase Storage.
+
+### 7. Originals Page — Real Data
+- `src/app/(main)/originals/page.tsx`: Delegates to `OriginalsClient`.
+- `src/app/(main)/originals/OriginalsClient.tsx` (new): Loads all `isOriginal=true` published content; sorted by views; empty state with messaging.
+
+### 8. Creator Hub — Wallet + Dashboard Quick Links
+- `src/app/(main)/create/page.tsx`: Added Wallet and Dashboard quick-link cards.
+
+### 9. Wallet Page
+- `src/app/(studio)/wallet/page.tsx` (new): Full wallet dashboard:
+  - Stats: Token Balance, Total Earned, Pending Payout.
+  - Token cost reference table for all AI features.
+  - **Buy Tokens** tab: Renders `COIN_PACKAGES` with Razorpay order creation.
+  - **Withdraw** tab: UPI/bank form with minimum ₹200 guard, `createWithdrawalRequest` integration.
+  - **History** tab: Transaction list + withdrawal history with status icons.
+
+### 10. Razorpay Integration
+- `src/app/api/payments/create-order/route.ts` (new): Creates Razorpay order via REST API using `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET`; validates package ID; returns `orderId`, `amount`, `currency`.
+- `src/app/api/webhooks/route.ts`: Completed — handles `payment.captured` event: verifies HMAC signature, checks idempotency (skips already-processed payment IDs), credits tokens to the user, creates a `transactions` record. Logs `payment.failed` events.
+
+### 11. Token Economy
+- `src/lib/tokens.ts` (new): `TOKEN_COSTS` map, `getUserBalance`, `chargeTokens` — deducts from Firestore balance atomically and writes a transaction record.
+- `src/types/transaction.ts`: Added `'ai_usage'` to `TransactionType`.
+- `src/app/api/ai/novel-content/route.ts`: Charges 2–3 tokens per synopsis action when `userId` is provided; returns HTTP 402 with `insufficientTokens: true` if balance insufficient.
+- `src/app/api/ai/generate-image/route.ts`: Charges 1 token for prompt generation, 15 for image generation.
+- `src/components/novel/CreateNovelModal.tsx` + `AIImageGenerator.tsx`: Pass `userId` to all AI API calls.
+- `src/app/(novel)/create/novel/page.tsx`: Passes `userId` prop to `CreateNovelModal`.
+
+### Database Schema Changes
+- `novels` collection: new fields `language` (string), `visibility` ('public' | 'private'), `bannerURL` (default null).
+- `follows` collection (new): `{ followerId, followingId, createdAt }` keyed as `${followerId}_${followingId}`.
+- `transactions` collection: extended with `ai_usage` type; `razorpayPaymentId` field for idempotency.
+- `withdrawals` collection: used via `createWithdrawalRequest`.
+
+### Required Environment Variables (new)
+- `RAZORPAY_KEY_ID` — Razorpay API key (public)
+- `RAZORPAY_KEY_SECRET` — Razorpay secret (server-only)
+- `RAZORPAY_WEBHOOK_SECRET` — Webhook HMAC secret
+- `NEXT_PUBLIC_RAZORPAY_KEY_ID` — For client-side Razorpay checkout
+
+### Firestore Index Requirements (new)
+- `novels`: composite index on `(visibility, status, viewCount DESC)` for home/browse
+- `novels`: composite index on `(visibility, status, createdAt DESC)` for newest sort
+- `novels`: composite index on `(visibility, status, rating DESC)` for rating sort
+- `novels`: composite index on `(isOriginal, status, publishedAt DESC)` for originals
+- `follows`: composite index on `(followingId, createdAt DESC)`
+- `follows`: composite index on `(followerId, createdAt DESC)`
+- `transactions`: composite index on `(userId, createdAt DESC)`
+- `withdrawals`: composite index on `(creatorId, createdAt DESC)`
+
 ## 2026-06-26 — Fix ARIA Invalid Attribute Value on Profile Page Tab
 
 - `src/app/(main)/profile/[uid]/page.tsx`: Split the profile page tab selection buttons into separate static renderings with explicit `aria-selected="true"` and `aria-selected="false"` to prevent WCAG linting tools from flagging the JSX expression as `"{expression}"`.

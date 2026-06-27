@@ -21,6 +21,7 @@ import toast from 'react-hot-toast'
 import { createNovel, updateNovel } from '@/lib/firebase/firestore'
 import { uploadNovelCover, uploadNovelBanner } from '@/lib/firebase/storage'
 import { GENRES } from '@/lib/utils/constants'
+import { slugify } from '@/lib/utils/formatters'
 import type { Novel } from '@/types'
 import { AIImageGenerator } from './AIImageGenerator'
 
@@ -42,6 +43,7 @@ interface Props {
   editNovel?: Novel | null
   onClose: () => void
   onCreated: (id: string) => void
+  userId?: string
 }
 
 const STATUS_OPTIONS = [
@@ -117,6 +119,7 @@ export function CreateNovelModal({
   editNovel,
   onClose,
   onCreated,
+  userId,
 }: Props) {
   const isEditing = !!editNovel
 
@@ -218,16 +221,25 @@ export function CreateNovelModal({
           action,
           novelTitle: currentTitle || 'Untitled Novel',
           currentSynopsis,
+          userId,
         }),
       })
-      const data = await res.json() as { result?: string; error?: string }
-      if (!res.ok) throw new Error(data.error)
+      const data = await res.json() as { result?: string; error?: string; insufficientTokens?: boolean }
+      if (!res.ok) {
+        if (data.insufficientTokens) {
+          toast.error(data.error ?? 'Not enough tokens', { duration: 6000 })
+          return
+        }
+        throw new Error(data.error ?? `Server error ${res.status}`)
+      }
       if (data.result) {
         setValue('synopsis', data.result)
         toast.success('Synopsis updated!')
       }
-    } catch {
-      toast.error('Could not generate synopsis — check ANTHROPIC_API_KEY')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not generate synopsis'
+      toast.error(msg)
+      console.error('[CreateNovelModal] Synopsis AI error:', err)
     } finally {
       setSynopsisLoading(false)
     }
@@ -267,8 +279,10 @@ export function CreateNovelModal({
         onCreated(editNovel.id)
       } else {
         // Create first, then upload
+        const slug = slugify(data.title) + '-' + Date.now().toString(36)
         const id = await createNovel(authorId, authorName, authorPhotoURL, {
           title: data.title,
+          slug,
           synopsis: data.synopsis,
           genres: data.genres as Novel['genres'],
           tags: data.tags,
@@ -288,8 +302,11 @@ export function CreateNovelModal({
         toast.success('Novel created!')
         onCreated(id)
       }
-    } catch {
-      toast.error('Something went wrong. Please try again.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong'
+      toast.error(msg)
+      console.error('[CreateNovelModal] Submit error:', err)
+      // Form data is preserved — user can retry
     }
   }
 
@@ -365,6 +382,7 @@ export function CreateNovelModal({
                 novelTitle={watch('title')}
                 novelSynopsis={watch('synopsis')}
                 imageType={aiPanel}
+                userId={userId}
                 onAccept={(file) => {
                   if (aiPanel === 'cover') handleCoverFile(file)
                   else handleBannerFile(file)

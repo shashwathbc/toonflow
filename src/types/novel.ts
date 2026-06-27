@@ -1,6 +1,7 @@
 import type { FirestoreTimestamp } from './user'
 
 export type ContentStatus = 'draft' | 'published' | 'ongoing' | 'completed' | 'hiatus'
+export type ContentVisibility = 'public' | 'private'
 
 export type ContentGenre =
   | 'action'
@@ -32,6 +33,8 @@ export interface Novel {
   status: ContentStatus
   genres: ContentGenre[]
   tags: string[]
+  language: string
+  visibility: ContentVisibility
   isPremium: boolean
   isFeatured: boolean
   isOriginal: boolean
