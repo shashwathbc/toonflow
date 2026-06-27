@@ -39,13 +39,13 @@ import toast from 'react-hot-toast'
 import type { Webtoon } from '@/types'
 import { formatCount, formatRelativeTimestamp } from '@/lib/utils/formatters'
 
-type FilterStatus = 'all' | 'draft' | 'published' | 'ongoing' | 'completed' | 'hiatus'
+type FilterStatus = 'all' | 'draft' | 'live' | 'ongoing' | 'completed' | 'hiatus'
 type SortOrder = 'updated' | 'views' | 'alpha' | 'episodes'
 
 const STATUS_FILTERS: { label: string; value: FilterStatus }[] = [
   { label: 'All', value: 'all' },
   { label: 'Draft', value: 'draft' },
-  { label: 'Published', value: 'published' },
+  { label: 'Live', value: 'live' },
   { label: 'Ongoing', value: 'ongoing' },
   { label: 'Completed', value: 'completed' },
   { label: 'Hiatus', value: 'hiatus' },
@@ -302,7 +302,8 @@ export default function WebtoonDashboardPage() {
 
   const filtered = useMemo(() => {
     let result = [...webtoons]
-    if (filter !== 'all') result = result.filter((w) => w.status === filter)
+    if (filter === 'live') result = result.filter((w) => w.status !== 'draft')
+    else if (filter !== 'all') result = result.filter((w) => w.status === filter)
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter(

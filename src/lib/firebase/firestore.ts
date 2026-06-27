@@ -157,14 +157,17 @@ export async function updateNovel(id: string, data: Partial<Novel>): Promise<voi
 }
 
 export async function getTrendingNovels(limitCount = TRENDING_LIMIT): Promise<Novel[]> {
+  // Single-field orderBy avoids composite index requirement; filter status client-side
   const q = query(
     collection(db, 'novels'),
     where('status', 'in', ['published', 'ongoing']),
-    orderBy('viewCount', 'desc'),
-    limit(limitCount)
+    limit(limitCount * 4)
   )
   const snaps = await getDocs(q)
-  return snaps.docs.map((d) => fromDoc<Novel>(d))
+  return snaps.docs
+    .map((d) => fromDoc<Novel>(d))
+    .sort((a, b) => b.viewCount - a.viewCount)
+    .slice(0, limitCount)
 }
 
 export async function getNovelsByAuthor(uid: string): Promise<Novel[]> {
@@ -248,6 +251,7 @@ export async function createWebtoon(
     synopsis: '',
     coverURL: null,
     status: 'draft',
+    visibility: 'public',
     genres: [],
     tags: [],
     isPremium: false,
@@ -275,11 +279,13 @@ export async function getTrendingWebtoons(limitCount = TRENDING_LIMIT): Promise<
   const q = query(
     collection(db, 'webtoons'),
     where('status', 'in', ['published', 'ongoing']),
-    orderBy('viewCount', 'desc'),
-    limit(limitCount)
+    limit(limitCount * 4)
   )
   const snaps = await getDocs(q)
-  return snaps.docs.map((d) => fromDoc<Webtoon>(d))
+  return snaps.docs
+    .map((d) => fromDoc<Webtoon>(d))
+    .sort((a, b) => b.viewCount - a.viewCount)
+    .slice(0, limitCount)
 }
 
 export async function getWebtoonsByAuthor(uid: string): Promise<Webtoon[]> {
@@ -390,13 +396,13 @@ export async function getComments(targetId: string, targetType: string): Promise
   const q = query(
     collection(db, 'comments'),
     where('targetId', '==', targetId),
-    where('targetType', '==', targetType),
-    where('parentId', '==', null),
-    orderBy('createdAt', 'desc'),
-    limit(50)
+    limit(200)
   )
   const snaps = await getDocs(q)
-  return snaps.docs.map((d) => fromDoc<Comment>(d))
+  return snaps.docs
+    .map((d) => fromDoc<Comment>(d))
+    .filter((c) => c.targetType === targetType && c.parentId == null)
+    .sort((a, b) => compareTimestamps(a.createdAt, b.createdAt))
 }
 
 export async function addComment(
@@ -434,21 +440,46 @@ export interface BrowseResult {
 export async function browseContent(options: BrowseOptions = {}): Promise<BrowseResult> {
   const { contentType = 'all', genre, status, sortBy = 'trending', limitCount = BROWSE_LIMIT } = options
 
-  const buildQuery = (col: string) => {
-    const constraints = [
-      where('status', 'in', ['published', 'ongoing', 'completed']),
-      where('visibility', '==', 'public'),
-    ]
-    if (genre) constraints.push(where('genres', 'array-contains', genre))
-    if (status && status !== 'all') constraints.push(where('status', '==', status))
+  const PUBLISHED_STATUSES = ['published', 'ongoing', 'completed']
+  const sortKey = sortBy === 'newest' ? 'createdAt' : sortBy === 'rating' ? 'rating' : 'viewCount'
 
-    const sortField = sortBy === 'newest' ? 'createdAt' : sortBy === 'rating' ? 'rating' : 'viewCount'
-    return query(collection(db, col), ...constraints, orderBy(sortField, 'desc'), limit(limitCount))
+  // Single-field where clause so Firestore auto-indexes handle it;
+  // all secondary filters and sorting happen client-side to avoid composite index requirements.
+  const fetchCol = async <T extends Novel | Webtoon>(col: string): Promise<T[]> => {
+    let q
+    if (genre) {
+      q = query(collection(db, col), where('genres', 'array-contains', genre), limit(limitCount * 4))
+    } else if (status && status !== 'all') {
+      q = query(collection(db, col), where('status', '==', status), limit(limitCount * 4))
+    } else {
+      q = query(collection(db, col), where('visibility', '==', 'public'), limit(limitCount * 4))
+    }
+
+    const snaps = await getDocs(q)
+    let items = snaps.docs.map((d) => fromDoc<T>(d))
+
+    items = items.filter((item) => (item as Novel).visibility === 'public')
+    if (status && status !== 'all') {
+      items = items.filter((item) => (item as Novel).status === status)
+    } else {
+      items = items.filter((item) => PUBLISHED_STATUSES.includes((item as Novel).status))
+    }
+
+    items.sort((a, b) => {
+      if (sortKey === 'createdAt') {
+        return compareTimestamps((a as Novel).createdAt, (b as Novel).createdAt)
+      }
+      const av = ((a as unknown as Record<string, number>)[sortKey]) ?? 0
+      const bv = ((b as unknown as Record<string, number>)[sortKey]) ?? 0
+      return bv - av
+    })
+
+    return items.slice(0, limitCount)
   }
 
   const [novels, webtoons] = await Promise.all([
-    contentType === 'webtoon' ? [] : getDocs(buildQuery('novels')).then((s) => s.docs.map((d) => fromDoc<Novel>(d))),
-    contentType === 'novel' ? [] : getDocs(buildQuery('webtoons')).then((s) => s.docs.map((d) => fromDoc<Webtoon>(d))),
+    contentType === 'webtoon' ? ([] as Novel[]) : fetchCol<Novel>('novels'),
+    contentType === 'novel' ? ([] as Webtoon[]) : fetchCol<Webtoon>('webtoons'),
   ])
 
   return { novels, webtoons }
@@ -898,69 +929,67 @@ export async function searchContent(
   const q = searchQuery.toLowerCase().trim()
   if (!q) return { novels: [], webtoons: [] }
 
-  // Firestore doesn't support full-text search natively.
-  // Query by title range (prefix match) as a lightweight substitute.
+  const LIVE = ['published', 'ongoing', 'completed']
+  // Title range (prefix match) — uses single-field index on 'title' (auto-created).
+  // Filter status/visibility client-side to avoid composite index requirements.
   const titleEnd = q.replace(/.$/, (c) => String.fromCharCode(c.charCodeAt(0) + 1))
 
   const novelQ = query(
     collection(db, 'novels'),
-    where('status', 'in', ['published', 'ongoing', 'completed']),
-    where('visibility', '==', 'public'),
     where('title', '>=', q),
     where('title', '<', titleEnd),
-    limit(limitCount)
+    limit(limitCount * 3)
   )
   const webtoonQ = query(
     collection(db, 'webtoons'),
-    where('status', 'in', ['published', 'ongoing', 'completed']),
-    where('visibility', '==', 'public'),
     where('title', '>=', q),
     where('title', '<', titleEnd),
-    limit(limitCount)
+    limit(limitCount * 3)
   )
 
   const [novelSnaps, webtoonSnaps] = await Promise.all([getDocs(novelQ), getDocs(webtoonQ)])
   return {
-    novels: novelSnaps.docs.map((d) => fromDoc<Novel>(d)),
-    webtoons: webtoonSnaps.docs.map((d) => fromDoc<Webtoon>(d)),
+    novels: novelSnaps.docs
+      .map((d) => fromDoc<Novel>(d))
+      .filter((n) => LIVE.includes(n.status) && n.visibility === 'public')
+      .slice(0, limitCount),
+    webtoons: webtoonSnaps.docs
+      .map((d) => fromDoc<Webtoon>(d))
+      .filter((w) => LIVE.includes(w.status) && w.visibility === 'public')
+      .slice(0, limitCount),
   }
 }
 
 // ── Originals ─────────────────────────────────────────────────
 
 export async function getOriginals(limitCount = 20): Promise<{ novels: Novel[]; webtoons: Webtoon[] }> {
+  const LIVE = ['published', 'ongoing', 'completed']
   const [novelSnaps, webtoonSnaps] = await Promise.all([
-    getDocs(query(
-      collection(db, 'novels'),
-      where('isOriginal', '==', true),
-      where('status', 'in', ['published', 'ongoing', 'completed']),
-      orderBy('publishedAt', 'desc'),
-      limit(limitCount)
-    )),
-    getDocs(query(
-      collection(db, 'webtoons'),
-      where('isOriginal', '==', true),
-      where('status', 'in', ['published', 'ongoing', 'completed']),
-      orderBy('publishedAt', 'desc'),
-      limit(limitCount)
-    )),
+    getDocs(query(collection(db, 'novels'), where('isOriginal', '==', true), limit(limitCount * 4))),
+    getDocs(query(collection(db, 'webtoons'), where('isOriginal', '==', true), limit(limitCount * 4))),
   ])
-  return {
-    novels: novelSnaps.docs.map((d) => fromDoc<Novel>(d)),
-    webtoons: webtoonSnaps.docs.map((d) => fromDoc<Webtoon>(d)),
-  }
+  const novels = novelSnaps.docs
+    .map((d) => fromDoc<Novel>(d))
+    .filter((n) => LIVE.includes(n.status) && n.visibility === 'public')
+    .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
+    .slice(0, limitCount)
+  const webtoons = webtoonSnaps.docs
+    .map((d) => fromDoc<Webtoon>(d))
+    .filter((w) => LIVE.includes(w.status) && w.visibility === 'public')
+    .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
+    .slice(0, limitCount)
+  return { novels, webtoons }
 }
 
 export async function getFeaturedNovels(limitCount = 6): Promise<Novel[]> {
-  const q = query(
-    collection(db, 'novels'),
-    where('status', 'in', ['published', 'ongoing', 'completed']),
-    where('visibility', '==', 'public'),
-    orderBy('viewCount', 'desc'),
-    limit(limitCount)
-  )
+  const LIVE = ['published', 'ongoing', 'completed']
+  const q = query(collection(db, 'novels'), where('visibility', '==', 'public'), limit(limitCount * 4))
   const snaps = await getDocs(q)
-  return snaps.docs.map((d) => fromDoc<Novel>(d))
+  return snaps.docs
+    .map((d) => fromDoc<Novel>(d))
+    .filter((n) => LIVE.includes(n.status))
+    .sort((a, b) => b.viewCount - a.viewCount)
+    .slice(0, limitCount)
 }
 
 export async function duplicateEpisode(

@@ -71,13 +71,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Ensure user document exists (handles email sign-in and first-time OAuth)
-        await createUserDocument(firebaseUser)
+        // Never let document-creation or profile-fetch errors block auth from resolving
+        try { await createUserDocument(firebaseUser) } catch (e) {
+          console.error('[Auth] createUserDocument error:', e)
+        }
 
-        const [profile, idToken] = await Promise.all([
-          getUserProfile(firebaseUser.uid),
-          firebaseUser.getIdToken(),
-        ])
+        let profile: UserProfile | null = null
+        let idToken = ''
+        try {
+          ;[profile, idToken] = await Promise.all([
+            getUserProfile(firebaseUser.uid),
+            firebaseUser.getIdToken(),
+          ])
+        } catch (e) {
+          console.error('[Auth] profile/token fetch error:', e)
+          // Fall through — auth still resolves with firebaseUser but no profile
+        }
 
         const isSuperAdmin =
           profile?.role === 'superadmin' || firebaseUser.email === SUPER_ADMIN_EMAIL
@@ -92,11 +101,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isSuperAdmin,
         })
 
-        await setSessionCookie(
-          idToken,
-          isSuperAdmin ? 'superadmin' : (profile?.role ?? 'user'),
-          firebaseUser.email ?? ''
-        )
+        if (idToken) {
+          await setSessionCookie(
+            idToken,
+            isSuperAdmin ? 'superadmin' : (profile?.role ?? 'user'),
+            firebaseUser.email ?? ''
+          ).catch((e) => console.error('[Auth] session cookie error:', e))
+        }
       } else {
         setState({
           firebaseUser: null,

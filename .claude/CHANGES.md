@@ -1,5 +1,92 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-06-27 — Full Super Admin System + Creator Dashboard
+
+### New Files
+- `src/components/layout/StudioLayoutShell.tsx` — Client wrapper that hides the studio sidebar on `/admin/super/*` routes so the super admin can use its own dedicated layout
+- `src/components/admin/SuperAdminSidebar.tsx` — Dedicated sidebar with 6 sections: Dashboard, Users, Novel Studio, Webtoon Studio, Requests, Settings
+- `src/components/admin/StatCard.tsx` — Reusable metric card with icon, value, trend badge, color variants
+- `src/components/admin/ConfirmDialog.tsx` — Accessible Framer Motion confirmation modal for all destructive actions
+- `src/components/admin/AdminCharts.tsx` — Recharts charts (lazy-loaded, SSR-safe): content bar chart, distribution pie, top genres bar
+- `src/lib/firebase/admin.ts` — All admin Firestore functions: analytics (`getPlatformStats`, `getCountFromServer`), user management, novel/webtoon moderation, reports, platform settings, audit logging
+- `src/app/(studio)/admin/super/layout.tsx` — Dedicated super admin layout (full-screen, no studio sidebar)
+- `src/app/(studio)/admin/super/users/page.tsx` — User management: table with search/role filter, role changer, disable/enable, delete, password reset
+- `src/app/(studio)/admin/super/novels/page.tsx` — Novel moderation: global table, search, status filter, soft-delete, restore, permanent delete with confirmation
+- `src/app/(studio)/admin/super/webtoons/page.tsx` — Webtoon moderation: same as novels page
+- `src/app/(studio)/admin/super/requests/page.tsx` — Reports management: tabbed by status (pending/resolved/dismissed), resolve/dismiss actions
+- `src/app/(studio)/admin/super/settings/page.tsx` — Platform settings: maintenance mode, signups toggle, content creation toggle, announcement banner, upload limits, AI limits
+- `src/app/(studio)/dashboard/page.tsx` — Creator personal dashboard: stats (views, likes, followers), quick actions, novel/webtoon lists
+
+### Modified Files
+- `src/app/(studio)/admin/super/page.tsx` — Replaced static stub with full analytics dashboard: real Firestore counts, lazy-loaded charts, recent users/novels/webtoons tables
+- `src/app/(studio)/layout.tsx` — Delegates to `StudioLayoutShell` for conditional sidebar rendering
+- `src/types/webtoon.ts` — Added `visibility` field (was missing from Webtoon type)
+- `src/lib/firebase/admin.ts` — `AdminReport.createdAt` typed as `FirestoreTimestamp | null`
+
+### Dependencies
+- `recharts` — installed for dashboard analytics charts
+
+### Security
+- Middleware (`src/proxy.ts`) already gates `/admin/super` by exact email match for `shashwathbc@gmail.com`
+- All destructive actions require `ConfirmDialog` confirmation before execution
+- Every admin action writes to `auditLogs` Firestore collection via `createAuditLog`
+
+## 2026-06-27 — Profile page crash fix (formatCount undefined)
+
+- `src/lib/utils/formatters.ts` `formatCount`: Changed signature from `(n: number)` to `(n: number | undefined | null)` with `?? 0` default. Existing Firestore user documents created before `followingCount` was added to the schema pass `undefined` at runtime, crashing on `.toString()`.
+- `firestore.rules`: Fixed — the CLI was targeting project `toonflow-studio-paint` (wrong) while the app connects to `toonflow-studio-paint-f384c`. Rules for the correct project must be published via Firebase Console → Firestore → Rules.
+- `.firebaserc`: Fixed `"Bash"` key → `"default"` and updated project ID to `toonflow-studio-paint-f384c`.
+
+## 2026-06-27 — Deploy Firestore security rules (fix "Missing or insufficient permissions")
+
+- **Root cause**: `firestore.rules` was never successfully deployed to Firebase. The file had a syntax error (`rules_version='2'` missing the trailing `;`), so any prior deploy attempts would have failed silently. Firebase was running the default production-mode rules that deny ALL access.
+- **Fix**: Rewrote `firestore.rules` with correct `rules_version = '2';` syntax and proper per-collection rules:
+  - `novels`, `webtoons`, their subcollections: public read; auth create; owner/admin update/delete
+  - `users/{userId}`: public read; owner create/update; admin delete
+  - `bookmarks`, `readingHistory`: owner-only read/write
+  - `comments`: public read; auth create; owner/admin delete
+  - `follows`, `transactions`, `reports`, `withdrawals`: appropriate auth-gated rules
+- **Deployed**: `firebase deploy --only firestore:rules` — rules are now live on `toonflow-studio-paint`
+
+## 2026-06-27 — Fix Homepage/Browse never loading + AuthContext hang + composite index elimination
+
+### Root causes fixed
+- **AuthContext hang**: `createUserDocument` or `getUserProfile` inside `onAuthStateChanged` could throw and silently prevent `setState({ loading: false })` from ever being called. Every page using `useAuth()` would stay in `loading: true` indefinitely. Fixed with try-catch wrappers so auth always resolves.
+- **All compound Firestore queries failing**: Every query combining `where` + `orderBy` on different fields requires a composite index that didn't exist (index file was reverted to empty). Queries threw "requires an index" errors → HomeFeed showed empty, Browse showed empty, Originals empty.
+
+### Changes
+- `src/contexts/AuthContext.tsx`: Wrapped `createUserDocument` call in `try/catch`; wrapped `getUserProfile + getIdToken` in `try/catch`. Auth state now always resolves even if Firestore is temporarily unavailable.
+- `src/lib/firebase/firestore.ts` — rewrote all compound queries to use single-field `where` + client-side filter/sort (eliminates all composite index requirements):
+  - `getTrendingNovels`: removed `orderBy('viewCount')` from Firestore query; sort client-side after fetching
+  - `getTrendingWebtoons`: same
+  - `browseContent`: rewrote `buildQuery` into `fetchCol` helper — single `where` clause, all secondary filtering and sorting client-side
+  - `getOriginals`: removed compound `where + orderBy`; filter visibility/status and sort publishedAt client-side
+  - `getFeaturedNovels`: removed compound `where + where + orderBy`; filter status client-side
+  - `searchContent`: removed `where('status', ...) + where('visibility', ...)` from Firestore query; filter client-side after title prefix match
+  - `getComments`: replaced 3-clause `where` + `orderBy` with single `where('targetId')` + client-side filter
+- `src/types/webtoon.ts`: Added `visibility: 'public' | 'unlisted' | 'private'` field to `Webtoon` interface (was missing — webtoons had no visibility in schema)
+- `src/lib/firebase/firestore.ts` `createWebtoon`: Adds `visibility: 'public'` default when creating webtoons
+
+## 2026-06-27 — Studio "Published" tab empty + cover image 400 error
+
+- `create/novel/page.tsx`: Renamed "Published" tab to "Live" (type `FilterStatus: 'live'`). `publishNovel()` sets `status: 'ongoing'`, not `'published'`, so the old tab was always empty. "Live" now filters `status !== 'draft'` and the tab count matches.
+- `create/webtoon/page.tsx`: Same fix — "Published" → "Live", filter updated to `status !== 'draft'`.
+- `create/seed/page.tsx`: Changed `COVER_URL` from `/images/ravana-cover.png` (non-existent local file causing 400 errors) to `https://picsum.photos/seed/ravana/900/1350`. Existing seeded documents in Firestore still have the broken URL — update cover via Edit Details in the studio.
+
+## 2026-06-27 — Published novels not showing in Home / Browse / Originals
+
+- `firestore.indexes.json`: Added 24 composite indexes (novels + webtoons) required by compound queries. Previously the file was empty, causing every multi-field query with orderBy to fail silently.
+- `firestore.ts` `browseContent`: Fixed `in` + `array-contains` conflict — Firestore forbids combining `where('status', 'in', [...])` with `where('genres', 'array-contains', genre)` in the same query. When genre is selected, the query now uses `array-contains` on genres + equality on visibility, and filters status client-side. When no genre, the original `in` filter is used.
+- **Action required**: Deploy indexes with `firebase deploy --only firestore:indexes` (indexes take a few minutes to build).
+- Note: "Originals" page only shows content where `isOriginal: true`. Regular published novels won't appear there — that's expected.
+
+## 2026-06-27 — Profile page "Profile Not Found" fix
+
+- `ProfilePageClient.tsx`: Fixed race condition where `load()` fired before `AuthContext` resolved auth state, causing `getUserProfile` to return null and show "Profile Not Found" even when logged in.
+- Added `authLoading` guard: `load()` now returns early while auth is still loading, and the skeleton is shown until both auth and profile load complete.
+- Added auto-heal: if viewing own profile and Firestore document is missing, `createUserDocument` is called automatically then profile is re-fetched.
+- `isOwnProfile` now only evaluates to `true` after auth has finished loading (`!authLoading && firebaseUser?.uid === uid`).
+
 ## 2026-06-27 — Novel Creation, Publishing, Profile, Wallet & Token Economy
 
 ### 1. AI Generation — Error Handling & Logging

@@ -31,10 +31,11 @@ export function formatDate(ts: FirestoreTimestamp): string {
   })
 }
 
-export function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return n.toString()
+export function formatCount(n: number | undefined | null): string {
+  const v = n ?? 0
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`
+  return v.toString()
 }
 
 export function formatCurrency(amountInPaise: number, currency: 'INR' | 'USD' = 'INR'): string {

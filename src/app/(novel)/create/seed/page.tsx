@@ -13,7 +13,7 @@ import {
 } from '@/lib/firebase/firestore'
 import { BookOpen, Film, CheckCircle2, XCircle, Loader2, Sparkles, ArrowLeft } from 'lucide-react'
 
-const COVER_URL = '/images/ravana-cover.png'
+const COVER_URL = 'https://picsum.photos/seed/ravana/900/1350'
 
 const NOVEL_DATA = {
   title: 'Ravana: The Immortal War',

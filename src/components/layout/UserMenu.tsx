@@ -112,9 +112,7 @@ export function UserDropdownContent({
         </div>
 
         <MenuItem href={`/profile/${userProfile?.uid}`} icon={<User size={14} />} label="Profile" />
-        {userProfile?.isCreator && (
-          <MenuItem href="/dashboard" icon={<LayoutDashboard size={14} />} label="Dashboard" />
-        )}
+        <MenuItem href="/dashboard" icon={<LayoutDashboard size={14} />} label="Dashboard" />
         {isAdmin && (
           <MenuItem href="/admin" icon={<Shield size={14} />} label="Admin Panel" />
         )}

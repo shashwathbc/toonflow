@@ -39,13 +39,13 @@ import toast from 'react-hot-toast'
 import type { Novel } from '@/types'
 import { formatCount, formatRelativeTimestamp } from '@/lib/utils/formatters'
 
-type FilterStatus = 'all' | 'draft' | 'published' | 'ongoing' | 'completed' | 'hiatus'
+type FilterStatus = 'all' | 'draft' | 'live' | 'ongoing' | 'completed' | 'hiatus'
 type SortOrder = 'updated' | 'views' | 'alpha' | 'chapters'
 
 const STATUS_FILTERS: { label: string; value: FilterStatus }[] = [
   { label: 'All', value: 'all' },
   { label: 'Draft', value: 'draft' },
-  { label: 'Published', value: 'published' },
+  { label: 'Live', value: 'live' },
   { label: 'Ongoing', value: 'ongoing' },
   { label: 'Completed', value: 'completed' },
   { label: 'Hiatus', value: 'hiatus' },
@@ -346,7 +346,8 @@ export default function NovelDashboardPage() {
 
   const filtered = useMemo(() => {
     let result = [...novels]
-    if (filter !== 'all') result = result.filter((n) => n.status === filter)
+    if (filter === 'live') result = result.filter((n) => n.status !== 'draft')
+    else if (filter !== 'all') result = result.filter((n) => n.status === filter)
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter(
@@ -555,6 +556,8 @@ export default function NovelDashboardPage() {
           {STATUS_FILTERS.map((f) => {
             const count = f.value === 'all'
               ? novels.length
+              : f.value === 'live'
+              ? novels.filter((n) => n.status !== 'draft').length
               : novels.filter((n) => n.status === f.value).length
             const isSelected = filter === f.value
             return isSelected ? (

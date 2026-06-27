@@ -1,12 +1,5 @@
-import StudioSidebar from '@/components/layout/StudioSidebar'
+import StudioLayoutShell from '@/components/layout/StudioLayoutShell'
 
 export default function StudioLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-bg flex">
-      <StudioSidebar />
-      <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
-        {children}
-      </main>
-    </div>
-  )
+  return <StudioLayoutShell>{children}</StudioLayoutShell>
 }

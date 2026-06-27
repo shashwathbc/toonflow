@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth'
 import {
   getUserProfile, getNovelsByAuthor, getWebtoonsByAuthor,
   getUserBookmarks, followUser, unfollowUser, isFollowing,
-  updateUserProfile,
+  updateUserProfile, createUserDocument,
 } from '@/lib/firebase/firestore'
 import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
@@ -319,8 +319,8 @@ function FollowButton({ targetUid, initialFollowing, onCountChange }: {
 }
 
 export function ProfilePageClient({ uid }: { uid: string }) {
-  const { firebaseUser } = useAuth()
-  const isOwnProfile = firebaseUser?.uid === uid
+  const { firebaseUser, loading: authLoading } = useAuth()
+  const isOwnProfile = !authLoading && firebaseUser?.uid === uid
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [novels, setNovels] = useState<Novel[]>([])
@@ -333,14 +333,22 @@ export function ProfilePageClient({ uid }: { uid: string }) {
   const [followerCount, setFollowerCount] = useState(0)
 
   const load = useCallback(async () => {
+    if (authLoading) return
     try {
       const [prof, novs, wts] = await Promise.all([
         getUserProfile(uid),
         getNovelsByAuthor(uid),
         getWebtoonsByAuthor(uid),
       ])
-      setProfile(prof)
-      setFollowerCount(prof?.followerCount ?? 0)
+
+      let resolvedProfile = prof
+      if (!resolvedProfile && isOwnProfile && firebaseUser) {
+        await createUserDocument(firebaseUser)
+        resolvedProfile = await getUserProfile(uid)
+      }
+
+      setProfile(resolvedProfile)
+      setFollowerCount(resolvedProfile?.followerCount ?? 0)
       setNovels(novs)
       setWebtoons(wts)
 
@@ -359,7 +367,7 @@ export function ProfilePageClient({ uid }: { uid: string }) {
     } finally {
       setLoading(false)
     }
-  }, [uid, firebaseUser, isOwnProfile])
+  }, [uid, firebaseUser, isOwnProfile, authLoading])
 
   useEffect(() => { load() }, [load])
 
@@ -371,7 +379,7 @@ export function ProfilePageClient({ uid }: { uid: string }) {
   const tabNovels = isOwnProfile ? novels : publishedNovels
   const tabWebtoons = isOwnProfile ? webtoons : publishedWebtoons
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="max-w-screen-xl mx-auto px-4 py-8 animate-pulse">
         <div className="w-full h-48 bg-bg-elevated rounded-2xl mb-0" />

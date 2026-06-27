@@ -1,0 +1,38 @@
+mutation CreateSeries($title: String!, $genre: String!, $description: String) @auth(level: USER) {
+  series_insert(data: {
+    title: $title,
+    genre: $genre,
+    description: $description,
+    creator: { id_expr: "auth.uid" },
+    createdAt_expr: "request.time"
+  })
+}
+
+mutation CreateChapter($seriesId: UUID!, $chapterNumber: Int!, $title: String!, $contentData: String!) @auth(level: USER) {
+  chapter_insert(data: {
+    series: { id: $seriesId },
+    chapterNumber: $chapterNumber,
+    title: $title,
+    contentData: $contentData,
+    publishedAt_expr: "request.time"
+  })
+}
+
+mutation FollowCreator($creatorId: UUID!) @auth(level: USER) {
+  follow_insert(data: {
+    creator: { id: $creatorId },
+    follower: { id_expr: "auth.uid" },
+    followedAt_expr: "request.time"
+  })
+}
+
+query GetSeriesWithChapters($seriesId: UUID!) @auth(level: PUBLIC) {
+  series(id: $seriesId) {
+    title
+    chapters_on_series(orderBy: [{chapterNumber: ASC}]) {
+      chapterNumber
+      title
+      viewCount
+    }
+  }
+}

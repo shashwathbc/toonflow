@@ -19,6 +19,7 @@ export interface Webtoon {
   synopsis: string
   coverURL: string | null
   status: ContentStatus
+  visibility: 'public' | 'unlisted' | 'private'
   genres: ContentGenre[]
   tags: string[]
   isPremium: boolean
