@@ -164,64 +164,73 @@ body {
   }
 }
 
-/* ── TipTap Editor ─────────────────────────────────────── */
+/* ── TipTap Editor — reader-matched typography ────────── */
 .tiptap {
   outline: none;
-  min-height: 600px;
-  font-size: 1rem;
-  line-height: 1.8;
-  color: #FFFFFF;
-  caret-color: #FFFFFF;
+  min-height: 60vh;
+  font-size: 1.125rem;
+  line-height: 1.9;
+  color: rgba(255, 255, 255, 0.85);
+  caret-color: #ffffff;
+  font-family: Georgia, "Times New Roman", serif;
 }
 
 .tiptap > * + * {
-  margin-top: 0.75em;
+  margin-top: 1.1em;
 }
 
 .tiptap p {
-  line-height: 1.8;
+  line-height: 1.9;
+  margin-bottom: 0;
 }
 
 .tiptap h1 {
-  font-size: 2em;
-  font-weight: 700;
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  font-weight: 900;
+  font-family: Georgia, "Times New Roman", serif;
+  margin-top: 2.5em;
+  margin-bottom: 0.4em;
   line-height: 1.2;
+  color: #ffffff;
 }
 
 .tiptap h2 {
-  font-size: 1.5em;
-  font-weight: 600;
-  margin-top: 1.25em;
-  margin-bottom: 0.4em;
+  font-size: clamp(1.2rem, 3vw, 1.6rem);
+  font-weight: 700;
+  font-family: Georgia, "Times New Roman", serif;
+  margin-top: 2em;
+  margin-bottom: 0.3em;
   line-height: 1.3;
+  color: #ffffff;
 }
 
 .tiptap h3 {
-  font-size: 1.25em;
-  font-weight: 600;
-  margin-top: 1em;
-  margin-bottom: 0.3em;
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-family: Georgia, "Times New Roman", serif;
+  margin-top: 1.5em;
+  margin-bottom: 0.25em;
   line-height: 1.4;
+  color: #ffffff;
 }
 
 .tiptap ul,
 .tiptap ol {
-  padding-left: 1.5em;
+  padding-left: 1.6em;
 }
 
 .tiptap ul li,
 .tiptap ol li {
-  margin-top: 0.25em;
+  margin-top: 0.4em;
+  line-height: 1.9;
 }
 
 .tiptap blockquote {
-  border-left: 3px solid rgba(255, 255, 255, 0.25);
-  padding-left: 1em;
-  color: #AAAAAA;
+  border-left: 2px solid rgba(255, 255, 255, 0.2);
+  padding-left: 1.25em;
+  color: rgba(255, 255, 255, 0.5);
   font-style: italic;
-  margin: 1em 0;
+  margin: 1.5em 0;
 }
 
 .tiptap code {
@@ -233,33 +242,35 @@ body {
 }
 
 .tiptap pre {
-  background: #212121;
-  border: 1px solid #3F3F3F;
+  background: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   padding: 1em;
   overflow-x: auto;
-  margin: 1em 0;
+  margin: 1.5em 0;
 }
 
 .tiptap pre code {
   background: none;
   padding: 0;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .tiptap hr {
   border: none;
-  border-top: 1px solid #3F3F3F;
-  margin: 2em 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 3em auto;
+  width: 40%;
 }
 
 .tiptap strong {
   font-weight: 700;
-  color: #FFFFFF;
+  color: #ffffff;
 }
 
 .tiptap em {
   font-style: italic;
-  color: #EBEBEB;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .tiptap u {
@@ -267,10 +278,96 @@ body {
   text-underline-offset: 3px;
 }
 
+/* Chapter title input in the novel editor */
+.editor-chapter-title {
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.2;
+}
+
 .tiptap p.is-editor-empty:first-child::before {
-  color: #717171;
+  color: rgba(255, 255, 255, 0.2);
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+/* ── Immersive Reader Animations ───────────────────────── */
+@keyframes reader-particle-float {
+  0%   { transform: translateY(0px)   translateX(0px)   scale(1);   opacity: var(--p-opacity); }
+  33%  { transform: translateY(-18px) translateX(8px)   scale(1.2); opacity: calc(var(--p-opacity) * 1.4); }
+  66%  { transform: translateY(-10px) translateX(-6px)  scale(0.9); opacity: calc(var(--p-opacity) * 0.7); }
+  100% { transform: translateY(0px)   translateX(0px)   scale(1);   opacity: var(--p-opacity); }
+}
+
+@keyframes reader-glow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50%       { opacity: 0.7; }
+}
+
+@keyframes reader-scroll-cue {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50%       { transform: translateY(8px); opacity: 1; }
+}
+
+@keyframes reader-title-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+@keyframes reader-fade-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes reader-line-grow {
+  from { scaleX: 0; }
+  to   { scaleX: 1; }
+}
+
+/* Paragraph reveal on scroll */
+.reader-paragraph {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reader-paragraph.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* First paragraph drop-cap */
+.reader-drop-cap::first-letter {
+  float: left;
+  font-size: 4.2em;
+  line-height: 0.75;
+  padding-right: 0.08em;
+  padding-top: 0.05em;
+  font-weight: 900;
+  color: #ffffff;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+/* Progress bar */
+.reader-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,0.6) 100%);
+  z-index: 100;
+  transition: width 0.1s linear;
+  pointer-events: none;
+}
+
+/* Reader header auto-hide */
+.reader-header {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+.reader-header.hidden {
+  transform: translateY(-100%);
+  opacity: 0;
 }

@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { BookOpen, Layers, Eye, Star, ArrowRight, Loader2, Globe } from 'lucide-react'
-import { getTrendingNovels, getTrendingWebtoons } from '@/lib/firebase/firestore'
-import { formatCount, formatRelativeTimestamp } from '@/lib/utils/formatters'
+import { BookOpen, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'lucide-react'
+import { getTrendingNovels, getTrendingWebtoons, getNewReleases } from '@/lib/firebase/firestore'
+import { formatCount } from '@/lib/utils/formatters'
 import type { Novel, Webtoon } from '@/types'
 
 function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }) {
@@ -78,14 +78,42 @@ function SkeletonCard() {
   )
 }
 
+function SectionHeader({ id, title, href, linkLabel }: { id: string; title: string; href: string; linkLabel: string }) {
+  return (
+    <div className="flex items-center justify-between mb-6">
+      <h2 id={id} className="section-heading">{title}</h2>
+      <Link
+        href={href}
+        className="text-sm text-white/50 hover:text-accent transition-colors flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
+        aria-label={linkLabel}
+      >
+        View All <ArrowRight size={14} aria-hidden="true" />
+      </Link>
+    </div>
+  )
+}
+
+const GRID = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'
+
 export function HomeFeed() {
   const [novels, setNovels] = useState<Novel[]>([])
   const [webtoons, setWebtoons] = useState<Webtoon[]>([])
+  const [newNovels, setNewNovels] = useState<Novel[]>([])
+  const [newWebtoons, setNewWebtoons] = useState<Webtoon[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([getTrendingNovels(12), getTrendingWebtoons(12)])
-      .then(([n, w]) => { setNovels(n); setWebtoons(w) })
+    Promise.all([
+      getTrendingNovels(12),
+      getTrendingWebtoons(12),
+      getNewReleases(6),
+    ])
+      .then(([n, w, releases]) => {
+        setNovels(n)
+        setWebtoons(w)
+        setNewNovels(releases.novels)
+        setNewWebtoons(releases.webtoons)
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
@@ -95,80 +123,124 @@ export function HomeFeed() {
     ...webtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
   ].sort((a, b) => b.item.viewCount - a.item.viewCount).slice(0, 12)
 
+  const newReleases = [
+    ...newNovels.map((n) => ({ item: n, type: 'novel' as const })),
+    ...newWebtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
+  ].slice(0, 6)
+
   if (loading) {
     return (
-      <section className="max-w-screen-xl mx-auto px-4 py-8" aria-labelledby="trending-heading">
-        <h2 id="trending-heading" className="section-heading mb-6">Trending Now</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)}
-        </div>
-      </section>
+      <div className="space-y-12 max-w-screen-xl mx-auto px-4 py-8">
+        {[0, 1].map((s) => (
+          <section key={s} aria-busy="true">
+            <div className="h-6 bg-bg-elevated rounded w-40 mb-6 animate-pulse" />
+            <div className={GRID}>
+              {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+          </section>
+        ))}
+      </div>
     )
   }
 
-  if (allTrending.length === 0) {
+  if (allTrending.length === 0 && newReleases.length === 0) {
     return (
-      <section className="max-w-screen-xl mx-auto px-4 py-8" aria-labelledby="trending-heading">
-        <h2 id="trending-heading" className="section-heading mb-6">Trending Now</h2>
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Globe size={32} className="text-white/20 mb-4" aria-hidden="true" />
-          <p className="text-white/50 text-sm">No published content yet. Be the first creator!</p>
-          <Link href="/create" className="btn-accent mt-4 text-sm">Start Creating</Link>
-        </div>
+      <section className="max-w-screen-xl mx-auto px-4 py-16 text-center" aria-labelledby="empty-heading">
+        <Globe size={40} className="text-white/20 mx-auto mb-4" aria-hidden="true" />
+        <h2 id="empty-heading" className="text-white/50 text-lg font-medium mb-2">No published content yet</h2>
+        <p className="text-white/30 text-sm mb-6">Be the first creator to publish on Toonflow!</p>
+        <Link href="/create" className="btn-accent">Start Creating</Link>
       </section>
     )
   }
 
   return (
-    <>
+    <div className="space-y-0">
       {/* Trending Now */}
-      <section className="max-w-screen-xl mx-auto px-4 py-8" aria-labelledby="trending-heading">
-        <div className="flex items-center justify-between mb-6">
-          <h2 id="trending-heading" className="section-heading">Trending Now</h2>
-          <Link
-            href="/browse"
-            className="text-sm text-white/50 hover:text-accent transition-colors flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
-            aria-label="View all content in browse page"
-          >
-            View All <ArrowRight size={14} aria-hidden="true" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {allTrending.map(({ item, type }) => (
-            <ContentCard key={`${type}-${item.id}`} item={item} type={type} />
-          ))}
-        </div>
-      </section>
+      {allTrending.length > 0 && (
+        <section className="max-w-screen-xl mx-auto px-4 py-8" aria-labelledby="trending-heading">
+          <SectionHeader
+            id="trending-heading"
+            title="Trending Now"
+            href="/browse?sort=trending"
+            linkLabel="View all trending content"
+          />
+          <div className={GRID}>
+            {allTrending.map(({ item, type }) => (
+              <ContentCard key={`${type}-${item.id}`} item={item} type={type} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* Novels section */}
+      {/* New Releases */}
+      {newReleases.length > 0 && (
+        <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="new-releases-heading">
+          <SectionHeader
+            id="new-releases-heading"
+            title="New Releases"
+            href="/browse?sort=newest"
+            linkLabel="View all new releases"
+          />
+          <div className={GRID}>
+            {newReleases.map(({ item, type }) => (
+              <ContentCard key={`${type}-${item.id}`} item={item} type={type} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Popular Novels */}
       {novels.length > 0 && (
         <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="novels-heading">
-          <div className="flex items-center justify-between mb-6">
-            <h2 id="novels-heading" className="section-heading">Popular Novels</h2>
-            <Link href="/browse?type=novel" className="text-sm text-white/50 hover:text-accent transition-colors flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded">
-              More Novels <ArrowRight size={14} aria-hidden="true" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <SectionHeader
+            id="novels-heading"
+            title="Popular Novels"
+            href="/browse?type=novel"
+            linkLabel="View all novels"
+          />
+          <div className={GRID}>
             {novels.slice(0, 6).map((n) => <ContentCard key={n.id} item={n} type="novel" />)}
           </div>
         </section>
       )}
 
-      {/* Webtoons section */}
+      {/* Popular Webtoons */}
       {webtoons.length > 0 && (
         <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="webtoons-heading">
-          <div className="flex items-center justify-between mb-6">
-            <h2 id="webtoons-heading" className="section-heading">Popular Webtoons</h2>
-            <Link href="/browse?type=webtoon" className="text-sm text-white/50 hover:text-accent transition-colors flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded">
-              More Webtoons <ArrowRight size={14} aria-hidden="true" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <SectionHeader
+            id="webtoons-heading"
+            title="Popular Webtoons"
+            href="/browse?type=webtoon"
+            linkLabel="View all webtoons"
+          />
+          <div className={GRID}>
             {webtoons.slice(0, 6).map((w) => <ContentCard key={w.id} item={w} type="webtoon" />)}
           </div>
         </section>
       )}
-    </>
+
+      {/* Originals promo */}
+      <section
+        className="max-w-screen-xl mx-auto px-4 pb-16"
+        aria-labelledby="originals-promo-heading"
+      >
+        <div className="bg-bg-elevated border border-bg-border p-8 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles size={18} className="text-accent" aria-hidden="true" />
+              <Tv2 size={18} className="text-accent" aria-hidden="true" />
+              <h2 id="originals-promo-heading" className="text-lg font-bold text-white">Toonflow Originals</h2>
+            </div>
+            <p className="text-white/60 max-w-sm">
+              Exclusive webtoons and novels created by top creators — only on Toonflow.
+            </p>
+          </div>
+          <Link href="/originals" className="btn-accent shrink-0">
+            Explore Originals
+          </Link>
+        </div>
+      </section>
+    </div>
   )
 }

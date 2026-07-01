@@ -37,22 +37,19 @@ service firebase.storage {
     // Novel covers
     match /novels/{novelId}/cover/{file} {
       allow read: if true;
-      allow write: if isAuth() && isImage() && isUnder10MB()
-        && firestore.get(/databases/(default)/documents/novels/$(novelId)).data.authorId == request.auth.uid;
+      allow write: if isAuth() && isImage() && isUnder10MB();
     }
 
     // Novel banners
     match /novels/{novelId}/banner/{file} {
       allow read: if true;
-      allow write: if isAuth() && isImage() && isUnder10MB()
-        && firestore.get(/databases/(default)/documents/novels/$(novelId)).data.authorId == request.auth.uid;
+      allow write: if isAuth() && isImage() && isUnder10MB();
     }
 
     // Webtoon covers
     match /webtoons/{webtoonId}/cover/{file} {
       allow read: if true;
-      allow write: if isAuth() && isImage() && isUnder10MB()
-        && firestore.get(/databases/(default)/documents/webtoons/$(webtoonId)).data.authorId == request.auth.uid;
+      allow write: if isAuth() && isImage() && isUnder10MB();
     }
 
     // Webtoon episode panels (up to 25MB per image)

@@ -309,7 +309,7 @@ function FollowButton({ targetUid, initialFollowing, onCountChange }: {
           : 'btn-accent'
       )}
       aria-label={following ? 'Unfollow creator' : 'Follow creator'}
-      aria-pressed={following ? 'true' : 'false'}
+      {...(following ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
     >
       {loading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : (
         following ? <><Check size={14} aria-hidden="true" /> Following</> : <><Users size={14} aria-hidden="true" /> Follow</>

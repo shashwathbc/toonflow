@@ -11,6 +11,8 @@ import {
   updateChapterContent,
   publishNovel,
   unpublishNovel,
+  publishChapter,
+  unpublishChapter,
 } from '@/lib/firebase/firestore'
 import dynamic from 'next/dynamic'
 import { ChapterSidebar } from '@/components/editor/ChapterSidebar'
@@ -52,6 +54,7 @@ export default function NovelEditorPage({ params }: PageProps) {
   const [aiCollapsed, setAiCollapsed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [chapterPublishing, setChapterPublishing] = useState(false)
 
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedContent = useRef('')
@@ -71,10 +74,15 @@ export default function NovelEditorPage({ params }: PageProps) {
       .finally(() => setNovelLoading(false))
   }, [novelId, firebaseUser, router])
 
-  // Auto-select first chapter when chapters load
+  // Auto-select first chapter when chapters load; keep active chapter status in sync
   useEffect(() => {
     if (chapters.length > 0 && !activeChapter) {
       selectChapter(chapters[0])
+    } else if (activeChapter) {
+      const fresh = chapters.find((c) => c.id === activeChapter.id)
+      if (fresh && fresh.status !== activeChapter.status) {
+        setActiveChapter(fresh)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapters])
@@ -183,6 +191,33 @@ export default function NovelEditorPage({ params }: PageProps) {
     }
   }
 
+  async function handlePublishChapter() {
+    if (!activeChapter) return
+    setChapterPublishing(true)
+    try {
+      await publishChapter(novelId, activeChapter.id)
+      // chapters state is driven by useChapters onSnapshot — will update automatically
+      toast.success('Chapter published! Readers can now see it.')
+    } catch {
+      toast.error('Failed to publish chapter')
+    } finally {
+      setChapterPublishing(false)
+    }
+  }
+
+  async function handleUnpublishChapter() {
+    if (!activeChapter) return
+    setChapterPublishing(true)
+    try {
+      await unpublishChapter(novelId, activeChapter.id)
+      toast.success('Chapter unpublished')
+    } catch {
+      toast.error('Failed to unpublish chapter')
+    } finally {
+      setChapterPublishing(false)
+    }
+  }
+
   const handleExportPDF = useCallback(async () => {
     if (!novel) return
     const { default: jsPDF } = await import('jspdf')
@@ -270,9 +305,12 @@ export default function NovelEditorPage({ params }: PageProps) {
         onSave={saveChapter}
         onPublish={handlePublish}
         onUnpublish={handleUnpublish}
+        onPublishChapter={handlePublishChapter}
+        onUnpublishChapter={handleUnpublishChapter}
         onExportPDF={handleExportPDF}
         onToggleFullscreen={() => setFullscreen((v) => !v)}
         isFullscreen={fullscreen}
+        chapterPublishing={chapterPublishing}
       />
 
       {/* Three-column editor */}
@@ -290,26 +328,32 @@ export default function NovelEditorPage({ params }: PageProps) {
         )}
 
         {/* Center: Editor */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-bg-card">
+        <div className="flex-1 flex flex-col overflow-hidden bg-black">
           {activeChapter ? (
             <>
-              {/* Chapter title input */}
-              <div className="px-8 pt-6 pb-2 border-b border-bg-border">
-                <input
-                  type="text"
-                  value={chapterTitle}
-                  onChange={(e) => setChapterTitle(e.target.value)}
-                  placeholder="Chapter Title"
-                  className="w-full bg-transparent text-xl font-bold text-white placeholder:text-white/20 outline-none focus-visible:outline-2 focus-visible:outline-white/40 focus-visible:rounded"
-                  aria-label="Chapter title"
-                  onBlur={() => {
-                    if (activeChapter && chapterTitle !== activeChapter.title) {
-                      import('@/lib/firebase/firestore').then(({ updateChapter }) => {
-                        updateChapter(novelId, activeChapter.id, { title: chapterTitle }).catch(() => {})
-                      })
-                    }
-                  }}
-                />
+              {/* Chapter title input — styled like the reader heading */}
+              <div className="bg-black border-b border-white/8">
+                <div className="max-w-[680px] mx-auto px-6 sm:px-10 pt-10 pb-4">
+                  <p className="text-[10px] tracking-[0.5em] text-white/25 uppercase mb-2">
+                    Chapter {activeChapter.chapterNumber}
+                  </p>
+                  <input
+                    type="text"
+                    value={chapterTitle}
+                    onChange={(e) => setChapterTitle(e.target.value)}
+                    placeholder="Chapter Title"
+                    className="editor-chapter-title w-full bg-transparent font-black text-white placeholder:text-white/15 outline-none focus-visible:outline-none"
+                    aria-label="Chapter title"
+                    onBlur={() => {
+                      if (activeChapter && chapterTitle !== activeChapter.title) {
+                        import('@/lib/firebase/firestore').then(({ updateChapter }) => {
+                          updateChapter(novelId, activeChapter.id, { title: chapterTitle }).catch(() => {})
+                        })
+                      }
+                    }}
+                  />
+                  <div className="h-px w-12 bg-white/15 mt-5" />
+                </div>
               </div>
 
               {/* TipTap editor */}

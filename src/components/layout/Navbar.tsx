@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Plus, Search } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils/cn'
 import UserMenu from './UserMenu'
 
@@ -18,14 +17,6 @@ const NAV_LINKS = [
 function Navbar() {
   const pathname = usePathname()
   const { isAuthenticated } = useAuth()
-  const { setLoginModalOpen } = useAppStore()
-
-  const handleCreate = () => {
-    if (!isAuthenticated) {
-      setLoginModalOpen(true)
-      return
-    }
-  }
 
   return (
     <header
@@ -85,15 +76,14 @@ function Navbar() {
               <span className="hidden sm:block">CREATE</span>
             </Link>
           ) : (
-            <button
-              type="button"
-              onClick={handleCreate}
+            <Link
+              href="/login?redirect=/create"
               className="hidden md:inline-flex btn-accent text-sm py-1.5 px-3"
               aria-label="Create — sign in required"
             >
               <Plus size={16} aria-hidden="true" />
               <span className="hidden sm:block">CREATE</span>
-            </button>
+            </Link>
           )}
 
           {/* Search */}

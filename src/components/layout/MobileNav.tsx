@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 import { Home, BookOpen, Search, Plus, LayoutDashboard, User } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useAuth } from '@/hooks/useAuth'
-import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils/cn'
 import * as Avatar from '@radix-ui/react-avatar'
 import { UserDropdownContent } from './UserMenu'
@@ -13,14 +12,6 @@ import { UserDropdownContent } from './UserMenu'
 export default function MobileNav() {
   const pathname = usePathname()
   const { isAuthenticated, userProfile } = useAuth()
-  const { setLoginModalOpen } = useAppStore()
-
-  const handleAuthRequiredClick = (e: React.MouseEvent, targetUrl: string) => {
-    if (!isAuthenticated) {
-      e.preventDefault()
-      setLoginModalOpen(true)
-    }
-  }
 
   const initials = userProfile?.displayName
     ?.split(' ')
@@ -49,24 +40,17 @@ export default function MobileNav() {
       isActive: pathname.startsWith('/browse'),
     },
     {
-      href: '/create',
+      href: isAuthenticated ? '/create' : '/login?redirect=/create',
       label: 'Create',
       icon: <Plus size={20} />,
       isActive: pathname.startsWith('/create'),
-      onClick: (e: React.MouseEvent) => handleAuthRequiredClick(e, '/create'),
     },
     {
-      href: isAuthenticated ? '/dashboard' : '#',
+      href: isAuthenticated ? '/dashboard' : '/login',
       label: isAuthenticated ? 'Dashboard' : 'Login',
       isActive: isAuthenticated
         ? pathname.startsWith('/dashboard') || pathname.startsWith('/profile')
         : false,
-      onClick: (e: React.MouseEvent) => {
-        if (!isAuthenticated) {
-          e.preventDefault()
-          setLoginModalOpen(true)
-        }
-      },
       customRender: isAuthenticated ? (
         <Avatar.Root className="w-6 h-6 rounded-full overflow-hidden bg-accent/20 flex items-center justify-center border border-transparent hover:border-white transition-colors">
           <Avatar.Image
@@ -124,7 +108,7 @@ export default function MobileNav() {
           <Link
             key={idx}
             href={item.href}
-            onClick={item.onClick}
+            onClick={(item as { onClick?: () => void }).onClick}
             className={cn(
               'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'

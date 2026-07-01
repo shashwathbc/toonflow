@@ -6,24 +6,22 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import * as Avatar from '@radix-ui/react-avatar'
 import { useAuth } from '@/hooks/useAuth'
 import { logout } from '@/lib/firebase/auth'
-import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils/cn'
 import toast from 'react-hot-toast'
 
 export default function UserMenu() {
   const { isAuthenticated, userProfile, isAdmin, isSuperAdmin } = useAuth()
-  const { setLoginModalOpen } = useAppStore()
 
   if (!isAuthenticated) {
     return (
       <div className="flex items-center gap-2">
-        <button
-          onClick={() => setLoginModalOpen(true)}
+        <Link
+          href="/login"
           className="btn-ghost text-sm py-1.5 px-3"
           aria-label="Log in to your account"
         >
           Login
-        </button>
+        </Link>
         <Link
           href="/signup"
           className="btn-accent text-sm py-1.5 px-3"

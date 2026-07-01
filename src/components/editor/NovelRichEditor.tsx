@@ -117,7 +117,7 @@ export function NovelRichEditor({
       {/* Formatting toolbar */}
       {!readOnly && editor && (
         <div
-          className="flex items-center gap-0.5 px-4 py-2 border-b border-bg-border flex-wrap sticky top-14 bg-bg-card z-10"
+          className="flex items-center gap-0.5 px-4 py-2 border-b border-white/8 flex-wrap sticky top-14 bg-black z-10"
           role="toolbar"
           aria-label="Text formatting"
         >
@@ -236,16 +236,16 @@ export function NovelRichEditor({
         </div>
       )}
 
-      {/* Editor content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-editor mx-auto px-8 py-8">
+      {/* Editor content — black background, reader-width, reader typography */}
+      <div className="flex-1 overflow-y-auto bg-black">
+        <div className="max-w-[680px] mx-auto px-6 sm:px-10 py-10 pb-24">
           <EditorContent editor={editor} />
         </div>
       </div>
 
       {/* Stats footer */}
       <div
-        className="flex items-center gap-4 px-8 py-2 border-t border-bg-border text-[11px] text-white/30"
+        className="flex items-center gap-4 px-8 py-2 border-t border-white/8 bg-black text-[11px] text-white/25"
         aria-live="polite"
         aria-label="Document statistics"
       >

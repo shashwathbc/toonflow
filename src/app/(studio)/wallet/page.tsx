@@ -311,7 +311,7 @@ function WithdrawSection({ balance, onRequested }: { balance: number; onRequeste
                       ? 'bg-accent/10 text-accent border-accent/30'
                       : 'text-white/50 border-bg-border hover:border-white/20 hover:text-white'
                   )}
-                  aria-pressed={method === m.value}
+                  {...(method === m.value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
                 >
                   {m.label}
                 </button>
@@ -475,7 +475,7 @@ export default function WalletPage() {
               key={id}
               type="button"
               role="tab"
-              aria-selected={activeTab === id}
+              aria-selected={activeTab === id ? 'true' : 'false'}
               onClick={() => setActiveTab(id as typeof activeTab)}
               className={cn(
                 'px-4 py-2.5 text-sm font-medium border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-t',

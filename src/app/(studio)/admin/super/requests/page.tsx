@@ -96,7 +96,7 @@ export default function AdminRequestsPage() {
           <button
             key={label}
             role="tab"
-            aria-selected={tab === value}
+            aria-selected={tab === value ? 'true' : 'false'}
             onClick={() => setTab(value as AdminReport['status'] | undefined)}
             className={cn(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',

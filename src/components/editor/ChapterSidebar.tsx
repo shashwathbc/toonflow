@@ -26,6 +26,8 @@ import {
   ChevronRight,
   FileText,
   Loader2,
+  Globe,
+  EyeOff,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -33,6 +35,8 @@ import {
   deleteChapter,
   duplicateChapter,
   reorderChapters,
+  publishChapter,
+  unpublishChapter,
 } from '@/lib/firebase/firestore'
 import { nowTimestamp } from '@/lib/utils/time'
 import type { Chapter } from '@/types'
@@ -55,6 +59,7 @@ interface SortableChapterRowProps {
   onRequestDelete: () => void
   onConfirmDelete: () => void
   onCancelDelete: () => void
+  onTogglePublish: () => void
 }
 
 function SortableChapterRow({
@@ -66,6 +71,7 @@ function SortableChapterRow({
   onRequestDelete,
   onConfirmDelete,
   onCancelDelete,
+  onTogglePublish,
 }: SortableChapterRowProps) {
   const {
     attributes,
@@ -115,11 +121,13 @@ function SortableChapterRow({
             <span className="text-[10px] font-semibold text-white/40 flex-shrink-0">
               Ch.{chapter.chapterNumber}
             </span>
-            {chapter.status === 'published' && (
-              <span className="text-[9px] bg-white text-bg px-1 py-0.5 rounded font-semibold">
-                PUB
-              </span>
-            )}
+            <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${
+              chapter.status === 'published'
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-white/10 text-white/40'
+            }`}>
+              {chapter.status === 'published' ? 'PUB' : 'DRAFT'}
+            </span>
           </div>
           <p className={`text-xs leading-tight truncate ${isActive ? 'text-white font-medium' : 'text-white/70'}`}>
             {chapter.title || 'Untitled Chapter'}
@@ -150,23 +158,43 @@ function SortableChapterRow({
             </button>
           </div>
         ) : (
-          <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex-shrink-0 flex items-center gap-0.5">
+            {/* Publish toggle — always visible */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onDuplicate() }}
-              className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
-              aria-label={`Duplicate chapter ${chapter.chapterNumber}`}
+              onClick={(e) => { e.stopPropagation(); onTogglePublish() }}
+              className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-white ${
+                chapter.status === 'published'
+                  ? 'text-accent hover:text-white/60 hover:bg-white/5'
+                  : 'text-white/25 hover:text-accent hover:bg-white/5'
+              }`}
+              aria-label={chapter.status === 'published' ? `Unpublish chapter ${chapter.chapterNumber}` : `Publish chapter ${chapter.chapterNumber}`}
+              title={chapter.status === 'published' ? 'Unpublish chapter' : 'Publish chapter'}
             >
-              <Copy size={11} aria-hidden="true" />
+              {chapter.status === 'published'
+                ? <Globe size={11} aria-hidden="true" />
+                : <Globe size={11} aria-hidden="true" />
+              }
             </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
-              className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
-              aria-label={`Delete chapter ${chapter.chapterNumber}`}
-            >
-              <Trash2 size={11} aria-hidden="true" />
-            </button>
+            {/* Copy + delete — hover only */}
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDuplicate() }}
+                className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+                aria-label={`Duplicate chapter ${chapter.chapterNumber}`}
+              >
+                <Copy size={11} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
+                className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
+                aria-label={`Delete chapter ${chapter.chapterNumber}`}
+              >
+                <Trash2 size={11} aria-hidden="true" />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -237,6 +265,20 @@ export function ChapterSidebar({
       toast.success('Chapter deleted')
     } catch {
       toast.error('Failed to delete chapter')
+    }
+  }
+
+  async function handleTogglePublish(chapter: Chapter) {
+    try {
+      if (chapter.status === 'published') {
+        await unpublishChapter(novelId, chapter.id)
+        toast.success('Chapter unpublished')
+      } else {
+        await publishChapter(novelId, chapter.id)
+        toast.success('Chapter published — readers can now see it!')
+      }
+    } catch {
+      toast.error('Failed to update chapter status')
     }
   }
 
@@ -353,6 +395,7 @@ export function ChapterSidebar({
                     isActive={chapter.id === activeChapterId}
                     pendingDeleteId={pendingDeleteId}
                     onSelect={() => onSelectChapter(chapter)}
+                    onTogglePublish={() => handleTogglePublish(chapter)}
                     onDuplicate={() => handleDuplicate(chapter)}
                     onRequestDelete={() => setPendingDeleteId(chapter.id)}
                     onConfirmDelete={() => handleConfirmDelete(chapter)}

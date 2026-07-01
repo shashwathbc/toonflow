@@ -157,7 +157,6 @@ export async function updateNovel(id: string, data: Partial<Novel>): Promise<voi
 }
 
 export async function getTrendingNovels(limitCount = TRENDING_LIMIT): Promise<Novel[]> {
-  // Single-field orderBy avoids composite index requirement; filter status client-side
   const q = query(
     collection(db, 'novels'),
     where('status', 'in', ['published', 'ongoing']),
@@ -166,6 +165,7 @@ export async function getTrendingNovels(limitCount = TRENDING_LIMIT): Promise<No
   const snaps = await getDocs(q)
   return snaps.docs
     .map((d) => fromDoc<Novel>(d))
+    .filter((n) => n.visibility === 'public')
     .sort((a, b) => b.viewCount - a.viewCount)
     .slice(0, limitCount)
 }
@@ -219,6 +219,20 @@ export async function updateChapter(
   data: Partial<Chapter>
 ): Promise<void> {
   await updateDoc(doc(db, 'novels', novelId, 'chapters', chapterId), data)
+}
+
+export async function publishChapter(novelId: string, chapterId: string): Promise<void> {
+  await updateDoc(doc(db, 'novels', novelId, 'chapters', chapterId), {
+    status: 'published',
+    publishedAt: serverTimestamp(),
+  })
+}
+
+export async function unpublishChapter(novelId: string, chapterId: string): Promise<void> {
+  await updateDoc(doc(db, 'novels', novelId, 'chapters', chapterId), {
+    status: 'draft',
+    publishedAt: null,
+  })
 }
 
 export async function deleteChapter(novelId: string, chapterId: string): Promise<void> {
@@ -284,6 +298,7 @@ export async function getTrendingWebtoons(limitCount = TRENDING_LIMIT): Promise<
   const snaps = await getDocs(q)
   return snaps.docs
     .map((d) => fromDoc<Webtoon>(d))
+    .filter((w) => w.visibility === 'public')
     .sort((a, b) => b.viewCount - a.viewCount)
     .slice(0, limitCount)
 }
@@ -976,6 +991,25 @@ export async function getOriginals(limitCount = 20): Promise<{ novels: Novel[]; 
   const webtoons = webtoonSnaps.docs
     .map((d) => fromDoc<Webtoon>(d))
     .filter((w) => LIVE.includes(w.status) && w.visibility === 'public')
+    .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
+    .slice(0, limitCount)
+  return { novels, webtoons }
+}
+
+export async function getNewReleases(limitCount = 6): Promise<{ novels: Novel[]; webtoons: Webtoon[] }> {
+  const LIVE = ['published', 'ongoing', 'completed']
+  const [novelSnaps, webtoonSnaps] = await Promise.all([
+    getDocs(query(collection(db, 'novels'), where('visibility', '==', 'public'), limit(limitCount * 4))),
+    getDocs(query(collection(db, 'webtoons'), where('visibility', '==', 'public'), limit(limitCount * 4))),
+  ])
+  const novels = novelSnaps.docs
+    .map((d) => fromDoc<Novel>(d))
+    .filter((n) => LIVE.includes(n.status))
+    .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
+    .slice(0, limitCount)
+  const webtoons = webtoonSnaps.docs
+    .map((d) => fromDoc<Webtoon>(d))
+    .filter((w) => LIVE.includes(w.status))
     .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
     .slice(0, limitCount)
   return { novels, webtoons }

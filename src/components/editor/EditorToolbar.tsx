@@ -23,9 +23,12 @@ interface EditorToolbarProps {
   onSave: () => void
   onPublish: () => void
   onUnpublish: () => void
+  onPublishChapter: () => void
+  onUnpublishChapter: () => void
   onExportPDF: () => void
   onToggleFullscreen: () => void
   isFullscreen: boolean
+  chapterPublishing?: boolean
 }
 
 function SaveIndicator({ state }: { state: EditorToolbarProps['saveState'] }) {
@@ -62,11 +65,15 @@ export function EditorToolbar({
   onSave,
   onPublish,
   onUnpublish,
+  onPublishChapter,
+  onUnpublishChapter,
   onExportPDF,
   onToggleFullscreen,
   isFullscreen,
+  chapterPublishing = false,
 }: EditorToolbarProps) {
   const isPublished = novel?.status !== 'draft' && novel?.status !== undefined
+  const isChapterPublished = chapter?.status === 'published'
 
   return (
     <header
@@ -142,6 +149,44 @@ export function EditorToolbar({
         >
           <Maximize2 size={13} aria-hidden="true" />
         </button>
+
+        {/* Chapter publish toggle */}
+        {chapter && (
+          <>
+            <div className="w-px h-5 bg-bg-border mx-1" aria-hidden="true" />
+            {isChapterPublished ? (
+              <button
+                type="button"
+                onClick={onUnpublishChapter}
+                disabled={chapterPublishing}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-accent/10 text-accent hover:bg-white/10 hover:text-white/60 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none disabled:opacity-50"
+                aria-label="Unpublish this chapter"
+                title="Chapter is live — click to unpublish"
+              >
+                {chapterPublishing
+                  ? <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                  : <Globe size={11} aria-hidden="true" />
+                }
+                <span className="hidden sm:inline">Chapter Live</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onPublishChapter}
+                disabled={chapterPublishing}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-white text-black font-semibold hover:bg-white/90 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none disabled:opacity-50"
+                aria-label="Publish this chapter"
+                title="Publish chapter so readers can see it"
+              >
+                {chapterPublishing
+                  ? <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                  : <Globe size={11} aria-hidden="true" />
+                }
+                <span className="hidden sm:inline">Publish Chapter</span>
+              </button>
+            )}
+          </>
+        )}
 
         <div className="w-px h-5 bg-bg-border mx-1" aria-hidden="true" />
 

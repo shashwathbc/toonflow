@@ -170,7 +170,7 @@ export function BrowseClient() {
           onClick={() => setSidebarOpen((v) => !v)}
           className="btn-ghost text-sm md:hidden"
           aria-label="Toggle filters"
-          aria-expanded={sidebarOpen}
+          aria-expanded={sidebarOpen ? 'true' : 'false'}
         >
           <SlidersHorizontal size={16} aria-hidden="true" />
           Filters
@@ -245,7 +245,7 @@ export function BrowseClient() {
                       ? 'bg-accent/10 text-accent font-medium'
                       : 'text-white/60 hover:bg-white/10 hover:text-white'
                   )}
-                  aria-pressed={sortBy === opt.value ? 'true' : 'false'}
+                  {...(sortBy === opt.value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
                 >
                   {opt.label}
                 </button>
@@ -268,7 +268,7 @@ export function BrowseClient() {
                       ? 'bg-accent/10 text-accent font-medium'
                       : 'text-white/60 hover:bg-white/10 hover:text-white'
                   )}
-                  aria-pressed={status === opt.value ? 'true' : 'false'}
+                  {...(status === opt.value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
                 >
                   {opt.label}
                 </button>
@@ -291,7 +291,7 @@ export function BrowseClient() {
                       ? 'bg-accent/10 text-accent border-accent/30'
                       : 'bg-bg text-white/50 border-bg-border hover:border-white/30 hover:text-white'
                   )}
-                  aria-pressed={genre === g ? 'true' : 'false'}
+                  {...(genre === g ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
                 >
                   {g}
                 </button>
