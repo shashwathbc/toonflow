@@ -6,32 +6,28 @@ import type { Episode } from '@/types'
 
 export function useEpisodes(webtoonId: string) {
   const [episodes, setEpisodes] = useState<Episode[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // loading derives from "has the current webtoonId received its first snapshot",
+  // so the effect never calls setState synchronously
+  const [loadedId, setLoadedId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!webtoonId) {
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
+    if (!webtoonId) return
 
     const unsub = subscribeToEpisodes(
       webtoonId,
       (data) => {
         setEpisodes(data)
-        setLoading(false)
+        setLoadedId(webtoonId)
       },
       (err) => {
         setError(err.message)
-        setLoading(false)
+        setLoadedId(webtoonId)
       }
     )
 
     return unsub
   }, [webtoonId])
 
-  return { episodes, loading, error }
+  return { episodes, loading: !!webtoonId && loadedId !== webtoonId, error }
 }

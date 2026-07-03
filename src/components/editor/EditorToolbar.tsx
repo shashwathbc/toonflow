@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   ArrowLeft,
   Save,
@@ -13,8 +14,13 @@ import {
   Loader2,
   FileText,
   Maximize2,
+  ChevronDown,
+  BookCopy,
 } from 'lucide-react'
+import { cn } from '@/lib/utils/cn'
 import type { Novel, Chapter } from '@/types'
+
+export type PDFExportScope = 'all' | 'current'
 
 interface EditorToolbarProps {
   novel: Novel | null
@@ -25,7 +31,7 @@ interface EditorToolbarProps {
   onUnpublish: () => void
   onPublishChapter: () => void
   onUnpublishChapter: () => void
-  onExportPDF: () => void
+  onExportPDF: (scope: PDFExportScope) => void
   onToggleFullscreen: () => void
   isFullscreen: boolean
   chapterPublishing?: boolean
@@ -119,15 +125,60 @@ export function EditorToolbar({
           <span className="hidden sm:inline">Save</span>
         </button>
 
-        <button
-          onClick={onExportPDF}
-          className="btn-ghost text-xs px-2.5 py-1.5 gap-1.5"
-          aria-label="Export as PDF"
-          title="Export PDF"
-        >
-          <Download size={13} aria-hidden="true" />
-          <span className="hidden lg:inline">PDF</span>
-        </button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              className="btn-ghost text-xs px-2.5 py-1.5 gap-1.5"
+              aria-label="Download PDF options"
+              title="Download PDF"
+            >
+              <Download size={13} aria-hidden="true" />
+              <span className="hidden lg:inline">PDF</span>
+              <ChevronDown size={11} aria-hidden="true" />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className={cn(
+                'z-50 min-w-52 bg-bg-card border border-bg-border rounded-xl p-1.5 shadow-xl',
+                'data-[state=open]:animate-fade-in'
+              )}
+              side="bottom"
+              align="end"
+              sideOffset={8}
+              role="menu"
+              aria-label="PDF download options"
+            >
+              <DropdownMenu.Item
+                className={cn(
+                  'flex items-center gap-2 px-2 py-1.5 text-sm text-text rounded-lg cursor-pointer',
+                  'hover:bg-white/10 focus-visible:bg-white/10 outline-none'
+                )}
+                onSelect={() => onExportPDF('all')}
+                role="menuitem"
+              >
+                <BookCopy size={14} aria-hidden="true" />
+                Download all chapters
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className={cn(
+                  'flex items-center gap-2 px-2 py-1.5 text-sm text-text rounded-lg',
+                  chapter
+                    ? 'cursor-pointer hover:bg-white/10 focus-visible:bg-white/10'
+                    : 'opacity-40 cursor-not-allowed',
+                  'outline-none'
+                )}
+                disabled={!chapter}
+                onSelect={() => onExportPDF('current')}
+                role="menuitem"
+              >
+                <FileText size={14} aria-hidden="true" />
+                Download current chapter
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
 
         <Link
           href={novel ? `/novel/${novel.id}` : '#'}

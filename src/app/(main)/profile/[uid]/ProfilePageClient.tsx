@@ -14,6 +14,7 @@ import {
   getUserProfile, getNovelsByAuthor, getWebtoonsByAuthor,
   getUserBookmarks, followUser, unfollowUser, isFollowing,
   updateUserProfile, createUserDocument,
+  getNovelById, getWebtoonById,
 } from '@/lib/firebase/firestore'
 import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
@@ -325,48 +326,58 @@ export function ProfilePageClient({ uid }: { uid: string }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [novels, setNovels] = useState<Novel[]>([])
   const [webtoons, setWebtoons] = useState<Webtoon[]>([])
-  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [bookmarks, setBookmarks] = useState<{ type: 'novel' | 'webtoon'; item: Novel | Webtoon }[]>([])
+  // loading derives from "has the current uid been loaded" so the load effect
+  // never calls setState synchronously (react-hooks/set-state-in-effect)
+  const [loadedUid, setLoadedUid] = useState<string | null>(null)
+  const loading = loadedUid !== uid
   const [activeTab, setActiveTab] = useState<Tab>('novels')
   const [showEdit, setShowEdit] = useState(false)
   const [userIsFollowing, setUserIsFollowing] = useState(false)
   const [followerCount, setFollowerCount] = useState(0)
 
-  const load = useCallback(async () => {
+  const load = useCallback(() => {
     if (authLoading) return
-    try {
-      const [prof, novs, wts] = await Promise.all([
-        getUserProfile(uid),
-        getNovelsByAuthor(uid),
-        getWebtoonsByAuthor(uid),
-      ])
+    Promise.all([
+      getUserProfile(uid),
+      getNovelsByAuthor(uid),
+      getWebtoonsByAuthor(uid),
+    ])
+      .then(async ([prof, novs, wts]) => {
+        let resolvedProfile = prof
+        if (!resolvedProfile && isOwnProfile && firebaseUser) {
+          await createUserDocument(firebaseUser)
+          resolvedProfile = await getUserProfile(uid)
+        }
 
-      let resolvedProfile = prof
-      if (!resolvedProfile && isOwnProfile && firebaseUser) {
-        await createUserDocument(firebaseUser)
-        resolvedProfile = await getUserProfile(uid)
-      }
+        setProfile(resolvedProfile)
+        setFollowerCount(resolvedProfile?.followerCount ?? 0)
+        setNovels(novs)
+        setWebtoons(wts)
 
-      setProfile(resolvedProfile)
-      setFollowerCount(resolvedProfile?.followerCount ?? 0)
-      setNovels(novs)
-      setWebtoons(wts)
+        if (firebaseUser && !isOwnProfile) {
+          const following = await isFollowing(firebaseUser.uid, uid)
+          setUserIsFollowing(following)
+        }
 
-      if (firebaseUser && !isOwnProfile) {
-        const following = await isFollowing(firebaseUser.uid, uid)
-        setUserIsFollowing(following)
-      }
-
-      if (isOwnProfile && firebaseUser) {
-        const bks = await getUserBookmarks(firebaseUser.uid)
-        setBookmarks(bks)
-      }
-    } catch (err) {
-      console.error('[Profile] load error:', err)
-      toast.error('Failed to load profile')
-    } finally {
-      setLoading(false)
-    }
+        if (isOwnProfile && firebaseUser) {
+          const bks = await getUserBookmarks(firebaseUser.uid)
+          const resolved = await Promise.all(
+            bks.map(async (b: BookmarkItem) => {
+              const item = b.contentType === 'novel'
+                ? await getNovelById(b.contentId)
+                : await getWebtoonById(b.contentId)
+              return item ? { type: b.contentType, item } : null
+            })
+          )
+          setBookmarks(resolved.filter((r): r is { type: 'novel' | 'webtoon'; item: Novel | Webtoon } => r !== null))
+        }
+      })
+      .catch((err) => {
+        console.error('[Profile] load error:', err)
+        toast.error('Failed to load profile')
+      })
+      .finally(() => setLoadedUid(uid))
   }, [uid, firebaseUser, isOwnProfile, authLoading])
 
   useEffect(() => { load() }, [load])
@@ -616,7 +627,20 @@ export function ProfilePageClient({ uid }: { uid: string }) {
                 <p className="text-white/50 text-sm">No bookmarks yet. Save content while reading to find it here.</p>
               </div>
             ) : (
-              <p className="text-white/50 text-sm pb-8">{bookmarks.length} bookmarked item{bookmarks.length !== 1 ? 's' : ''}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-8">
+                {bookmarks.map(({ type, item }) => (
+                  <ContentCard
+                    key={item.id}
+                    title={item.title}
+                    coverURL={item.coverURL}
+                    href={type === 'novel' ? `/novel/${item.id}` : `/webtoon/${item.id}`}
+                    chapterCount={type === 'novel' ? (item as Novel).chapterCount : (item as Webtoon).episodeCount}
+                    viewCount={item.viewCount}
+                    status={item.status}
+                    type={type}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}

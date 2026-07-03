@@ -4,51 +4,56 @@ import type { Novel, Webtoon, UserProfile } from '@/types'
 
 export function useNovel(id: string | null) {
   const [novel, setNovel] = useState<Novel | null>(null)
-  const [loading, setLoading] = useState(!!id)
   const [error, setError] = useState<Error | null>(null)
+  // loading is derived from "has the current id finished fetching" so the
+  // effect never calls setState synchronously (react-hooks/set-state-in-effect)
+  const [fetchedId, setFetchedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
-    setLoading(true)
+    let cancelled = false
     getNovelById(id)
-      .then(setNovel)
-      .catch(setError)
-      .finally(() => setLoading(false))
+      .then((data) => { if (!cancelled) setNovel(data) })
+      .catch((err) => { if (!cancelled) setError(err) })
+      .finally(() => { if (!cancelled) setFetchedId(id) })
+    return () => { cancelled = true }
   }, [id])
 
-  return { novel, loading, error }
+  return { novel, loading: !!id && fetchedId !== id, error }
 }
 
 export function useWebtoon(id: string | null) {
   const [webtoon, setWebtoon] = useState<Webtoon | null>(null)
-  const [loading, setLoading] = useState(!!id)
   const [error, setError] = useState<Error | null>(null)
+  const [fetchedId, setFetchedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
-    setLoading(true)
+    let cancelled = false
     getWebtoonById(id)
-      .then(setWebtoon)
-      .catch(setError)
-      .finally(() => setLoading(false))
+      .then((data) => { if (!cancelled) setWebtoon(data) })
+      .catch((err) => { if (!cancelled) setError(err) })
+      .finally(() => { if (!cancelled) setFetchedId(id) })
+    return () => { cancelled = true }
   }, [id])
 
-  return { webtoon, loading, error }
+  return { webtoon, loading: !!id && fetchedId !== id, error }
 }
 
 export function useUserProfile(uid: string | null) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(!!uid)
   const [error, setError] = useState<Error | null>(null)
+  const [fetchedUid, setFetchedUid] = useState<string | null>(null)
 
   useEffect(() => {
     if (!uid) return
-    setLoading(true)
+    let cancelled = false
     getUserProfile(uid)
-      .then(setProfile)
-      .catch(setError)
-      .finally(() => setLoading(false))
+      .then((data) => { if (!cancelled) setProfile(data) })
+      .catch((err) => { if (!cancelled) setError(err) })
+      .finally(() => { if (!cancelled) setFetchedUid(uid) })
+    return () => { cancelled = true }
   }, [uid])
 
-  return { profile, loading, error }
+  return { profile, loading: !!uid && fetchedUid !== uid, error }
 }

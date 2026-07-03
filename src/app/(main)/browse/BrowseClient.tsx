@@ -101,40 +101,43 @@ export function BrowseClient() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') ?? '')
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [items, setItems] = useState<Array<{ item: Novel | Webtoon; type: 'novel' | 'webtoon' }>>([])
-  const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      if (searchQuery.trim()) {
-        const { novels, webtoons } = await searchContent(searchQuery.trim(), 48)
-        const filtered = [
-          ...(contentType !== 'webtoon' ? novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })) : []),
-          ...(contentType !== 'novel' ? webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })) : []),
-        ]
-        setItems(filtered)
-      } else {
-        const { novels, webtoons } = await browseContent({
+  // loading derives from "have the current filters been loaded" so the load
+  // effect never calls setState synchronously (react-hooks/set-state-in-effect)
+  const filterKey = `${contentType}|${genre}|${status}|${sortBy}|${searchQuery}`
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const loading = loadedKey !== filterKey
+
+  const load = useCallback(() => {
+    const request = searchQuery.trim()
+      ? searchContent(searchQuery.trim(), 48).then(({ novels, webtoons }) => {
+          setItems([
+            ...(contentType !== 'webtoon' ? novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })) : []),
+            ...(contentType !== 'novel' ? webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })) : []),
+          ])
+        })
+      : browseContent({
           contentType,
           genre: genre || undefined,
           status: status || undefined,
           sortBy,
           limitCount: 48,
+        }).then(({ novels, webtoons }) => {
+          setItems([
+            ...novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })),
+            ...webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })),
+          ])
         })
-        setItems([
-          ...novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })),
-          ...webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })),
-        ])
-      }
-    } catch (err) {
-      console.error('[Browse] load error:', err)
-      toast.error('Failed to load content')
-    } finally {
-      setLoading(false)
-    }
-  }, [contentType, genre, status, sortBy, searchQuery])
+
+    request
+      .catch((err) => {
+        console.error('[Browse] load error:', err)
+        toast.error('Failed to load content')
+      })
+      .finally(() => setLoadedKey(filterKey))
+  }, [contentType, genre, status, sortBy, searchQuery, filterKey])
 
   useEffect(() => { load() }, [load])
 

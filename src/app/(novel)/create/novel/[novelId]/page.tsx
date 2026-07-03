@@ -44,7 +44,10 @@ export default function NovelEditorPage({ params }: PageProps) {
   const { chapters, loading: chaptersLoading } = useChapters(novelId)
 
   const [novel, setNovel] = useState<Novel | null>(null)
-  const [novelLoading, setNovelLoading] = useState(true)
+  // loading derives from "has the current novelId been fetched" so the effect
+  // never calls setState synchronously (react-hooks/set-state-in-effect)
+  const [fetchedId, setFetchedId] = useState<string | null>(null)
+  const novelLoading = fetchedId !== novelId
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null)
   const [chapterTitle, setChapterTitle] = useState('')
   const [editorContent, setEditorContent] = useState('')
@@ -61,7 +64,6 @@ export default function NovelEditorPage({ params }: PageProps) {
 
   // Load novel
   useEffect(() => {
-    setNovelLoading(true)
     getNovelById(novelId)
       .then((n) => {
         setNovel(n)
@@ -71,21 +73,24 @@ export default function NovelEditorPage({ params }: PageProps) {
         }
       })
       .catch(() => toast.error('Failed to load novel'))
-      .finally(() => setNovelLoading(false))
+      .finally(() => setFetchedId(novelId))
   }, [novelId, firebaseUser, router])
 
-  // Auto-select first chapter when chapters load; keep active chapter status in sync
+  // Auto-select first chapter when chapters load
   useEffect(() => {
     if (chapters.length > 0 && !activeChapter) {
       selectChapter(chapters[0])
-    } else if (activeChapter) {
-      const fresh = chapters.find((c) => c.id === activeChapter.id)
-      if (fresh && fresh.status !== activeChapter.status) {
-        setActiveChapter(fresh)
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapters])
+
+  // Keep active chapter status in sync with the live chapter subscription.
+  // Render-time state adjustment — the React-sanctioned alternative to
+  // calling setState synchronously inside an effect.
+  const freshActive = activeChapter ? chapters.find((c) => c.id === activeChapter.id) : undefined
+  if (activeChapter && freshActive && freshActive.status !== activeChapter.status) {
+    setActiveChapter(freshActive)
+  }
 
   // Keyboard shortcut: Ctrl+S = save
   useEffect(() => {
@@ -112,6 +117,16 @@ export default function NovelEditorPage({ params }: PageProps) {
     setChapterTitle(chapter.title ?? '')
     setEditorContent(chapter.content ?? '')
     lastSavedContent.current = chapter.content ?? ''
+  }
+
+  function handleApplyAIChapter(html: string) {
+    // Word count from the generated HTML (tags stripped)
+    const text = html.replace(/<[^>]+>/g, ' ')
+    const wc = text.split(/\s+/).filter(Boolean).length
+    handleEditorChange(html, wc)
+    if (activeChapter) {
+      triggerSave(activeChapter.id, html, wc, true)
+    }
   }
 
   function handleEditorChange(html: string, wc: number) {
@@ -218,8 +233,13 @@ export default function NovelEditorPage({ params }: PageProps) {
     }
   }
 
-  const handleExportPDF = useCallback(async () => {
+  const handleExportPDF = useCallback(async (scope: 'all' | 'current') => {
     if (!novel) return
+    if (scope === 'current' && !activeChapter) {
+      toast('No chapter selected')
+      return
+    }
+
     const { default: jsPDF } = await import('jspdf')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const margin = 20
@@ -243,35 +263,53 @@ export default function NovelEditorPage({ params }: PageProps) {
       y += extraPadding
     }
 
+    const htmlToPlainText = (html: string) => html
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .trim()
+
+    const addChapter = (num: number | undefined, title: string, contentHtml: string, newPage: boolean) => {
+      if (newPage) {
+        doc.addPage()
+        y = margin
+      }
+      addText(`Chapter ${num ?? '?'}: ${title || 'Untitled'}`, 16, true, 6)
+      addText(htmlToPlainText(contentHtml), 11, false, 4)
+    }
+
     // Title page
     addText(novel.title || 'Untitled Novel', 24, true, 8)
     addText(`by ${novel.authorName}`, 14, false, 6)
     if (novel.synopsis) addText(novel.synopsis, 11, false, 10)
 
-    // Chapters
-    chapters.forEach((ch) => {
-      doc.addPage()
-      y = margin
-      addText(`Chapter ${ch.chapterNumber}: ${ch.title}`, 16, true, 6)
+    let filename = `${novel.title || 'novel'}.pdf`
 
-      // Strip HTML tags for PDF text
-      const plainText = (ch.content ?? '')
-        .replace(/<\/p>/gi, '\n')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .trim()
+    if (scope === 'current' && activeChapter) {
+      // Use the live editor state so unsaved edits are included
+      addChapter(activeChapter.chapterNumber, chapterTitle || activeChapter.title, editorContent, true)
+      filename = `${novel.title || 'novel'} - Chapter ${activeChapter.chapterNumber ?? ''}.pdf`
+    } else {
+      chapters.forEach((ch) => {
+        // Current chapter may have unsaved edits — export what's on screen
+        const isActive = ch.id === activeChapter?.id
+        addChapter(
+          ch.chapterNumber,
+          isActive ? (chapterTitle || ch.title) : ch.title,
+          isActive ? editorContent : (ch.content ?? ''),
+          true,
+        )
+      })
+    }
 
-      addText(plainText, 11, false, 4)
-    })
-
-    doc.save(`${novel.title || 'novel'}.pdf`)
-    toast.success('PDF downloaded')
-  }, [novel, chapters])
+    doc.save(filename)
+    toast.success(scope === 'current' ? 'Chapter PDF downloaded' : 'PDF downloaded')
+  }, [novel, chapters, activeChapter, chapterTitle, editorContent])
 
   const isLoading = authLoading || novelLoading || chaptersLoading
 
@@ -384,9 +422,11 @@ export default function NovelEditorPage({ params }: PageProps) {
           <AIAssistant
             novel={novel}
             chapter={activeChapter}
+            chapters={chapters}
             novelId={novelId}
             collapsed={aiCollapsed}
             onToggleCollapse={() => setAiCollapsed((v) => !v)}
+            onApplyChapter={handleApplyAIChapter}
           />
         )}
       </div>

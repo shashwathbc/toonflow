@@ -33,7 +33,7 @@ import {
   Check,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import type { Webtoon, Episode, PanelImage } from '@/types'
+import type { Webtoon, Episode, PanelImage, PanelSpan } from '@/types'
 import { uploadEpisodePanel } from '@/lib/firebase/storage'
 
 interface PageProps {
@@ -47,7 +47,10 @@ export default function WebtoonEditorPage({ params }: PageProps) {
   const { episodes, loading: episodesLoading } = useEpisodes(webtoonId)
 
   const [webtoon, setWebtoon] = useState<Webtoon | null>(null)
-  const [webtoonLoading, setWebtoonLoading] = useState(true)
+  // loading derives from "has the current webtoonId been fetched" so the effect
+  // never calls setState synchronously (react-hooks/set-state-in-effect)
+  const [fetchedId, setFetchedId] = useState<string | null>(null)
+  const webtoonLoading = fetchedId !== webtoonId
   const [activeEpisode, setActiveEpisode] = useState<Episode | null>(null)
   const [episodeTitle, setEpisodeTitle] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -56,10 +59,39 @@ export default function WebtoonEditorPage({ params }: PageProps) {
   const [fullscreen, setFullscreen] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [uploadingProgress, setUploadingProgress] = useState<Record<string, number>>({})
+  const [canvasWidth, setCanvasWidth] = useState(800)
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  const CANVAS_MIN = 360
+  const CANVAS_MAX = 1400
+
+  const clampCanvas = (w: number) => Math.min(CANVAS_MAX, Math.max(CANVAS_MIN, w))
+
+  const onResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    resizeRef.current = { startX: e.clientX, startWidth: canvasWidth }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizeRef.current) return
+    // Strip is centered, so dragging one edge grows both sides
+    const delta = (e.clientX - resizeRef.current.startX) * 2
+    setCanvasWidth(clampCanvas(resizeRef.current.startWidth + delta))
+  }
+  const onResizeEnd = () => {
+    resizeRef.current = null
+  }
+  const onResizeKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      setCanvasWidth((w) => clampCanvas(w - 40))
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      setCanvasWidth((w) => clampCanvas(w + 40))
+    }
+  }
 
   // Load webtoon properties
   useEffect(() => {
-    setWebtoonLoading(true)
     getWebtoonById(webtoonId)
       .then((w) => {
         setWebtoon(w)
@@ -69,7 +101,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
         }
       })
       .catch(() => toast.error('Failed to load webtoon'))
-      .finally(() => setWebtoonLoading(false))
+      .finally(() => setFetchedId(webtoonId))
   }, [webtoonId, firebaseUser, router])
 
   // Select first episode when list loads initially
@@ -99,6 +131,21 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     }
   }
 
+  const readImageDimensions = (file: File): Promise<{ width: number; height: number }> =>
+    new Promise((resolve) => {
+      const url = URL.createObjectURL(file)
+      const img = new window.Image()
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        resolve({ width: img.naturalWidth || 800, height: img.naturalHeight || 1200 })
+      }
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        resolve({ width: 800, height: 1200 })
+      }
+      img.src = url
+    })
+
   const handlePanelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!activeEpisode || !webtoon || !e.target.files) return
     const files = Array.from(e.target.files)
@@ -126,11 +173,11 @@ export default function WebtoonEditorPage({ params }: PageProps) {
           }
         )
 
-        // Default dimensions, or standard 800px width/height ratio
+        const { width, height } = await readImageDimensions(file)
         updatedPanels.push({
           url,
-          width: 800,
-          height: 1200,
+          width,
+          height,
           order,
           altText: file.name,
         })
@@ -199,6 +246,22 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     }
   }
 
+  const setPanelSpan = async (index: number, span: PanelSpan) => {
+    if (!activeEpisode || !webtoon) return
+    setSaveState('saving')
+    const panels = (activeEpisode.panels ?? []).map((panel, idx) =>
+      idx === index ? { ...panel, span } : panel
+    )
+    try {
+      await updateEpisode(webtoonId, activeEpisode.id, { panels })
+      setActiveEpisode((prev) => (prev ? { ...prev, panels } : prev))
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), 2000)
+    } catch {
+      setSaveState('error')
+    }
+  }
+
   const makeThumbnail = async (url: string) => {
     if (!activeEpisode || !webtoon) return
     setSaveState('saving')
@@ -258,10 +321,11 @@ export default function WebtoonEditorPage({ params }: PageProps) {
         file,
         order
       )
+      const { width, height } = await readImageDimensions(file)
       updatedPanels.push({
         url,
-        width: 800,
-        height: 1200,
+        width,
+        height,
         order,
         altText: `AI generated panel ${order}`,
       })
@@ -344,7 +408,36 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                 />
 
                 {/* Upload Panels controls */}
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                  {/* Canvas width presets */}
+                  <div
+                    className="flex items-center gap-1 border border-bg-border rounded-lg px-1.5 py-1"
+                    role="group"
+                    aria-label="Canvas width"
+                  >
+                    {([
+                      ['Mobile', 480],
+                      ['Default', 800],
+                      ['Wide', 1080],
+                    ] as const).map(([label, width]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setCanvasWidth(width)}
+                        className={`text-[11px] px-2 py-1 rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
+                          canvasWidth === width
+                            ? 'bg-accent/15 text-accent font-semibold'
+                            : 'text-white/40 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    <span className="text-[10px] font-mono text-white/30 px-1.5 tabular-nums" aria-live="polite">
+                      {canvasWidth}px
+                    </span>
+                  </div>
+
                   <label className="btn-accent text-xs px-3.5 py-2 cursor-pointer flex items-center gap-1.5 hover:bg-accent-hover transition-colors">
                     <Upload size={13} aria-hidden="true" />
                     Upload Panels
@@ -370,7 +463,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
               </div>
 
               {/* Panels vertical strip list */}
-              <div className="flex-1 overflow-y-auto bg-bg-elevated/40 p-6 flex flex-col items-center gap-4">
+              <div className="flex-1 overflow-y-scroll overflow-x-auto bg-bg-elevated/40 p-6 flex flex-col items-center gap-4">
                 {isUploading && (
                   <div className="w-full max-w-xl bg-bg-card border border-bg-border p-4 rounded-xl space-y-2">
                     <p className="text-xs font-semibold text-white/70">Uploading new panels…</p>
@@ -392,37 +485,44 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                     </p>
                   </div>
                 ) : (
-                  <div className="w-full max-w-xl space-y-3">
+                  <div className="relative flex-shrink-0" style={{ width: canvasWidth }}>
+                    <div className="bg-black shadow-2xl rounded-sm overflow-hidden flex flex-wrap items-start">
                     {(activeEpisode.panels ?? []).map((panel, idx) => {
                       const isThumb = activeEpisode.thumbnailURL === panel.url
+                      const span = panel.span ?? 'full'
+                      const spanWidth =
+                        span === 'half' ? '50%'
+                        : span === 'third' ? '33.3333%'
+                        : span === 'two-thirds' ? '66.6667%'
+                        : '100%'
                       return (
                         <div
                           key={`${panel.url}-${idx}`}
-                          className="group relative bg-bg-card border border-bg-border rounded-xl overflow-hidden shadow-md"
+                          className="group relative"
+                          style={{ width: spanWidth }}
                         >
-                          <div className="relative w-full aspect-[4/3] bg-black">
-                            <Image
-                              src={panel.url}
-                              alt={panel.altText ?? `Panel ${idx + 1}`}
-                              fill
-                              className="object-contain"
-                              sizes="(max-width: 600px) 100vw, 600px"
-                            />
+                          {/* Seamless panel at natural aspect ratio, sized by its span template */}
+                          <Image
+                            src={panel.url}
+                            alt={panel.altText ?? `Panel ${idx + 1}`}
+                            width={panel.width || 800}
+                            height={panel.height || 1200}
+                            className="block w-full h-auto select-none"
+                            sizes="(max-width: 800px) 100vw, 800px"
+                          />
 
-                            {/* Top badge */}
-                            <span className="absolute top-2 left-2 text-[10px] bg-black/60 backdrop-blur-sm text-white/60 font-semibold px-2 py-0.5 rounded-full">
+                          {/* Hover/focus overlay controls — hidden so the strip reads as one page */}
+                          <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
+                            <span className="text-[10px] bg-black/70 backdrop-blur-sm text-white/70 font-semibold px-2 py-0.5 rounded-full mt-0.5">
                               Panel {idx + 1}
                             </span>
-                          </div>
 
-                          {/* Controls bar */}
-                          <div className="px-3 py-2 bg-bg-card/95 border-t border-bg-border flex items-center justify-between gap-4 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 pointer-events-auto bg-black/70 backdrop-blur-sm rounded-full px-1.5 py-1">
                               <button
                                 type="button"
                                 onClick={() => movePanel(idx, 'up')}
                                 disabled={idx === 0}
-                                className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20"
+                                className="p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-accent"
                                 aria-label="Move panel up"
                               >
                                 <ArrowUp size={13} aria-hidden="true" />
@@ -431,21 +531,18 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                                 type="button"
                                 onClick={() => movePanel(idx, 'down')}
                                 disabled={idx === (activeEpisode.panels ?? []).length - 1}
-                                className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white disabled:opacity-20"
+                                className="p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-accent"
                                 aria-label="Move panel down"
                               >
                                 <ArrowDown size={13} aria-hidden="true" />
                               </button>
-                            </div>
-
-                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() => makeThumbnail(panel.url)}
-                                className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 font-medium ${
+                                className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all flex items-center gap-1 font-medium focus-visible:ring-2 focus-visible:ring-accent ${
                                   isThumb
                                     ? 'bg-accent/15 border-accent text-accent'
-                                    : 'border-white/10 text-white/50 hover:border-white/20 hover:text-white'
+                                    : 'border-white/10 text-white/60 hover:border-white/20 hover:text-white'
                                 }`}
                                 aria-label="Set as episode thumbnail"
                               >
@@ -455,16 +552,80 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                               <button
                                 type="button"
                                 onClick={() => removePanel(idx)}
-                                className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger"
+                                className="p-1 rounded-full hover:bg-danger/10 text-white/60 hover:text-danger focus-visible:ring-2 focus-visible:ring-accent"
                                 aria-label="Remove panel"
                               >
                                 <Trash2 size={13} aria-hidden="true" />
                               </button>
                             </div>
                           </div>
+
+                          {/* Layout template picker — how much of the canvas this panel spans */}
+                          <div className="absolute inset-x-0 bottom-0 flex justify-center p-2 pt-8 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200 bg-gradient-to-t from-black/60 to-transparent pointer-events-none">
+                            <div
+                              role="group"
+                              aria-label={`Panel ${idx + 1} width template`}
+                              className="flex items-center gap-0.5 pointer-events-auto bg-black/70 backdrop-blur-sm rounded-full px-1.5 py-1"
+                            >
+                              {([
+                                ['full', '1/1', 'Full width'],
+                                ['two-thirds', '2/3', 'Two thirds width'],
+                                ['half', '1/2', 'Half width'],
+                                ['third', '1/3', 'One third width'],
+                              ] as const).map(([value, label, name]) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => setPanelSpan(idx, value)}
+                                  aria-label={name}
+                                  aria-pressed={span === value ? 'true' : 'false'}
+                                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
+                                    span === value
+                                      ? 'bg-accent/20 text-accent font-bold'
+                                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       )
                     })}
+
+                    {/* End-of-strip append zone */}
+                    <label className="w-full flex flex-col items-center justify-center gap-2 py-10 border-t border-dashed border-white/10 cursor-pointer text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors">
+                      <Plus size={18} aria-hidden="true" />
+                      <span className="text-xs font-medium">Add panels to the strip</span>
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handlePanelUpload}
+                      />
+                    </label>
+                    </div>
+
+                    {/* Canvas resize handle */}
+                    <div
+                      role="slider"
+                      aria-orientation="vertical"
+                      aria-label="Resize canvas width"
+                      aria-valuenow={Number(canvasWidth)}
+                      aria-valuemin={Number(CANVAS_MIN)}
+                      aria-valuemax={Number(CANVAS_MAX)}
+                      tabIndex={0}
+                      onPointerDown={onResizeStart}
+                      onPointerMove={onResizeMove}
+                      onPointerUp={onResizeEnd}
+                      onPointerCancel={onResizeEnd}
+                      onKeyDown={onResizeKeyDown}
+                      className="absolute top-0 -right-3 h-full w-3 cursor-col-resize flex items-center justify-center group/handle touch-none focus-visible:ring-2 focus-visible:ring-accent rounded"
+                    >
+                      <div className="w-1 h-16 rounded-full bg-white/15 group-hover/handle:bg-accent/60 transition-colors" aria-hidden="true" />
+                    </div>
                   </div>
                 )}
               </div>

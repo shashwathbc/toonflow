@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, ImageIcon, Loader2, Home, List } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { getWebtoonById, getEpisodesByWebtoon, upsertReadingHistory } from '@/lib/firebase/firestore'
-import { trackView } from '@/lib/firebase/engagement'
+import { useViewTracking } from '@/hooks/useViewTracking'
 import LikeButton from '@/components/reader/LikeButton'
 import CommentSection from '@/components/reader/CommentSection'
 import type { Webtoon, Episode } from '@/types'
@@ -19,7 +19,6 @@ export default function EpisodeReaderPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [episode, setEpisode] = useState<Episode | null>(null)
   const [loading, setLoading] = useState(true)
-  const viewTracked = useRef(false)
 
   useEffect(() => {
     Promise.all([getWebtoonById(id), getEpisodesByWebtoon(id)])
@@ -34,11 +33,10 @@ export default function EpisodeReaderPage() {
       .finally(() => setLoading(false))
   }, [id, episodeId])
 
-  useEffect(() => {
-    if (!episode || viewTracked.current) return
-    viewTracked.current = true
+  useViewTracking(episode ? { contentType: 'episode', contentId: episodeId, parentId: id } : null)
 
-    trackView(episodeId, 'episode', id, firebaseUser?.uid ?? null).catch(() => {})
+  useEffect(() => {
+    if (!episode) return
 
     if (firebaseUser) {
       upsertReadingHistory(firebaseUser.uid, {

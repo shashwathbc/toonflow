@@ -4,6 +4,16 @@ export const AUTH_COOKIE_NAME = 'toonflow-auth-token'
 export const ROLE_COOKIE_NAME = 'toonflow-user-role'
 export const EMAIL_COOKIE_NAME = 'toonflow-user-email'
 
+/**
+ * Feature flags for release gating.
+ * Locked features redirect to /coming-soon (super admin bypasses the lock).
+ * Flip to true when the feature is ready to ship.
+ */
+export const FEATURE_FLAGS = {
+  webtoonStudio: false, // /create/webtoon/** — Webtoon Studio (locked card on /create grid)
+  wallet: false, // /wallet/** — token purchases & payouts (locked in place)
+} as const
+
 export const APP_NAME = 'Toonflow Studio Paint'
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://toonflowstudiopaint.com'
 

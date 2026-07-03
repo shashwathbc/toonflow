@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import {
   getAllUsers, searchUsers, setUserRole, setUserDisabled,
-  sendUserPasswordReset, deleteUserData, createAuditLog,
+  sendUserPasswordReset, deleteUserData, createAuditLog, getUserCount,
 } from '@/lib/firebase/admin'
 import ConfirmDialog from '@/components/admin/ConfirmDialog'
 import { formatDate } from '@/lib/utils/formatters'
@@ -31,6 +31,7 @@ const ROLE_COLORS: Record<string, string> = {
 export default function AdminUsersPage() {
   const { firebaseUser } = useAuth()
   const [users, setUsers] = useState<UserProfile[]>([])
+  const [totalCount, setTotalCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
@@ -44,8 +45,9 @@ export default function AdminUsersPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = search.trim() ? await searchUsers(search.trim()) : await getAllUsers(100)
+      const data = search.trim() ? await searchUsers(search.trim()) : await getAllUsers(200)
       setUsers(data)
+      getUserCount().then(setTotalCount).catch(() => setTotalCount(null))
     } catch (e: unknown) {
       toast.error((e as Error).message)
     } finally {
@@ -111,7 +113,11 @@ export default function AdminUsersPage() {
           <h1 className="text-xl font-bold text-text flex items-center gap-2">
             <Users size={18} aria-hidden="true" /> User Management
           </h1>
-          <p className="text-sm text-text-secondary mt-0.5">{users.length} users loaded</p>
+          <p className="text-sm text-text-secondary mt-0.5">
+            {totalCount !== null
+              ? `${totalCount} registered user${totalCount === 1 ? '' : 's'} · showing ${filtered.length}`
+              : `${filtered.length} users shown`}
+          </p>
         </div>
       </div>
 

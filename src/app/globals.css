@@ -176,7 +176,7 @@ body {
 }
 
 .tiptap > * + * {
-  margin-top: 1.1em;
+  margin-top: 1.15em;
 }
 
 .tiptap p {
@@ -184,34 +184,66 @@ body {
   margin-bottom: 0;
 }
 
+/* Drop cap on the very first paragraph — matches the reader */
+.tiptap > p:first-child::first-letter {
+  float: left;
+  font-size: 4.2em;
+  line-height: 0.75;
+  padding-right: 0.08em;
+  padding-top: 0.05em;
+  font-weight: 900;
+  color: #ffffff;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+/* No drop cap on the empty-editor placeholder */
+.tiptap > p.is-editor-empty:first-child::first-letter {
+  float: none;
+  font-size: inherit;
+  font-weight: inherit;
+  padding: 0;
+}
+
+.tiptap s {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
 .tiptap h1 {
-  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  /* Large cinematic dramatic heading — like the bold large text in reference */
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
   font-weight: 900;
   font-family: Georgia, "Times New Roman", serif;
-  margin-top: 2.5em;
-  margin-bottom: 0.4em;
+  font-style: italic;
+  margin-top: 2em;
+  margin-bottom: 0.3em;
+  line-height: 1.1;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.tiptap h2 {
+  /* Section heading */
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 800;
+  font-family: Georgia, "Times New Roman", serif;
+  margin-top: 2em;
+  margin-bottom: 0.35em;
   line-height: 1.2;
   color: #ffffff;
 }
 
-.tiptap h2 {
-  font-size: clamp(1.2rem, 3vw, 1.6rem);
-  font-weight: 700;
-  font-family: Georgia, "Times New Roman", serif;
-  margin-top: 2em;
-  margin-bottom: 0.3em;
-  line-height: 1.3;
-  color: #ffffff;
-}
-
 .tiptap h3 {
-  font-size: 1.2rem;
+  /* Small caps label — like "THE DEMON KING" in orange/accent */
+  font-size: 0.75rem;
   font-weight: 700;
   font-family: Georgia, "Times New Roman", serif;
-  margin-top: 1.5em;
-  margin-bottom: 0.25em;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  margin-top: 3em;
+  margin-bottom: 0.5em;
   line-height: 1.4;
-  color: #ffffff;
+  color: #C9A84C;
 }
 
 .tiptap ul,
@@ -370,4 +402,140 @@ body {
 .reader-header.hidden {
   transform: translateY(-100%);
   opacity: 0;
+}
+
+/* ── Immersive Reader HTML content (from TipTap) ─────── */
+.reader-content {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.125rem;
+  line-height: 1.9;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.reader-content p {
+  margin-bottom: 1.15em;
+  line-height: 1.9;
+  /* Allow TipTap's style="text-align:..." to pass through */
+  text-align: inherit;
+}
+
+/* Drop cap on very first paragraph */
+.reader-content p:first-of-type::first-letter {
+  float: left;
+  font-size: 4.2em;
+  line-height: 0.75;
+  padding-right: 0.08em;
+  padding-top: 0.05em;
+  font-weight: 900;
+  color: #ffffff;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.reader-content h1 {
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  font-weight: 900;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  color: #ffffff;
+  margin-top: 2em;
+  margin-bottom: 0.3em;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.reader-content h2 {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 800;
+  font-family: Georgia, "Times New Roman", serif;
+  color: #ffffff;
+  margin-top: 2em;
+  margin-bottom: 0.35em;
+  line-height: 1.2;
+}
+
+.reader-content h3 {
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: #C9A84C;
+  margin-top: 3em;
+  margin-bottom: 0.5em;
+  line-height: 1.4;
+}
+
+.reader-content strong {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.reader-content em {
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.reader-content u {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reader-content s {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.reader-content blockquote {
+  border-left: 2px solid rgba(255, 255, 255, 0.2);
+  padding-left: 1.25em;
+  color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
+  margin: 1.5em 0;
+}
+
+.reader-content hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 3em auto;
+  width: 40%;
+}
+
+.reader-content ul,
+.reader-content ol {
+  padding-left: 1.6em;
+  margin-bottom: 1.15em;
+}
+
+.reader-content li {
+  margin-bottom: 0.4em;
+  line-height: 1.9;
+}
+
+.reader-content code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+  font-size: 0.875em;
+  font-family: monospace;
+}
+
+/* Font size variants */
+.reader-content-sm { font-size: 1rem;      line-height: 1.85; }
+.reader-content-md { font-size: 1.125rem;  line-height: 1.9;  }
+.reader-content-lg { font-size: 1.25rem;   line-height: 1.95; }
+.reader-content-xl { font-size: 1.5rem;    line-height: 2.0;  }
+
+/* Fade-in the entire content container on mount */
+.reader-content {
+  animation: reader-fade-in 0.6s ease both;
+}
+
+/* Chapter heading in the immersive reader */
+.reader-chapter-heading {
+  animation: reader-fade-in 0.7s ease both;
+}
+.reader-chapter-title {
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.2;
 }

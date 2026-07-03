@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { AUTH_COOKIE_NAME, ROLE_COOKIE_NAME, EMAIL_COOKIE_NAME, SUPER_ADMIN_EMAIL } from '@/lib/utils/constants'
+import { AUTH_COOKIE_NAME, ROLE_COOKIE_NAME, EMAIL_COOKIE_NAME, SUPER_ADMIN_EMAIL, FEATURE_FLAGS } from '@/lib/utils/constants'
 
 const ADMIN_ROLES = ['admin', 'superadmin']
 
@@ -26,8 +26,16 @@ export function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Release gate — Webtoon Studio deep links redirect to Coming Soon.
+  // (/create hub stays reachable: its Webtoon card renders locked; /wallet renders its own in-place lock.)
+  if (!FEATURE_FLAGS.webtoonStudio && pathname.startsWith('/create/webtoon')) {
+    const url = new URL('/coming-soon', request.url)
+    url.searchParams.set('feature', 'studio')
+    return NextResponse.redirect(url)
+  }
+
   // Authenticated-user gate
-  if (pathname.startsWith('/create') || pathname.startsWith('/dashboard')) {
+  if (pathname.startsWith('/create') || pathname.startsWith('/dashboard') || pathname.startsWith('/wallet')) {
     if (!authToken) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('redirect', pathname)
@@ -39,5 +47,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/create/:path*', '/dashboard/:path*', '/admin/:path*'],
+  matcher: ['/create/:path*', '/dashboard/:path*', '/admin/:path*', '/wallet/:path*'],
 }

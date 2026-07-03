@@ -1,37 +1,33 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { subscribeToNovels } from '@/lib/firebase/firestore'
 import type { Novel } from '@/types'
 
 export function useNovels(uid: string) {
   const [novels, setNovels] = useState<Novel[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // loading derives from "has the current uid received its first snapshot",
+  // so the effect never calls setState synchronously
+  const [loadedUid, setLoadedUid] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!uid) {
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
+    if (!uid) return
 
     const unsub = subscribeToNovels(
       uid,
       (data) => {
         setNovels(data)
-        setLoading(false)
+        setLoadedUid(uid)
       },
       (err) => {
         setError(err.message)
-        setLoading(false)
+        setLoadedUid(uid)
       }
     )
 
     return unsub
   }, [uid])
 
-  return { novels, loading, error }
+  return { novels, loading: !!uid && loadedUid !== uid, error }
 }

@@ -6,6 +6,7 @@ import {
   BookOpen,
   ImageIcon,
   LayoutDashboard,
+  Wallet,
   Shield,
   Star,
   ChevronLeft,
@@ -26,6 +27,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { href: '/create/novel', label: 'Novel Studio', icon: <BookOpen size={18} /> },
   { href: '/create/webtoon', label: 'Webtoon Studio', icon: <ImageIcon size={18} /> },
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+  { href: '/wallet', label: 'Wallet', icon: <Wallet size={18} /> },
   { href: '/admin', label: 'Admin Panel', icon: <Shield size={18} />, adminOnly: true },
   { href: '/admin/super', label: 'Super Admin', icon: <Star size={18} />, superAdminOnly: true },
 ]

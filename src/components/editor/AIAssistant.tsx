@@ -33,9 +33,30 @@ const QUICK_ACTIONS = [
 interface AIAssistantProps {
   novel: Novel | null
   chapter: Chapter | null
+  chapters?: Chapter[]
   novelId: string
   collapsed: boolean
   onToggleCollapse: () => void
+  onApplyChapter?: (html: string) => void
+}
+
+// Condense earlier chapters for the AI consistency engine — strip editor HTML, trim size
+function buildPreviousChapters(chapters: Chapter[] | undefined, current: Chapter | null) {
+  if (!chapters?.length) return []
+  return chapters
+    .filter((c) => c.id !== current?.id && (!current || c.chapterNumber < current.chapterNumber))
+    .sort((a, b) => a.chapterNumber - b.chapterNumber)
+    .slice(-12)
+    .map((c) => ({
+      chapterNumber: c.chapterNumber,
+      title: c.title,
+      status: c.status,
+      excerpt: (c.content ?? '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 3000),
+    }))
 }
 
 function MessageBubble({ msg }: { msg: AIMessage & { id?: string } }) {
@@ -68,13 +89,16 @@ function MessageBubble({ msg }: { msg: AIMessage & { id?: string } }) {
 export function AIAssistant({
   novel,
   chapter,
+  chapters,
   novelId,
   collapsed,
   onToggleCollapse,
+  onApplyChapter,
 }: AIAssistantProps) {
   const [messages, setMessages] = useState<Array<AIMessage & { id?: string }>>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [writingChapter, setWritingChapter] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [showActions, setShowActions] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
@@ -122,8 +146,11 @@ export function AIAssistant({
           message: text.trim(),
           novelTitle: novel?.title ?? '',
           novelSynopsis: novel?.synopsis ?? '',
+          novelGenres: novel?.genres ?? [],
+          novelTags: novel?.tags ?? [],
           chapterTitle: chapter?.title ?? '',
           chapterContent: chapter?.content ?? '',
+          previousChapters: buildPreviousChapters(chapters, chapter),
           history,
         }),
       })
@@ -148,6 +175,56 @@ export function AIAssistant({
     } finally {
       setSending(false)
       inputRef.current?.focus()
+    }
+  }
+
+  async function writeFullChapter() {
+    if (writingChapter || sending) return
+    if (!onApplyChapter) return
+    setWritingChapter(true)
+    const toastId = toast.loading('Writing your chapter… this can take a minute')
+
+    try {
+      const history = messages.slice(-20).map((m) => ({ role: m.role, content: m.content }))
+
+      const res = await fetch('/api/ai/novel-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'write-chapter',
+          message:
+            'Write the complete chapter now — maximum 300 words — from the idea in our conversation (and the current draft, if any). Cinematic, show-don\'t-tell, full continuity with all previous chapters, ending on a strong cliffhanger.',
+          novelTitle: novel?.title ?? '',
+          novelSynopsis: novel?.synopsis ?? '',
+          novelGenres: novel?.genres ?? [],
+          novelTags: novel?.tags ?? [],
+          chapterTitle: chapter?.title ?? '',
+          chapterContent: chapter?.content ?? '',
+          previousChapters: buildPreviousChapters(chapters, chapter),
+          history,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Chapter generation failed')
+      if (!data.html) throw new Error('No chapter content generated')
+
+      onApplyChapter(data.html)
+      toast.success('Chapter written to the canvas ✍', { id: toastId })
+
+      const note: AIMessage & { id?: string } = {
+        id: `local-ai-${now()}`,
+        role: 'assistant',
+        content: '✍ I wrote the chapter into the canvas — under 300 words, consistent with your previous chapters. Review it in the editor and ask me to revise any beat.',
+        createdAt: nowTimestamp(),
+      }
+      setMessages((prev) => [...prev, note])
+      addNovelAIMessage(novelId, { role: 'assistant', content: note.content }).catch(() => {})
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Chapter generation failed'
+      toast.error(msg, { id: toastId })
+    } finally {
+      setWritingChapter(false)
     }
   }
 
@@ -305,6 +382,30 @@ export function AIAssistant({
 
         <div ref={bottomRef} />
       </div>
+
+      {/* Write full chapter */}
+      {onApplyChapter && (
+        <div className="px-3 pt-2">
+          <button
+            type="button"
+            onClick={writeFullChapter}
+            disabled={writingChapter || sending}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white text-bg text-xs font-semibold hover:bg-white/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          >
+            {writingChapter ? (
+              <>
+                <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                Writing chapter…
+              </>
+            ) : (
+              <>
+                <Sparkles size={12} aria-hidden="true" />
+                Write Full Chapter to Canvas
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="px-3 pb-1">

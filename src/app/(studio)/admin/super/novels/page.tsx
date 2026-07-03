@@ -1,19 +1,20 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
-  BookOpen, Search, ChevronDown, Loader2, ExternalLink,
+  BookOpen, Search, ChevronDown, ChevronRight, Loader2, ExternalLink,
   Trash2, EyeOff, Eye, RotateCcw, FileText,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { getAllNovels, adminDeleteNovel, adminSoftDeleteNovel, createAuditLog } from '@/lib/firebase/admin'
+import { getChaptersByNovel, deleteChapter } from '@/lib/firebase/firestore'
 import ConfirmDialog from '@/components/admin/ConfirmDialog'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
-import type { Novel } from '@/types'
+import type { Novel, Chapter } from '@/types'
 
 const STATUS_OPTIONS = ['all', 'draft', 'ongoing', 'completed', 'hiatus']
 
@@ -25,7 +26,9 @@ const STATUS_COLORS: Record<string, string> = {
   published: 'bg-accent/10 text-accent',
 }
 
-type ConfirmType = { type: 'delete' | 'softdelete' | 'restore'; novel: Novel }
+type ConfirmType =
+  | { type: 'delete' | 'softdelete' | 'restore'; novel: Novel }
+  | { type: 'deleteChapter'; novel: Novel; chapter: Chapter }
 
 export default function AdminNovelsPage() {
   const { firebaseUser } = useAuth()
@@ -35,6 +38,28 @@ export default function AdminNovelsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [confirm, setConfirm] = useState<ConfirmType | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [chaptersMap, setChaptersMap] = useState<Record<string, Chapter[]>>({})
+  const [chaptersLoading, setChaptersLoading] = useState<string | null>(null)
+
+  const toggleExpand = async (novel: Novel) => {
+    if (expandedId === novel.id) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(novel.id)
+    if (!chaptersMap[novel.id]) {
+      setChaptersLoading(novel.id)
+      try {
+        const chapters = await getChaptersByNovel(novel.id)
+        setChaptersMap((prev) => ({ ...prev, [novel.id]: chapters }))
+      } catch (e: unknown) {
+        toast.error((e as Error).message)
+      } finally {
+        setChaptersLoading(null)
+      }
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -58,7 +83,17 @@ export default function AdminNovelsPage() {
     setActionLoading(true)
     try {
       const { type, novel } = confirm
-      if (type === 'delete') {
+      if (type === 'deleteChapter') {
+        const { chapter } = confirm
+        await deleteChapter(novel.id, chapter.id)
+        await createAuditLog({ adminUid: firebaseUser.uid, adminEmail: firebaseUser.email!, action: 'delete_chapter', resource: 'chapters', resourceId: chapter.id, details: `Deleted chapter ${chapter.chapterNumber} "${chapter.title}" from novel "${novel.title}"` })
+        toast.success('Chapter deleted')
+        setChaptersMap((prev) => ({
+          ...prev,
+          [novel.id]: (prev[novel.id] ?? []).filter((c) => c.id !== chapter.id),
+        }))
+        setNovels((prev) => prev.map((n) => n.id === novel.id ? { ...n, chapterCount: Math.max(0, (n.chapterCount ?? 1) - 1) } : n))
+      } else if (type === 'delete') {
         await adminDeleteNovel(novel.id)
         await createAuditLog({ adminUid: firebaseUser.uid, adminEmail: firebaseUser.email!, action: 'delete_novel', resource: 'novels', resourceId: novel.id, details: `Permanently deleted: "${novel.title}"` })
         toast.success('Novel permanently deleted')
@@ -131,6 +166,7 @@ export default function AdminNovelsPage() {
             <table className="w-full min-w-[900px]" role="table">
               <thead>
                 <tr className="border-b border-bg-border bg-bg-elevated/50">
+                  <th className="w-10 px-3 py-3" scope="col"><span className="sr-only">Expand</span></th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-text-muted" scope="col">Novel</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-text-muted" scope="col">Author</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-text-muted" scope="col">Status</th>
@@ -143,11 +179,24 @@ export default function AdminNovelsPage() {
               <tbody>
                 {novels.map((n) => {
                   const softDeleted = (n as Novel & { softDeleted?: boolean }).softDeleted
+                  const isExpanded = expandedId === n.id
+                  const chapters = chaptersMap[n.id]
                   return (
-                    <tr key={n.id} className={cn(
+                    <React.Fragment key={n.id}>
+                    <tr className={cn(
                       'border-b border-bg-border/50 last:border-0 transition-colors',
                       softDeleted ? 'opacity-50' : 'hover:bg-bg-elevated/30'
                     )}>
+                      <td className="px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(n)}
+                          aria-label={isExpanded ? `Collapse chapters of "${n.title}"` : `Show chapters of "${n.title}"`}
+                          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                        >
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-10 rounded-lg bg-bg-elevated flex-shrink-0 overflow-hidden">
@@ -213,6 +262,73 @@ export default function AdminNovelsPage() {
                         </div>
                       </td>
                     </tr>
+
+                    {isExpanded && (
+                      <tr className="border-b border-bg-border/50 last:border-0 bg-bg-elevated/20">
+                        <td colSpan={8} className="px-5 py-3">
+                          {chaptersLoading === n.id ? (
+                            <div className="flex items-center gap-2 text-xs text-text-muted py-2">
+                              <Loader2 size={13} className="animate-spin" aria-hidden="true" /> Loading chapters…
+                            </div>
+                          ) : !chapters || chapters.length === 0 ? (
+                            <p className="text-xs text-text-muted py-2">No chapters in this novel.</p>
+                          ) : (
+                            <table className="w-full" aria-label={`Chapters of "${n.title}"`}>
+                              <thead>
+                                <tr className="text-[11px] text-text-muted">
+                                  <th className="text-left py-1.5 pr-4 font-medium w-12" scope="col">#</th>
+                                  <th className="text-left py-1.5 pr-4 font-medium" scope="col">Chapter Title</th>
+                                  <th className="text-left py-1.5 pr-4 font-medium" scope="col">Status</th>
+                                  <th className="text-left py-1.5 pr-4 font-medium" scope="col">Created</th>
+                                  <th className="text-right py-1.5 font-medium" scope="col">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {chapters.map((c) => (
+                                  <tr key={c.id} className="border-t border-bg-border/40">
+                                    <td className="py-2 pr-4 text-xs text-text-muted tabular-nums">{c.chapterNumber}</td>
+                                    <td className="py-2 pr-4 text-xs text-text">{c.title || 'Untitled chapter'}</td>
+                                    <td className="py-2 pr-4">
+                                      <span className={cn(
+                                        'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                                        c.status === 'published' ? 'bg-accent/10 text-accent' : 'bg-bg-elevated text-text-muted'
+                                      )}>
+                                        {c.status ?? 'draft'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 pr-4 text-xs text-text-muted whitespace-nowrap">
+                                      {c.createdAt ? formatDate(c.createdAt) : '—'}
+                                    </td>
+                                    <td className="py-2 text-right">
+                                      <div className="flex items-center gap-1.5 justify-end">
+                                        <Link
+                                          href={`/novel/${n.id}/chapter/${c.id}`}
+                                          target="_blank"
+                                          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                                          aria-label={`Open chapter ${c.chapterNumber} "${c.title}"`}
+                                        >
+                                          <ExternalLink size={13} />
+                                        </Link>
+                                        <button
+                                          type="button"
+                                          onClick={() => setConfirm({ type: 'deleteChapter', novel: n, chapter: c })}
+                                          className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+                                          aria-label={`Delete chapter ${c.chapterNumber} "${c.title}"`}
+                                          title="Delete chapter"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
@@ -224,23 +340,27 @@ export default function AdminNovelsPage() {
       <ConfirmDialog
         open={!!confirm}
         title={
+          confirm?.type === 'deleteChapter' ? `Delete chapter ${confirm.chapter.chapterNumber} "${confirm.chapter.title}"?` :
           confirm?.type === 'delete' ? `Permanently delete "${confirm.novel.title}"?` :
           confirm?.type === 'softdelete' ? `Hide "${confirm?.novel.title}" from public?` :
           `Restore "${confirm?.novel.title}"?`
         }
         description={
-          confirm?.type === 'delete'
+          confirm?.type === 'deleteChapter'
+            ? `This permanently deletes this single chapter from "${confirm.novel.title}". This action CANNOT be undone.`
+            : confirm?.type === 'delete'
             ? 'This permanently deletes the novel and all its chapters. This action CANNOT be undone.'
             : confirm?.type === 'softdelete'
             ? 'The novel will be hidden from all public listings but its data is preserved. You can restore it later.'
             : 'The novel will be visible to readers again.'
         }
         confirmLabel={
+          confirm?.type === 'deleteChapter' ? 'Delete Chapter' :
           confirm?.type === 'delete' ? 'Delete Forever' :
           confirm?.type === 'softdelete' ? 'Hide Novel' :
           'Restore'
         }
-        danger={confirm?.type === 'delete' || confirm?.type === 'softdelete'}
+        danger={confirm?.type === 'delete' || confirm?.type === 'softdelete' || confirm?.type === 'deleteChapter'}
         loading={actionLoading}
         onConfirm={handleConfirm}
         onCancel={() => setConfirm(null)}

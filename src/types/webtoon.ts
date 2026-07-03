@@ -1,12 +1,16 @@
 import type { FirestoreTimestamp } from './user'
 import type { ContentStatus, ContentGenre } from './novel'
 
+/** Horizontal share of the canvas a panel occupies in the strip layout */
+export type PanelSpan = 'full' | 'half' | 'third' | 'two-thirds'
+
 export interface PanelImage {
   url: string
   width: number
   height: number
   order: number
   altText?: string
+  span?: PanelSpan
 }
 
 export interface Webtoon {

@@ -76,11 +76,13 @@ function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | '
 
 export function OriginalsClient() {
   const [items, setItems] = useState<{ item: Novel | Webtoon; type: 'novel' | 'webtoon' }[]>([])
-  const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<SortBy>('trending')
+  // loading derives from "has the current sort been loaded" so the effect
+  // never calls setState synchronously (react-hooks/set-state-in-effect)
+  const [loadedSort, setLoadedSort] = useState<SortBy | null>(null)
+  const loading = loadedSort !== sortBy
 
   useEffect(() => {
-    setLoading(true)
     browseContent({ sortBy, limitCount: 48 })
       .then(({ novels, webtoons }) => {
         const combined = [
@@ -95,7 +97,7 @@ export function OriginalsClient() {
         setItems(combined)
       })
       .catch(console.error)
-      .finally(() => setLoading(false))
+      .finally(() => setLoadedSort(sortBy))
   }, [sortBy])
 
   return (

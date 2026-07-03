@@ -1,19 +1,20 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
-  ImageIcon, Search, ChevronDown, Loader2, ExternalLink,
+  ImageIcon, Search, ChevronDown, ChevronRight, Loader2, ExternalLink,
   Trash2, EyeOff, RotateCcw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { getAllWebtoons, adminDeleteWebtoon, adminSoftDeleteNovel, createAuditLog } from '@/lib/firebase/admin'
+import { getEpisodesByWebtoon, deleteEpisode } from '@/lib/firebase/firestore'
 import ConfirmDialog from '@/components/admin/ConfirmDialog'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
-import type { Webtoon } from '@/types'
+import type { Webtoon, Episode } from '@/types'
 
 const STATUS_OPTIONS = ['all', 'draft', 'ongoing', 'completed', 'hiatus']
 const STATUS_COLORS: Record<string, string> = {
@@ -22,7 +23,9 @@ const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-bg-elevated text-text-muted',
   hiatus: 'bg-warning/10 text-warning',
 }
-type ConfirmType = { type: 'delete' | 'softdelete' | 'restore'; webtoon: Webtoon }
+type ConfirmType =
+  | { type: 'delete' | 'softdelete' | 'restore'; webtoon: Webtoon }
+  | { type: 'deleteEpisode'; webtoon: Webtoon; episode: Episode }
 
 export default function AdminWebtoonsPage() {
   const { firebaseUser } = useAuth()
@@ -32,6 +35,28 @@ export default function AdminWebtoonsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [confirm, setConfirm] = useState<ConfirmType | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [episodesMap, setEpisodesMap] = useState<Record<string, Episode[]>>({})
+  const [episodesLoading, setEpisodesLoading] = useState<string | null>(null)
+
+  const toggleExpand = async (webtoon: Webtoon) => {
+    if (expandedId === webtoon.id) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(webtoon.id)
+    if (!episodesMap[webtoon.id]) {
+      setEpisodesLoading(webtoon.id)
+      try {
+        const episodes = await getEpisodesByWebtoon(webtoon.id)
+        setEpisodesMap((prev) => ({ ...prev, [webtoon.id]: episodes }))
+      } catch (e: unknown) {
+        toast.error((e as Error).message)
+      } finally {
+        setEpisodesLoading(null)
+      }
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -55,7 +80,17 @@ export default function AdminWebtoonsPage() {
     setActionLoading(true)
     try {
       const { type, webtoon } = confirm
-      if (type === 'delete') {
+      if (type === 'deleteEpisode') {
+        const { episode } = confirm
+        await deleteEpisode(webtoon.id, episode.id)
+        await createAuditLog({ adminUid: firebaseUser.uid, adminEmail: firebaseUser.email!, action: 'delete_episode', resource: 'episodes', resourceId: episode.id, details: `Deleted episode ${episode.episodeNumber} "${episode.title}" from webtoon "${webtoon.title}"` })
+        toast.success('Episode deleted')
+        setEpisodesMap((prev) => ({
+          ...prev,
+          [webtoon.id]: (prev[webtoon.id] ?? []).filter((ep) => ep.id !== episode.id),
+        }))
+        setWebtoons((prev) => prev.map((w) => w.id === webtoon.id ? { ...w, episodeCount: Math.max(0, (w.episodeCount ?? 1) - 1) } : w))
+      } else if (type === 'delete') {
         await adminDeleteWebtoon(webtoon.id)
         await createAuditLog({ adminUid: firebaseUser.uid, adminEmail: firebaseUser.email!, action: 'delete_webtoon', resource: 'webtoons', resourceId: webtoon.id, details: `Permanently deleted: "${webtoon.title}"` })
         toast.success('Webtoon permanently deleted')
@@ -128,6 +163,7 @@ export default function AdminWebtoonsPage() {
             <table className="w-full min-w-[900px]" role="table">
               <thead>
                 <tr className="border-b border-bg-border bg-bg-elevated/50">
+                  <th className="w-10 px-3 py-3" scope="col"><span className="sr-only">Expand</span></th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-text-muted" scope="col">Webtoon</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-text-muted" scope="col">Author</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-text-muted" scope="col">Status</th>
@@ -140,11 +176,24 @@ export default function AdminWebtoonsPage() {
               <tbody>
                 {webtoons.map((w) => {
                   const softDeleted = (w as Webtoon & { softDeleted?: boolean }).softDeleted
+                  const isExpanded = expandedId === w.id
+                  const episodes = episodesMap[w.id]
                   return (
-                    <tr key={w.id} className={cn(
+                    <React.Fragment key={w.id}>
+                    <tr className={cn(
                       'border-b border-bg-border/50 last:border-0 transition-colors',
                       softDeleted ? 'opacity-50' : 'hover:bg-bg-elevated/30'
                     )}>
+                      <td className="px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(w)}
+                          aria-label={isExpanded ? `Collapse episodes of "${w.title}"` : `Show episodes of "${w.title}"`}
+                          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                        >
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-10 rounded-lg bg-bg-elevated flex-shrink-0 overflow-hidden">
@@ -207,6 +256,75 @@ export default function AdminWebtoonsPage() {
                         </div>
                       </td>
                     </tr>
+
+                    {isExpanded && (
+                      <tr className="border-b border-bg-border/50 last:border-0 bg-bg-elevated/20">
+                        <td colSpan={8} className="px-5 py-3">
+                          {episodesLoading === w.id ? (
+                            <div className="flex items-center gap-2 text-xs text-text-muted py-2">
+                              <Loader2 size={13} className="animate-spin" aria-hidden="true" /> Loading episodes…
+                            </div>
+                          ) : !episodes || episodes.length === 0 ? (
+                            <p className="text-xs text-text-muted py-2">No episodes in this webtoon.</p>
+                          ) : (
+                            <table className="w-full" aria-label={`Episodes of "${w.title}"`}>
+                              <thead>
+                                <tr className="text-[11px] text-text-muted">
+                                  <th className="text-left py-1.5 pr-4 font-medium w-12" scope="col">#</th>
+                                  <th className="text-left py-1.5 pr-4 font-medium" scope="col">Episode Title</th>
+                                  <th className="text-left py-1.5 pr-4 font-medium" scope="col">Panels</th>
+                                  <th className="text-left py-1.5 pr-4 font-medium" scope="col">Status</th>
+                                  <th className="text-left py-1.5 pr-4 font-medium" scope="col">Created</th>
+                                  <th className="text-right py-1.5 font-medium" scope="col">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {episodes.map((ep) => (
+                                  <tr key={ep.id} className="border-t border-bg-border/40">
+                                    <td className="py-2 pr-4 text-xs text-text-muted tabular-nums">{ep.episodeNumber}</td>
+                                    <td className="py-2 pr-4 text-xs text-text">{ep.title || 'Untitled episode'}</td>
+                                    <td className="py-2 pr-4 text-xs text-text-muted tabular-nums">{ep.panels?.length ?? 0}</td>
+                                    <td className="py-2 pr-4">
+                                      <span className={cn(
+                                        'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                                        ep.status === 'published' ? 'bg-accent/10 text-accent' : 'bg-bg-elevated text-text-muted'
+                                      )}>
+                                        {ep.status ?? 'draft'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 pr-4 text-xs text-text-muted whitespace-nowrap">
+                                      {ep.createdAt ? formatDate(ep.createdAt) : '—'}
+                                    </td>
+                                    <td className="py-2 text-right">
+                                      <div className="flex items-center gap-1.5 justify-end">
+                                        <Link
+                                          href={`/webtoon/${w.id}/episode/${ep.id}`}
+                                          target="_blank"
+                                          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                                          aria-label={`Open episode ${ep.episodeNumber} "${ep.title}"`}
+                                        >
+                                          <ExternalLink size={13} />
+                                        </Link>
+                                        <button
+                                          type="button"
+                                          onClick={() => setConfirm({ type: 'deleteEpisode', webtoon: w, episode: ep })}
+                                          className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+                                          aria-label={`Delete episode ${ep.episodeNumber} "${ep.title}"`}
+                                          title="Delete episode"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
@@ -218,19 +336,26 @@ export default function AdminWebtoonsPage() {
       <ConfirmDialog
         open={!!confirm}
         title={
+          confirm?.type === 'deleteEpisode' ? `Delete episode ${confirm.episode.episodeNumber} "${confirm.episode.title}"?` :
           confirm?.type === 'delete' ? `Permanently delete "${confirm.webtoon.title}"?` :
           confirm?.type === 'softdelete' ? `Hide "${confirm?.webtoon.title}"?` :
           `Restore "${confirm?.webtoon.title}"?`
         }
         description={
-          confirm?.type === 'delete'
+          confirm?.type === 'deleteEpisode'
+            ? `This permanently deletes this single episode from "${confirm.webtoon.title}". Cannot be undone.`
+            : confirm?.type === 'delete'
             ? 'This permanently deletes the webtoon and all episodes. Cannot be undone.'
             : confirm?.type === 'softdelete'
             ? 'The webtoon will be hidden from all public listings. Data is preserved and can be restored.'
             : 'The webtoon will be visible to readers again.'
         }
-        confirmLabel={confirm?.type === 'delete' ? 'Delete Forever' : confirm?.type === 'softdelete' ? 'Hide Webtoon' : 'Restore'}
-        danger={confirm?.type === 'delete' || confirm?.type === 'softdelete'}
+        confirmLabel={
+          confirm?.type === 'deleteEpisode' ? 'Delete Episode' :
+          confirm?.type === 'delete' ? 'Delete Forever' :
+          confirm?.type === 'softdelete' ? 'Hide Webtoon' : 'Restore'
+        }
+        danger={confirm?.type === 'delete' || confirm?.type === 'softdelete' || confirm?.type === 'deleteEpisode'}
         loading={actionLoading}
         onConfirm={handleConfirm}
         onCancel={() => setConfirm(null)}

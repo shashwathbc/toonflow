@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   Wallet, Coins, TrendingUp, ArrowDownLeft, ArrowUpRight, Clock, Check,
   X, AlertTriangle, Loader2, ArrowLeft, CreditCard, Banknote, Receipt,
-  BadgeIndianRupee, Plus,
+  BadgeIndianRupee, Plus, Lock,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -14,7 +14,7 @@ import {
   getUserTransactions, getCreatorWithdrawals, createWithdrawalRequest,
 } from '@/lib/firebase/firestore'
 import { formatRelativeTimestamp } from '@/lib/utils/formatters'
-import { COIN_PACKAGES } from '@/lib/utils/constants'
+import { COIN_PACKAGES, FEATURE_FLAGS } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
 import type { Transaction, Withdrawal, WithdrawalMethod } from '@/types'
 
@@ -360,28 +360,68 @@ function WithdrawSection({ balance, onRequested }: { balance: number; onRequeste
   )
 }
 
+function WalletComingSoon() {
+  return (
+    <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-6 py-20">
+      <div className="relative mb-8">
+        <div className="w-20 h-20 rounded-2xl bg-bg-elevated border border-bg-border flex items-center justify-center">
+          <Wallet size={32} className="text-accent" aria-hidden="true" />
+        </div>
+        <span className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-warning/15 border border-warning/30 flex items-center justify-center">
+          <Lock size={13} className="text-warning" aria-hidden="true" />
+        </span>
+      </div>
+
+      <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-warning bg-warning/10 border border-warning/20 rounded-full px-3 py-1 mb-4">
+        <Lock size={11} aria-hidden="true" />
+        Coming Soon
+      </p>
+      <h1 className="text-2xl sm:text-3xl font-bold text-text mb-4 max-w-md">Wallet is coming soon</h1>
+      <p className="text-sm text-text-secondary leading-relaxed max-w-md mb-10">
+        Token purchases, creator earnings and payouts are almost ready. Everything on
+        Toonflow is free during launch — enjoy reading!
+      </p>
+
+      <Link
+        href="/create"
+        className="btn-accent text-sm px-5 py-2.5 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <ArrowLeft size={15} aria-hidden="true" />
+        Back to Creator Hub
+      </Link>
+    </div>
+  )
+}
+
 export default function WalletPage() {
+  if (!FEATURE_FLAGS.wallet) return <WalletComingSoon />
+  return <WalletPageInner />
+}
+
+function WalletPageInner() {
   const { firebaseUser, userProfile, loading: authLoading } = useAuth()
   const router = useRouter()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
-  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'tokens' | 'earnings' | 'history'>('tokens')
+  // loading derives from "has the current user's data been loaded" so the load
+  // effect never calls setState synchronously (react-hooks/set-state-in-effect)
+  const [loadedUid, setLoadedUid] = useState<string | null>(null)
+  const loading = !firebaseUser || loadedUid !== firebaseUser.uid
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(() => {
     if (!firebaseUser) return
-    try {
-      const [txs, wds] = await Promise.all([
-        getUserTransactions(firebaseUser.uid, 50),
-        getCreatorWithdrawals(firebaseUser.uid),
-      ])
-      setTransactions(txs)
-      setWithdrawals(wds)
-    } catch (err) {
-      console.error('[Wallet] load error:', err)
-    } finally {
-      setLoading(false)
-    }
+    const uid = firebaseUser.uid
+    Promise.all([
+      getUserTransactions(uid, 50),
+      getCreatorWithdrawals(uid),
+    ])
+      .then(([txs, wds]) => {
+        setTransactions(txs)
+        setWithdrawals(wds)
+      })
+      .catch((err) => console.error('[Wallet] load error:', err))
+      .finally(() => setLoadedUid(uid))
   }, [firebaseUser])
 
   useEffect(() => {

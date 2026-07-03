@@ -18,6 +18,17 @@ import type { UserProfile, Novel, Webtoon } from '@/types'
 import Image from 'next/image'
 import Link from 'next/link'
 
+const BusinessCharts = dynamic(() => import('@/components/admin/BusinessCharts'), {
+  ssr: false,
+  loading: () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {[1, 2].map((i) => (
+        <div key={i} className="bg-bg-card border border-bg-border rounded-2xl p-5 h-64 animate-pulse" />
+      ))}
+    </div>
+  ),
+})
+
 const AdminCharts = dynamic(() => import('@/components/admin/AdminCharts'), {
   ssr: false,
   loading: () => (
@@ -36,6 +47,20 @@ export default function SuperAdminDashboard() {
   const [recentWebtoons, setRecentWebtoons] = useState<Webtoon[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [analytics, setAnalytics] = useState<import('@/components/admin/BusinessCharts').BusinessAnalytics | null>(null)
+
+  // Business analytics — refreshed every 60s so "live users" stays current
+  useEffect(() => {
+    let cancelled = false
+    const fetchAnalytics = () =>
+      fetch('/api/admin/analytics')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (!cancelled && d) setAnalytics(d) })
+        .catch(() => { /* analytics are non-critical; stat tiles show — */ })
+    fetchAnalytics()
+    const id = setInterval(fetchAnalytics, 60_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -111,9 +136,48 @@ export default function SuperAdminDashboard() {
         </div>
       </section>
 
+      {/* Business analytics */}
+      <section aria-labelledby="biz-heading">
+        <h2 id="biz-heading" className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wider">Business Analytics</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-4">
+          <StatCard
+            label="Live Users (5 min)"
+            value={analytics ? String(analytics.liveUsers) : '—'}
+            sub="active readers right now"
+            icon={<TrendingUp size={16} />}
+            color="accent"
+          />
+          <StatCard
+            label="Readers (14 days)"
+            value={analytics ? formatCount(analytics.readers14d) : '—'}
+            sub="unique visitors"
+            icon={<Users size={16} />}
+          />
+          <StatCard
+            label="Views (14 days)"
+            value={analytics ? formatCount(analytics.views14d) : '—'}
+            sub="validated reader views"
+            icon={<Eye size={16} />}
+          />
+          <StatCard
+            label="Avg Engagement"
+            value={analytics ? `${analytics.avgEngagementSec}s` : '—'}
+            sub="per view"
+            icon={<Heart size={16} />}
+          />
+          <StatCard
+            label="Avg Scroll Depth"
+            value={analytics ? `${analytics.avgScrollPct}%` : '—'}
+            sub="how far readers scroll"
+            icon={<Bookmark size={16} />}
+          />
+        </div>
+        {analytics && <BusinessCharts data={analytics} />}
+      </section>
+
       {/* Charts */}
       <section aria-labelledby="charts-heading">
-        <h2 id="charts-heading" className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wider">Analytics</h2>
+        <h2 id="charts-heading" className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wider">Content Analytics</h2>
         <AdminCharts stats={stats!} novels={recentNovels} webtoons={recentWebtoons} />
       </section>
 

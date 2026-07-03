@@ -6,32 +6,28 @@ import type { Webtoon } from '@/types'
 
 export function useWebtoons(uid: string) {
   const [webtoons, setWebtoons] = useState<Webtoon[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // loading derives from "has the current uid received its first snapshot",
+  // so the effect never calls setState synchronously
+  const [loadedUid, setLoadedUid] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!uid) {
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
+    if (!uid) return
 
     const unsub = subscribeToWebtoons(
       uid,
       (data) => {
         setWebtoons(data)
-        setLoading(false)
+        setLoadedUid(uid)
       },
       (err) => {
         setError(err.message)
-        setLoading(false)
+        setLoadedUid(uid)
       }
     )
 
     return unsub
   }, [uid])
 
-  return { webtoons, loading, error }
+  return { webtoons, loading: !!uid && loadedUid !== uid, error }
 }

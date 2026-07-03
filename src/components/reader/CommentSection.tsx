@@ -268,21 +268,20 @@ interface CommentSectionProps {
 export default function CommentSection({ targetId, targetType, creatorId }: CommentSectionProps) {
   const { firebaseUser, userProfile } = useAuth()
   const [comments, setComments] = useState<Comment[]>([])
-  const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest')
+  // loading derives from "has the current target been fetched" so the load
+  // effect never calls setState synchronously (react-hooks/set-state-in-effect)
+  const targetKey = `${targetType}|${targetId}`
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const loading = loadedKey !== targetKey
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getComments(targetId, targetType)
-      setComments(data)
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false)
-    }
+  const load = useCallback(() => {
+    getComments(targetId, targetType)
+      .then(setComments)
+      .catch(() => { /* silently fail */ })
+      .finally(() => setLoadedKey(`${targetType}|${targetId}`))
   }, [targetId, targetType])
 
   useEffect(() => { load() }, [load])

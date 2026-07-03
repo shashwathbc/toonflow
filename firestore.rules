@@ -16,26 +16,43 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
     }
 
+    // True when the update touches ONLY the given counter fields
+    // (lets readers bump likeCount/viewCount without content write access)
+    function onlyUpdates(keys) {
+      return isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
     // Public content — anyone can read published novels/webtoons
     match /novels/{novelId} {
       allow read: if true;
       allow create: if isSignedIn();
-      allow update, delete: if isOwner(resource.data.authorId) || isAdmin();
+      // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it
+      allow update: if isOwner(resource.data.authorId) || isAdmin()
+        || onlyUpdates(['likeCount', 'rating', 'ratingCount']);
+      allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /chapters/{chapterId} {
         allow read: if true;
-        allow write: if isOwner(get(/databases/$(database)/documents/novels/$(novelId)).data.authorId) || isAdmin();
+        allow create, delete: if isOwner(get(/databases/$(database)/documents/novels/$(novelId)).data.authorId) || isAdmin();
+        allow update: if isOwner(get(/databases/$(database)/documents/novels/$(novelId)).data.authorId) || isAdmin()
+          || onlyUpdates(['likeCount']);
       }
     }
 
     match /webtoons/{webtoonId} {
       allow read: if true;
       allow create: if isSignedIn();
-      allow update, delete: if isOwner(resource.data.authorId) || isAdmin();
+      // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it
+      allow update: if isOwner(resource.data.authorId) || isAdmin()
+        || onlyUpdates(['likeCount', 'rating', 'ratingCount']);
+      allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /episodes/{episodeId} {
         allow read: if true;
-        allow write: if isOwner(get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId) || isAdmin();
+        allow create, delete: if isOwner(get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId) || isAdmin();
+        allow update: if isOwner(get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId) || isAdmin()
+          || onlyUpdates(['likeCount']);
       }
     }
 
@@ -43,7 +60,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true;
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin()
+        || onlyUpdates(['followerCount', 'followingCount']);
       allow delete: if isAdmin();
     }
 
@@ -61,7 +79,9 @@ service cloud.firestore {
     match /comments/{commentId} {
       allow read: if true;
       allow create: if isSignedIn();
-      allow update, delete: if isOwner(resource.data.authorId) || isAdmin();
+      allow update: if isOwner(resource.data.authorId) || isAdmin()
+        || onlyUpdates(['likeCount']);
+      allow delete: if isOwner(resource.data.authorId) || isAdmin();
     }
 
     // Follows — auth read, owner write
@@ -71,10 +91,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == resource.data.followerId;
     }
 
-    // Transactions — owner read, server write
+    // Transactions — owner read, owner or admin write
     match /transactions/{txId} {
-      allow read: if isOwner(resource.data.userId);
-      allow write: if isSignedIn();
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
 
     // Reports — auth create, admin manage
@@ -84,17 +105,53 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Support requests — created only via the Admin SDK API route; admin-managed
+    match /supportRequests/{requestId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
+    }
+
     // Withdrawals — owner read/create, admin manage
     match /withdrawals/{wId} {
       allow read: if isOwner(resource.data.creatorId) || isAdmin();
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
       allow update: if isAdmin();
     }
 
-    // Views — anyone can create (anon tracking), owner can read
+    // View tracking — SERVER ONLY (Admin SDK bypasses rules). Clients get no
+    // access: view logs, dedup records and analytics must be tamper-proof.
     match /views/{viewId} {
-      allow read: if isSignedIn();
-      allow create: if true;
+      allow read, write: if false; // legacy collection, retired
+    }
+    match /chapterViews/{viewId} {
+      allow read, write: if false;
+    }
+    match /viewDedup/{dedupId} {
+      allow read, write: if false;
+    }
+    match /viewStats/{statsId} {
+      allow read: if isAdmin();
+      allow write: if false;
+      match /daily/{day} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+    match /suspiciousViews/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Ratings — signed-in users manage their own 1–5 star ratings
+    match /ratings/{ratingId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.value is int
+        && request.resource.data.value >= 1 && request.resource.data.value <= 5;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid
+        && request.resource.data.value is int
+        && request.resource.data.value >= 1 && request.resource.data.value <= 5;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
     // Likes — signed-in users manage their own likes

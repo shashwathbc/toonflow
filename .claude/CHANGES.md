@@ -645,6 +645,134 @@ Initialize Firebase Storage at https://console.firebase.google.com/project/toonf
 ## 2026-06-30
 - Fixed `require is not defined` error in tailwind.config.ts by replacing `require('tailwind-scrollbar')` with an ESM `import` (file was loaded as ESM, CJS require unavailable)
 
+## 2026-07-02 — Editor WYSIWYG + Dramatic Typography + Reader Fixes
+
+### Editor WYSIWYG (editor looks identical to the published reader)
+- `src/app/(novel)/create/novel/[novelId]/page.tsx`: Changed center editor area from `bg-bg-card` to `bg-black`. Chapter title input area redesigned: black bg, `editor-chapter-title` CSS class (Georgia serif, clamp 1.8–3rem), chapter number label above in small-caps, thin divider below.
+- `src/components/editor/NovelRichEditor.tsx`: Editor content area uses `bg-black`, `max-w-[680px]`, Georgian serif at 1.125rem/1.9 line-height — same as the reader.
+
+### Dramatic Typography (TipTap extensions + color palette)
+- Installed `@tiptap/extension-text-align`, `@tiptap/extension-text-style`, `@tiptap/extension-color`.
+- `src/components/editor/NovelRichEditor.tsx` rewritten: Added TextAlign (types: heading, paragraph), TextStyle, Color extensions. Added alignment toolbar buttons (AlignLeft, AlignCenter, AlignRight). Added 6-color text palette: White, Muted (50%), Gold (#C9A84C), Crimson (#E05252), Frost (#7EC8E3), Sage (#7CB87C) plus reset. Color swatches use Tailwind `cls` field (not inline `style.backgroundColor`).
+- `src/app/globals.css` — heading hierarchy rewritten to match cinematic reference:
+  - H1: clamp(2.5rem→4.5rem), 900 weight, italic, letter-spacing -0.02em (large dramatic heading)
+  - H2: clamp(1.6rem→2.4rem), 800 weight (section heading)
+  - H3: 0.75rem, 700 weight, 0.4em letter-spacing, uppercase, gold (#C9A84C) (small-caps scene label)
+- `.reader-content` headings updated to match exactly.
+
+### Reader Fixes
+- Raw `<p>` HTML tags visible in reader → replaced `renderContent()` text-splitter with `dangerouslySetInnerHTML` + `.reader-content` prose CSS.
+- Invisible text in reader (opacity:0 never resolved) → removed IntersectionObserver; container now uses simple `animation: reader-fade-in` on mount.
+- `.reader-content p` has `text-align: inherit` so TipTap's `style="text-align: center"` on aligned paragraphs passes through.
+- Chapter reader moved from `(main)` route group to `(reader)` route group (black layout, no Navbar/Footer). Old `(main)/novel/[id]/chapter/` deleted.
+
+### Wallet in Studio Sidebar
+- `src/components/layout/StudioSidebar.tsx`: Added Wallet link under Dashboard.
+
 ## 2026-06-30 — Fix Login button
 - Fixed Login button in Navbar/UserMenu/MobileNav: was calling setLoginModalOpen(true) but no LoginModal existed, so clicking Login did nothing
 - Changed Login button to Link href='/login', Create button (unauthenticated) to href='/login?redirect=/create'
+
+## 2026-07-02 — Fix broken dev build (500s) + editor cleanup
+- **Installed missing `jspdf` dependency** — `src/app/(novel)/create/novel/[novelId]/page.tsx` dynamically imports it for PDF export, but it was never added to package.json, causing a webpack ModuleBuildError that 500'd routes in dev.
+- **Renamed `src/middleware.ts` → `src/proxy.ts`** (`export function proxy`) — Next.js 16 deprecated the middleware convention; having middleware.ts caused conflict errors. Logic unchanged (auth/admin/super-admin route gates).
+- **`NovelRichEditor.tsx`**: removed standalone `@tiptap/extension-underline` from the extension list — TipTap v3 StarterKit already bundles `underline`, so it was a duplicate extension name.
+- Verified: `tsc --noEmit` clean; reader route (`/novel/[id]/chapter/[chapterId]`) returns 200; `/create/**` correctly 307-redirects unauthenticated users and returns 200 with auth cookie.
+
+## 2026-07-02 — Fix chapter likes (Firestore rules) + profile bookmarks tab
+- **firestore.rules**: likes were failing because `toggleLike` increments `likeCount` on the content doc, but chapters/novels/webtoons only allowed writes by the author/admin. Added an `onlyUpdates(keys)` helper and counter-only update carve-outs for signed-in users: `viewCount`/`likeCount` on novels, webtoons, chapters, episodes; `likeCount` on comments; `followerCount`/`followingCount` on users (follow/unfollow batch had the same permission bug). Deployed with `firebase deploy --only firestore:rules --project toonflow-studio-paint-f384c` (note: CLI needs the explicit `--project` flag; default alias resolution 403s).
+- **ProfilePageClient.tsx**: the Bookmarks tab only rendered a "N bookmarked items" text line — bookmark docs (contentId/contentType) are now resolved via `getNovelById`/`getWebtoonById` and rendered as a `ContentCard` grid linking to `/novel/{id}` or `/webtoon/{id}`. Deleted/missing content is filtered out.
+
+## 2026-07-02 — AI Story Assistant: fix 401 + auto-write chapter workflow
+- **Diagnosed 401 "invalid x-api-key"**: the `ANTHROPIC_API_KEY` in `.env.local` is well-formed but rejected by the Anthropic API (verified with a direct `/v1/models` call) — the key is revoked/invalid and must be regenerated at console.anthropic.com. No code fix possible.
+- **api/ai/novel-assist**: added `mode: 'write-chapter'` — generates a complete chapter as clean `<p>` HTML in webtoon format (short dramatic one-line paragraphs) using `claude-opus-4-8` with server-side streaming (`messages.stream` + `finalMessage`, max_tokens 32000) to avoid HTTP timeouts; strips markdown fences and converts plain-text fallback to paragraphs. Added `export const maxDuration = 300`.
+- **AIAssistant.tsx**: new `onApplyChapter` prop + "Write Full Chapter to Canvas" button — sends the last 20 conversation turns as creative direction, applies the returned HTML to the editor, and logs a note in chat.
+- **create/novel/[novelId]/page.tsx**: `handleApplyAIChapter` sets editor content, computes word count from stripped HTML, and immediately persists via `triggerSave`.
+
+## 2026-07-03 — Master Webtoon Story Architect: storyboard generation + chapter continuity
+- **api/ai/novel-assist**: replaced the write-chapter system prompt with the Master Webtoon Story Architect prompt — transforms a rough chapter idea into a cinematic panel-by-panel webtoon storyboard (camera, environment, characters, dialogue, SFX, lighting, emotion, transitions, per-panel AI illustration prompts) with a consistency engine that honors the Story Bible context and all previous chapters. Model now returns strict structured JSON (`chapterTitle`, `summary`, `panels[]`); server renders it to rich-editor HTML via `scriptToHtml()` and returns both `{ html, script }`, with a plain-text/HTML fallback if JSON parsing fails.
+- **api/ai/novel-assist**: request body now accepts `novelGenres`, `novelTags`, and `previousChapters[]` (number/title/status/excerpt); context block includes up to 12 previous chapters (3000 chars each) for both chat and write-chapter modes. Chat system prompt updated with continuity rules (never contradict events, revive dead characters, change personalities, or reset emotions).
+- **AIAssistant.tsx**: new optional `chapters` prop + `buildPreviousChapters()` — strips editor HTML from earlier chapters and sends condensed excerpts with every request; write-chapter task message rewritten for storyboard output.
+- **create/novel/[novelId]/page.tsx**: passes the `useChapters` list into `AIAssistant`.
+- Verified: `tsc --noEmit` clean.
+
+## 2026-07-03 — Hard 300-word chapter cap for AI generation
+- **api/ai/novel-assist**: storyboard prompt now enforces a hard limit — all canvas text (summary, panels, dialogue, SFX, transitions) must total under 300 words; panel count reduced 30–60 → 6–12 with terse-field instructions; quality check includes the word cap.
+- **api/ai/novel-assist**: `scriptToHtml()` no longer renders `illustrationPrompt` into the canvas (still returned in the `script` JSON for image generation) so prompts don't consume the 300-word budget or inflate the editor word count.
+- Chat system prompt: assistant told chapters are capped at 300 words — won't push continuations past the limit and warns if the draft already exceeds it.
+- Verified: `tsc --noEmit` clean.
+
+## 2026-07-03 — Write-chapter: award-winning webtoon writer prompt (replaces storyboard JSON)
+- **api/ai/novel-assist**: replaced the storyboard-JSON architect prompt with the "award-winning webtoon writer" prompt — ONE complete prose chapter, hard 300-word max, show-don''t-tell (emotions via action/body language/silence, never stated), every line must build emotion/reveal character/progress story/increase tension, emotional highs and lows every 40–60 words, structure Opening Hook → Emotion → Conflict → Escalation → Mini Twist → Cliffhanger. Continuity rules against previous chapters retained. Output is back to plain `<p>` HTML paragraphs.
+- Removed now-dead storyboard machinery: `ScriptPanel`/`ChapterScript` types, `escapeHtml`, `scriptToHtml`, and the JSON-parse branch in the handler.
+- `max_tokens` 32000 → 4000 (300-word cap makes large budgets pointless; also backstops runaway output).
+- **AIAssistant.tsx**: write-chapter task message and post-write chat note updated from storyboard wording to 300-word chapter wording.
+- Verified: `tsc --noEmit` clean.
+
+## 2026-07-03 — Novel detail page redesigned to match production webtoon detail design
+- **(main)/novel/[id]/page.tsx**: full rewrite of layout to match https://toonflowstudiopaint.com/webtoon/... detail design. Diagnosis of "image not showing": coverURL, Storage object, and _next/image optimizer all worked — the missing image was the hero banner, which the old design simply didn't have.
+- New full-bleed hero: bannerURL ?? coverURL as dark backdrop (`Image fill`, opacity-30, gradient to bg), cover card with ring/shadow bottom-left, status pill with published year, 5xl extrabold title, type/rating/views meta row, genre chips, actions (Start Reading, Latest → last chapter, Like, Bookmark).
+- New Details card (accent-bar heading, 2-col stat tiles: Rating with stars, Type, Status, Chapters, Views, Year, Author with Follow button moved here) + Synopsis section with Read More ↓, Genres and Themes (tags) chip rows.
+- Chapters section now a card with header toolbar: chapter search input (labelled, sr-only) and Asc/Desc sort toggle; rows use mono "Ch. N" prefix + title + words/min + date/views; "Show more (N remaining)" footer.
+- WCAG: focus-visible rings on all new interactive elements, aria-labels on icon-only sort button, decorative images/icons aria-hidden, star rating has text alternative.
+- Verified: `tsc --noEmit` clean; headless-Chrome screenshot of /novel/b1IEojPKR0SOmPqSZ8O6 matches production design, cover + hero render.
+
+## 2026-07-03 — User star ratings (1–5) on novel detail page
+- **lib/firebase/engagement.ts**: new Rating System section — `setRating(uid, type, id, value)` runs a Firestore transaction that upserts `ratings/{uid}_{type}_{id}` and recomputes the aggregate `rating` (average, 1 decimal) + `ratingCount` on the novel/webtoon doc; clicking the same star again removes the user's rating. `getUserRating()` fetches the user's existing value.
+- **components/reader/RatingControl.tsx**: new interactive 5-star control — hover preview, filled stars show your rating (or the dimmed average when unrated), average + count text, optimistic-free (writes then updates), "Sign in to rate" toast for guests, `onRated` callback to sync parent state. WCAG: role="group" with descriptive label, per-star `aria-label` + `aria-pressed`, focus-visible rings.
+- **(main)/novel/[id]/page.tsx**: RatingControl added to hero actions row; `onRated` updates novel state so the hero meta stars and Details "Rating" tile stay in sync.
+- **firestore.rules**: new `/ratings/{ratingId}` rules (owner create/update/delete, value must be int 1–5, public read); `rating`/`ratingCount` added to the `onlyUpdates()` carve-out on novels and webtoons. Deployed via `firebase deploy --only firestore:rules --project toonflow-studio-paint-f384c`.
+- Verified: `tsc --noEmit` clean; rules compiled + released; screenshot shows star control in hero.
+
+## 2026-07-03 — Secure server-validated view counting system
+
+- **New**: `POST /api/views` (`src/app/api/views/route.ts`) — two-phase view protocol. `begin` issues an HMAC-signed view token (server timestamp) + signed httpOnly anonymous visitor cookie; `complete` re-validates everything server-side (CSRF origin check, bot/prefetch detection, per-IP/visitor/session rate limits with temporary blocking, token integrity + visitor binding + 6h expiry, server-measured dwell ≥20s OR scroll ≥50% with ≥8s dwell) before counting.
+- **New**: `src/lib/views/` — `config.ts` (thresholds), `crypto.ts` (HMAC tokens, signed visitor ids, salted hashes), `botDetection.ts` (UA signatures, sec-purpose/prefetch, sec-fetch-mode, accept-language heuristics), `rateLimit.ts` (sliding window + violation blocking), `viewService.ts` (single Firestore transaction: viewDedup rolling-24h dedup → chapterViews analytics log → viewStats aggregates → atomic viewCount increments on content + parent).
+- **New**: `src/lib/firebase/serverApp.ts` — Firebase Admin SDK init (server only); installed `firebase-admin` + `@opentelemetry/api`.
+- **New**: `GET /api/views/stats` — owner/admin analytics (unique/returning, reading time, avg completion, daily/weekly/monthly windows), separate from public counts.
+- **New**: `src/hooks/useViewTracking.ts` — client hook measuring visible time (Page Visibility API) + max scroll; fires complete once threshold met, sendBeacon on pagehide, 24h localStorage guard, skips webdriver.
+- **Changed**: chapter + episode reader pages now use `useViewTracking`; removed client-side `trackView` from `engagement.ts` (direct Firestore viewCount writes eliminated).
+- **Security**: `firestore.rules` — removed `viewCount` from client-updatable carve-outs on novels/chapters/webtoons/episodes; locked `views` (legacy), `chapterViews`, `viewDedup`, `suspiciousViews` to server-only; `viewStats` admin-read. Added `chapterViews` composite indexes.
+- **Docs**: `docs/view-tracking.md`; `VIEW_TOKEN_SECRET` added to `.env.example`.
+- **Verified**: tsc + eslint clean; live API tests — bot UA rejected, missing origin rejected, browser begin issues token+cookie, instant complete rejected (dwell), missing cookie rejected, tampered token rejected, 9s+60% scroll passes gates and runs the Firestore transaction (aborted safely on fake content id).
+- **Deploy required**: `firebase deploy --only firestore:rules,firestore:indexes --project toonflow-studio-paint-f384c`
+
+## 2026-07-03 — /create studio hub redesign
+- Removed the "Want to explore instantly?" / Seed Ravana Demo section (the `/create/seed` route itself still exists, just no longer linked).
+- Redesigned the page to fill the viewport: full-width studio cards and quick-link row (previously capped at max-w-2xl), min-h-screen section with ambient accent glows, larger typography, "Creator Studio" badge, hover glow + arrow-slide micro-interactions. Design tokens + WCAG focus rings preserved.
+
+## 2026-07-03 — Novel editor: PDF download dropdown
+- `EditorToolbar.tsx`: the PDF button is now a Radix dropdown (matches UserMenu styling) with "Download all chapters" and "Download current chapter" (disabled when no chapter is selected). `onExportPDF` prop now takes a `'all' | 'current'` scope.
+- `create/novel/[novelId]/page.tsx`: `handleExportPDF(scope)` — full-novel export unchanged in layout (title page + all chapters); current-chapter export produces `"<novel> - Chapter N.pdf"`. Both use the live editor content/title for the active chapter so unsaved edits are included.
+
+## 2026-07-03 — Webtoon editor: seamless vertical strip canvas
+- `src/app/(novel)/create/webtoon/[webtoonId]/page.tsx`
+  - Center canvas now renders panels as one continuous edge-to-edge vertical strip (max-w 800px, no gaps/borders, natural aspect ratio via `width`/`height` + `h-auto`) matching webtoon reader format (Asura-style).
+  - Panel controls (reorder, thumbnail, delete) moved to a hover/focus-within overlay with gradient scrim so the strip reads as a single page; all buttons keep aria-labels + focus-visible rings.
+  - Added an end-of-strip dashed "Add panels to the strip" upload zone.
+  - Uploads (manual + AI accept) now capture real image dimensions via object URL instead of hard-coded 800x1200, so editor and reader layouts are correct pre-load.
+
+## 2026-07-03 — Webtoon editor: resizable canvas + panel span templates + scrollbar
+- `src/types/webtoon.ts`: added `PanelSpan` type (`full | half | third | two-thirds`) and optional `span` field on `PanelImage`.
+- `src/app/(novel)/create/webtoon/[webtoonId]/page.tsx`
+  - Canvas is now resizable: drag handle on the strip''s right edge (pointer capture, grows both sides since centered), keyboard arrows adjust by 40px (role="separator" with aria-valuenow/min/max), clamped 360–1400px; width presets Mobile 480 / Default 800 / Wide 1080 with live px readout in the header.
+  - Panels can be sized template-wise: strip is a flex-wrap container; per-panel span picker (1/1, 2/3, 1/2, 1/3) in a bottom hover overlay persists `span` to Firestore via `setPanelSpan`, so multiple panels of different widths sit side-by-side.
+  - Scroll container changed to `overflow-y-scroll overflow-x-auto` so the vertical scrollbar is always available.
+- Note: IDE webhint diagnostics about aria-*="{expression}" and inline styles are static-checker false positives for React dynamic values; tsc and eslint pass with no new issues.
+
+## 2026-07-03 — Release gate: /create and /wallet locked as Coming Soon
+- `src/lib/utils/constants.ts`: added `FEATURE_FLAGS` (`creatorStudio: false`, `wallet: false`) — flip to true to unlock at release.
+- `src/proxy.ts`: middleware now redirects `/create/**` → `/coming-soon?feature=studio` and `/wallet/**` → `/coming-soon?feature=wallet` when the flag is off. Super admin (email cookie === SUPER_ADMIN_EMAIL) bypasses the lock and can still use both areas.
+- `src/app/(main)/coming-soon/page.tsx`: new public Coming Soon page (server component, Next 15 async searchParams) with per-feature copy (studio/wallet/default), pulse badge, Back to Home + Browse Stories CTAs; uses design tokens and focus-visible rings.
+
+## 2026-07-03 — Release lock rework, admin fixes, analytics, support flow, footer, legal pages
+- Release gate reworked to in-place locks: /create hub stays reachable; Webtoon Studio card renders locked "Coming Soon" (FEATURE_FLAGS.webtoonStudio), /wallet renders an in-place Coming Soon lock (FEATURE_FLAGS.wallet), /create/webtoon/** deep links redirect to /coming-soon. No admin bypass.
+- Dashboard: fixed broken cover thumbnails — copied og-image.png to public/images/ravana-cover.png (seed data referenced it but file was missing) and added CoverThumb onError fallback.
+- createUserDocument now backfills role/isCreator/createdAt on existing user docs (older signups lacked them) — fixes rules isAdmin() ("Missing or insufficient permissions") and users missing from admin lists.
+- /admin/super/users: getAllUsers no longer orderBy(createdAt) (Firestore drops docs missing the field) — sorts client-side; added getUserCount() and "X registered users · showing Y" header.
+- /admin/super/novels + /webtoons: expandable drill-down row per work listing chapters/episodes (number, title, status, created) with per-item open + delete (ConfirmDialog + audit log; counts updated).
+- Super admin business analytics: new /api/admin/analytics (Admin SDK, super-admin only) computing live users (5-min window), unique readers/views (14d), avg engagement/scroll, auth vs anon, daily traffic + signups series, top content. New BusinessCharts (recharts) + stat tiles on /admin/super, refreshed every 60s. Palette validated with dataviz checker (#3987e5/#199e70/#c98500/#9085e9 on #1A1A1A).
+- Support flow: SupportModal (Ask a Question / Report an Issue) wired to footer; POST /api/support stores supportRequests via Admin SDK (rate-limited 5/day/email) and sends Gmail auto-reply from toonflowstudiopaint@gmail.com (nodemailer; needs GMAIL_APP_PASSWORD env). Admin Requests page gained a Support Inbox table (status open/in-progress/resolved, delete w/ confirm, audit logs). Rules: supportRequests admin-only, client create denied. Indexes added (email+createdAt, status+createdAt).
+- Footer: converted to client component; real Instagram (instagram.com/toonflowstudiopaint) + LinkedIn (linkedin.com/company/toonflow-studio-paint) icons (inline SVGs — lucide dropped brand icons).
+- New legal pages with full content: /privacy, /terms, /ai-policy (server components, design tokens, cross-linked).
+- Deploy note: firebase deploy --only firestore:rules,firestore:indexes --project toonflow-studio-paint-f384c required for support inbox + analytics.

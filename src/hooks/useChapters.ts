@@ -6,32 +6,28 @@ import type { Chapter } from '@/types'
 
 export function useChapters(novelId: string) {
   const [chapters, setChapters] = useState<Chapter[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // loading derives from "has the current novelId received its first snapshot",
+  // so the effect never calls setState synchronously
+  const [loadedId, setLoadedId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!novelId) {
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
+    if (!novelId) return
 
     const unsub = subscribeToChapters(
       novelId,
       (data) => {
         setChapters(data)
-        setLoading(false)
+        setLoadedId(novelId)
       },
       (err) => {
         setError(err.message)
-        setLoading(false)
+        setLoadedId(novelId)
       }
     )
 
     return unsub
   }, [novelId])
 
-  return { chapters, loading, error }
+  return { chapters, loading: !!novelId && loadedId !== novelId, error }
 }

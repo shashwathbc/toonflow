@@ -75,6 +75,27 @@ function WalletCard({ label, value, sub, icon, color, action }: {
   )
 }
 
+function CoverThumb({ coverURL, type }: { coverURL: string | null; type: 'novel' | 'webtoon' }) {
+  const [failed, setFailed] = useState(false)
+  if (!coverURL || failed) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-text-muted">
+        {type === 'novel' ? <BookOpen size={12} /> : <ImageIcon size={12} />}
+      </div>
+    )
+  }
+  return (
+    <Image
+      src={coverURL}
+      alt=""
+      width={32}
+      height={40}
+      className="object-cover w-full h-full"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 function ContentRow({ item, type, earnedInr }: {
   item: Novel | Webtoon; type: 'novel' | 'webtoon'; earnedInr: number
 }) {
@@ -84,12 +105,7 @@ function ContentRow({ item, type, earnedInr }: {
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="w-8 h-10 rounded-lg bg-bg-elevated flex-shrink-0 overflow-hidden">
-            {item.coverURL
-              ? <Image src={item.coverURL} alt="" width={32} height={40} className="object-cover w-full h-full" />
-              : <div className="w-full h-full flex items-center justify-center text-text-muted">
-                  {type === 'novel' ? <BookOpen size={12} /> : <ImageIcon size={12} />}
-                </div>
-            }
+            <CoverThumb coverURL={item.coverURL} type={type} />
           </div>
           <div className="min-w-0">
             <Link href={href} className="text-sm font-medium text-text hover:text-accent transition-colors line-clamp-1">
@@ -435,32 +451,35 @@ export default function DashboardPage() {
   const [webtoons, setWebtoons] = useState<Webtoon[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
-  const [loading, setLoading] = useState(true)
   const [coinBalance, setCoinBalance] = useState(0)
   const [showBuy, setShowBuy] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
+  // loading derives from "has the current user's data been loaded" so the load
+  // effect never calls setState synchronously (react-hooks/set-state-in-effect)
+  const [loadedUid, setLoadedUid] = useState<string | null>(null)
+  const loading = !firebaseUser || loadedUid !== firebaseUser.uid
+  // plain value dep — optional chaining in the dep array breaks React Compiler memoization
+  const profileBalance = userProfile?.balance ?? 0
 
-  const load = useCallback(async () => {
+  const load = useCallback(() => {
     if (!firebaseUser) return
-    setLoading(true)
-    try {
-      const [n, w, tx, wd] = await Promise.all([
-        getNovelsByAuthor(firebaseUser.uid),
-        getWebtoonsByAuthor(firebaseUser.uid),
-        getUserTransactions(firebaseUser.uid),
-        getUserWithdrawals(firebaseUser.uid),
-      ])
-      setNovels(n)
-      setWebtoons(w)
-      setTransactions(tx)
-      setWithdrawals(wd)
-      setCoinBalance(userProfile?.balance ?? 0)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }, [firebaseUser, userProfile?.balance])
+    const uid = firebaseUser.uid
+    Promise.all([
+      getNovelsByAuthor(uid),
+      getWebtoonsByAuthor(uid),
+      getUserTransactions(uid),
+      getUserWithdrawals(uid),
+    ])
+      .then(([n, w, tx, wd]) => {
+        setNovels(n)
+        setWebtoons(w)
+        setTransactions(tx)
+        setWithdrawals(wd)
+        setCoinBalance(profileBalance)
+      })
+      .catch((e) => console.error(e))
+      .finally(() => setLoadedUid(uid))
+  }, [firebaseUser, profileBalance])
 
   useEffect(() => {
     if (!authLoading && firebaseUser) load()

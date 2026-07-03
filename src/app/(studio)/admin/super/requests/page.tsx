@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Flag, CheckCircle, XCircle, Trash2, Loader2, AlertCircle } from 'lucide-react'
+import { Flag, CheckCircle, XCircle, Trash2, Loader2, AlertCircle, LifeBuoy, Mail, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
-import { getAdminReports, updateReportStatus, createAuditLog, type AdminReport } from '@/lib/firebase/admin'
+import {
+  getAdminReports, updateReportStatus, createAuditLog, type AdminReport,
+  getSupportRequests, updateSupportRequestStatus, deleteSupportRequest, type SupportRequest,
+} from '@/lib/firebase/admin'
 import ConfirmDialog from '@/components/admin/ConfirmDialog'
 import { formatDate } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
@@ -32,17 +35,61 @@ const TYPE_COLORS: Record<string, string> = {
 export default function AdminRequestsPage() {
   const { firebaseUser } = useAuth()
   const [reports, setReports] = useState<AdminReport[]>([])
-  const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<AdminReport['status'] | undefined>(undefined)
+  // loading derives from "has the current tab been fetched" so the effect never
+  // calls setState synchronously; null sentinel since tab itself can be undefined
+  const [loadedTab, setLoadedTab] = useState<AdminReport['status'] | undefined | null>(null)
+  const loading = loadedTab !== tab
   const [confirm, setConfirm] = useState<{ action: AdminReport['status'] | 'delete'; report: AdminReport } | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [support, setSupport] = useState<SupportRequest[]>([])
+  const [supportLoading, setSupportLoading] = useState(true)
+  const [supportConfirm, setSupportConfirm] = useState<SupportRequest | null>(null)
+  const [supportActionLoading, setSupportActionLoading] = useState(false)
 
   useEffect(() => {
-    setLoading(true)
+    getSupportRequests()
+      .then(setSupport)
+      .catch((e: unknown) => toast.error((e as Error).message))
+      .finally(() => setSupportLoading(false))
+  }, [])
+
+  const handleSupportStatus = async (r: SupportRequest, status: SupportRequest['status']) => {
+    try {
+      await updateSupportRequestStatus(r.id, status)
+      if (firebaseUser) {
+        await createAuditLog({ adminUid: firebaseUser.uid, adminEmail: firebaseUser.email!, action: `support_${status}`, resource: 'supportRequests', resourceId: r.id, details: `Support request "${r.subject}" → ${status}` })
+      }
+      toast.success(`Marked as ${status}`)
+      setSupport((prev) => prev.map((s) => s.id === r.id ? { ...s, status } : s))
+    } catch (e: unknown) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  const handleSupportDelete = async () => {
+    if (!supportConfirm) return
+    setSupportActionLoading(true)
+    try {
+      await deleteSupportRequest(supportConfirm.id)
+      if (firebaseUser) {
+        await createAuditLog({ adminUid: firebaseUser.uid, adminEmail: firebaseUser.email!, action: 'delete_support_request', resource: 'supportRequests', resourceId: supportConfirm.id, details: `Deleted support request "${supportConfirm.subject}"` })
+      }
+      toast.success('Support request deleted')
+      setSupport((prev) => prev.filter((s) => s.id !== supportConfirm.id))
+    } catch (e: unknown) {
+      toast.error((e as Error).message)
+    } finally {
+      setSupportActionLoading(false)
+      setSupportConfirm(null)
+    }
+  }
+
+  useEffect(() => {
     getAdminReports(tab)
       .then(setReports)
       .catch((e: unknown) => toast.error((e as Error).message))
-      .finally(() => setLoading(false))
+      .finally(() => setLoadedTab(tab))
   }, [tab])
 
   const handleAction = async () => {
@@ -90,13 +137,131 @@ export default function AdminRequestsPage() {
         </div>
       </div>
 
+      {/* Support Inbox */}
+      <section aria-labelledby="support-heading" className="space-y-3">
+        <h2 id="support-heading" className="text-sm font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+          <LifeBuoy size={14} aria-hidden="true" /> Support Inbox
+          <span className="text-text-muted normal-case font-normal tracking-normal">
+            · {support.filter((s) => s.status === 'open').length} open of {support.length}
+          </span>
+        </h2>
+        <div className="bg-bg-card border border-bg-border rounded-2xl overflow-hidden">
+          {supportLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 size={18} className="animate-spin text-text-muted" />
+            </div>
+          ) : support.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 text-text-muted gap-2">
+              <LifeBuoy size={20} />
+              <p className="text-sm">No support requests yet</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px]" role="table">
+                <thead>
+                  <tr className="border-b border-bg-border bg-bg-elevated/50">
+                    <th className="text-left px-5 py-3 text-xs font-medium text-text-muted" scope="col">Type</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-text-muted" scope="col">From</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-text-muted" scope="col">Subject &amp; Message</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-text-muted" scope="col">Received</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-text-muted" scope="col">Status</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-text-muted" scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {support.map((r) => (
+                    <tr key={r.id} className="border-b border-bg-border/50 last:border-0 hover:bg-bg-elevated/30 transition-colors align-top">
+                      <td className="px-5 py-3">
+                        <span className={cn(
+                          'text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
+                          r.type === 'issue' ? 'bg-danger/10 text-danger' : 'bg-blue-500/10 text-blue-400'
+                        )}>
+                          {r.type === 'issue' ? 'Issue' : 'Question'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-sm text-text">{r.name || '—'}</p>
+                        <a href={`mailto:${r.email}`} className="text-xs text-text-muted hover:text-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded">
+                          {r.email}
+                        </a>
+                        {r.emailSent && (
+                          <p className="text-[10px] text-accent mt-0.5 flex items-center gap-1">
+                            <Mail size={9} aria-hidden="true" /> auto-reply sent
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 max-w-md">
+                        <p className="text-sm font-medium text-text">{r.subject}</p>
+                        <p className="text-xs text-text-secondary mt-0.5 line-clamp-3 whitespace-pre-wrap">{r.message}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-muted whitespace-nowrap">
+                        {r.createdAt ? formatDate(r.createdAt) : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          'text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
+                          r.status === 'open' ? 'bg-warning/10 text-warning'
+                          : r.status === 'in-progress' ? 'bg-blue-500/10 text-blue-400'
+                          : 'bg-accent/10 text-accent'
+                        )}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2 justify-end">
+                          {r.status === 'open' && (
+                            <button
+                              type="button"
+                              onClick={() => handleSupportStatus(r, 'in-progress')}
+                              className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                              aria-label={`Mark "${r.subject}" as in progress`}
+                              title="Mark in progress"
+                            >
+                              <Clock size={15} />
+                            </button>
+                          )}
+                          {r.status !== 'resolved' && (
+                            <button
+                              type="button"
+                              onClick={() => handleSupportStatus(r, 'resolved')}
+                              className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                              aria-label={`Mark "${r.subject}" as resolved`}
+                              title="Mark resolved"
+                            >
+                              <CheckCircle size={15} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSupportConfirm(r)}
+                            className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+                            aria-label={`Delete support request "${r.subject}"`}
+                            title="Delete"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Content Reports */}
+      <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-2 pt-2">
+        <Flag size={14} aria-hidden="true" /> Content Reports
+      </h2>
+
       {/* Tabs */}
       <div className="flex gap-1 bg-bg-elevated p-1 rounded-xl w-fit" role="tablist" aria-label="Report status filter">
         {TABS.map(({ label, value }) => (
           <button
             key={label}
             role="tab"
-            aria-selected={tab === value ? 'true' : 'false'}
             onClick={() => setTab(value as AdminReport['status'] | undefined)}
             className={cn(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
@@ -178,6 +343,17 @@ export default function AdminRequestsPage() {
         loading={actionLoading}
         onConfirm={handleAction}
         onCancel={() => setConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={!!supportConfirm}
+        title={`Delete support request "${supportConfirm?.subject}"?`}
+        description="This permanently removes the request from the inbox. Make sure you've replied to the user first — this cannot be undone."
+        confirmLabel="Delete Request"
+        danger
+        loading={supportActionLoading}
+        onConfirm={handleSupportDelete}
+        onCancel={() => setSupportConfirm(null)}
       />
     </div>
   )

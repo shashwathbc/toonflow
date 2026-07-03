@@ -13,7 +13,7 @@ import {
   getChaptersByNovel,
   upsertReadingHistory,
 } from '@/lib/firebase/firestore'
-import { trackView } from '@/lib/firebase/engagement'
+import { useViewTracking } from '@/hooks/useViewTracking'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import CommentSection from '@/components/reader/CommentSection'
@@ -25,70 +25,12 @@ import type { Novel, Chapter } from '@/types'
 
 // ── Font size options ─────────────────────────────────────────
 const FONT_OPTIONS = [
-  { label: 'S',  size: '1rem',    lineH: '1.85' },
-  { label: 'M',  size: '1.125rem', lineH: '1.9' },
-  { label: 'L',  size: '1.25rem', lineH: '1.95' },
-  { label: 'XL', size: '1.5rem',  lineH: '2.0' },
+  { label: 'S',  cls: 'reader-content-sm' },
+  { label: 'M',  cls: 'reader-content-md' },
+  { label: 'L',  cls: 'reader-content-lg' },
+  { label: 'XL', cls: 'reader-content-xl' },
 ]
 
-// ── Render chapter content with paragraph animations ──────────
-function renderContent(content: string, centered: boolean, fontOpt: typeof FONT_OPTIONS[0]) {
-  const lines = content.split('\n')
-  let paraIndex = 0
-
-  return lines.map((line, i) => {
-    if (!line.trim()) return <div key={i} className="h-5" />
-
-    if (line.startsWith('# ')) {
-      return (
-        <h2
-          key={i}
-          className="reader-paragraph text-white font-black mt-12 mb-4 leading-tight"
-          style={{ fontSize: 'clamp(1.5rem, 4vw, 2.2rem)', fontFamily: 'Georgia, serif' }}
-        >
-          {line.slice(2)}
-        </h2>
-      )
-    }
-    if (line.startsWith('## ')) {
-      return (
-        <h3
-          key={i}
-          className="reader-paragraph text-white font-bold mt-8 mb-3"
-          style={{ fontSize: 'clamp(1.2rem, 3vw, 1.6rem)', fontFamily: 'Georgia, serif' }}
-        >
-          {line.slice(3)}
-        </h3>
-      )
-    }
-    if (line.startsWith('--- ') || line === '---') {
-      return (
-        <div key={i} className="reader-paragraph flex items-center justify-center gap-4 my-10">
-          <div className="h-px w-16 bg-white/15" />
-          <span className="text-white/20 text-xs">✦</span>
-          <div className="h-px w-16 bg-white/15" />
-        </div>
-      )
-    }
-
-    const isFirst = paraIndex === 0
-    paraIndex++
-
-    return (
-      <p
-        key={i}
-        className={cn(
-          'reader-paragraph text-white/85 leading-loose',
-          isFirst && 'reader-drop-cap',
-          centered ? 'text-center' : '',
-        )}
-        style={{ fontSize: fontOpt.size, lineHeight: fontOpt.lineH, marginBottom: '1.1em' }}
-      >
-        {line}
-      </p>
-    )
-  })
-}
 
 // ── Main Page ─────────────────────────────────────────────────
 export default function ChapterReaderPage() {
@@ -108,7 +50,6 @@ export default function ChapterReaderPage() {
   const [headerVisible, setHeaderVisible] = useState(true)
   const [progress, setProgress] = useState(0)
 
-  const viewTracked   = useRef(false)
   const headerTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef    = useRef<HTMLDivElement>(null)
   const lastScrollY   = useRef(0)
@@ -128,11 +69,11 @@ export default function ChapterReaderPage() {
       .finally(() => setLoading(false))
   }, [id, chapterId])
 
-  // ── Track view + reading history ────────────────────────────
+  // ── Track view (server-validated) + reading history ────────
+  useViewTracking(chapter ? { contentType: 'chapter', contentId: chapterId, parentId: id } : null)
+
   useEffect(() => {
-    if (!chapter || viewTracked.current) return
-    viewTracked.current = true
-    trackView(chapterId, 'chapter', id, firebaseUser?.uid ?? null).catch(() => {})
+    if (!chapter) return
     if (firebaseUser) {
       upsertReadingHistory(firebaseUser.uid, {
         contentId: id,
@@ -143,17 +84,6 @@ export default function ChapterReaderPage() {
     }
   }, [chapter, chapterId, id, firebaseUser])
 
-  // ── Paragraph fade-in via IntersectionObserver ───────────────
-  useEffect(() => {
-    if (!contentRef.current) return
-    const observer = new IntersectionObserver(
-      (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add('visible')),
-      { threshold: 0.08 }
-    )
-    const paragraphs = contentRef.current.querySelectorAll('.reader-paragraph')
-    paragraphs.forEach((el) => observer.observe(el))
-    return () => observer.disconnect()
-  }, [chapter])
 
   // ── Reading progress + header auto-hide ─────────────────────
   const handleScroll = useCallback(() => {
@@ -187,7 +117,6 @@ export default function ChapterReaderPage() {
   const nextChapter  = currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null
   const isFirstChapter = currentIndex === 0
   const isLastChapter  = currentIndex === chapters.length - 1 && chapters.length > 0
-  const fontOpt = FONT_OPTIONS[fontIdx]
 
   // ── Loading ──────────────────────────────────────────────────
   if (loading) return (
@@ -363,14 +292,11 @@ export default function ChapterReaderPage() {
         ref={contentRef}
       >
         {/* Chapter heading */}
-        <header className="mb-12 text-center reader-paragraph">
+        <header className="mb-12 text-center reader-chapter-heading">
           <p className="text-[10px] tracking-[0.5em] text-white/25 uppercase mb-3">
             Chapter {chapter.chapterNumber}
           </p>
-          <h1
-            className="font-black text-white leading-tight"
-            style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)', fontFamily: 'Georgia, serif' }}
-          >
+          <h1 className="reader-chapter-title font-black text-white leading-tight">
             {chapter.title || `Chapter ${chapter.chapterNumber}`}
           </h1>
           {chapter.wordCount > 0 && (
@@ -381,11 +307,12 @@ export default function ChapterReaderPage() {
           <div className="h-px w-12 bg-white/15 mx-auto mt-6" />
         </header>
 
-        {/* Story text */}
+        {/* Story text — HTML from TipTap rendered with reader styles */}
         {chapter.content ? (
-          <div className="space-y-0">
-            {renderContent(chapter.content, centered, fontOpt)}
-          </div>
+          <div
+            className={cn('reader-content', FONT_OPTIONS[fontIdx].cls, centered && 'text-center')}
+            dangerouslySetInnerHTML={{ __html: chapter.content }}
+          />
         ) : (
           <p className="text-white/30 italic text-center py-16">This chapter has no content yet.</p>
         )}

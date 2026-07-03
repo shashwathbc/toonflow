@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore'
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { db, auth } from './config'
-import type { UserProfile, Novel, Webtoon, Comment, Report } from '@/types'
+import type { UserProfile, Novel, Webtoon, Comment, Report, FirestoreTimestamp } from '@/types'
 
 function fromDoc<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
   return { id: snap.id, ...snap.data() } as T
@@ -84,12 +84,58 @@ export async function getPlatformStats(): Promise<PlatformStats> {
   }
 }
 
+// ── Support Requests ─────────────────────────────────────────
+
+export interface SupportRequest {
+  id: string
+  type: 'question' | 'issue'
+  name: string
+  email: string
+  subject: string
+  message: string
+  userId: string | null
+  status: 'open' | 'in-progress' | 'resolved'
+  emailSent: boolean
+  createdAt: FirestoreTimestamp | null
+}
+
+export async function getSupportRequests(status?: SupportRequest['status']): Promise<SupportRequest[]> {
+  const base = collection(db, 'supportRequests')
+  const q = status
+    ? query(base, where('status', '==', status), orderBy('createdAt', 'desc'), limit(100))
+    : query(base, orderBy('createdAt', 'desc'), limit(100))
+  const snaps = await getDocs(q)
+  return snaps.docs.map((d) => fromDoc<SupportRequest>(d))
+}
+
+export async function updateSupportRequestStatus(
+  id: string,
+  status: SupportRequest['status']
+): Promise<void> {
+  await updateDoc(doc(db, 'supportRequests', id), { status, updatedAt: serverTimestamp() })
+}
+
+export async function deleteSupportRequest(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'supportRequests', id))
+}
+
 // ── User Management ──────────────────────────────────────────
 
 export async function getAllUsers(limitCount = 50): Promise<UserProfile[]> {
-  const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(limitCount))
+  // No orderBy('createdAt') here: Firestore silently excludes docs missing the
+  // field, which hides users created by older signup flows. Sort client-side.
+  const q = query(collection(db, 'users'), limit(limitCount))
   const snaps = await getDocs(q)
-  return snaps.docs.map((d) => fromDoc<UserProfile>(d))
+  const toSeconds = (ts: unknown): number =>
+    ts && typeof ts === 'object' && 'seconds' in ts ? (ts as { seconds: number }).seconds : 0
+  return snaps.docs
+    .map((d) => ({ ...(d.data() as UserProfile), uid: d.id }))
+    .sort((a, b) => toSeconds(b.createdAt) - toSeconds(a.createdAt))
+}
+
+export async function getUserCount(): Promise<number> {
+  const snap = await getCountFromServer(collection(db, 'users'))
+  return snap.data().count
 }
 
 export async function searchUsers(searchQuery: string): Promise<UserProfile[]> {

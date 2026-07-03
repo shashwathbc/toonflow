@@ -67,9 +67,23 @@ export async function createUserDocument(
 ): Promise<void> {
   const ref = doc(db, 'users', firebaseUser.uid)
   const snap = await getDoc(ref)
-  if (snap.exists()) return
-
   const isSuperAdmin = firebaseUser.email === SUPER_ADMIN_EMAIL
+
+  if (snap.exists()) {
+    // Backfill fields that older signup flows never wrote — role drives the
+    // Firestore rules isAdmin() check and createdAt drives admin list queries.
+    const data = snap.data()
+    const patch: Record<string, unknown> = {}
+    if (!data.role) patch.role = isSuperAdmin ? 'superadmin' : 'user'
+    if (isSuperAdmin && data.role !== 'superadmin') patch.role = 'superadmin'
+    if (data.isCreator === undefined) patch.isCreator = isSuperAdmin
+    if (!data.createdAt) patch.createdAt = serverTimestamp()
+    if (Object.keys(patch).length > 0) {
+      patch.updatedAt = serverTimestamp()
+      await setDoc(ref, patch, { merge: true })
+    }
+    return
+  }
 
   await setDoc(ref, {
     uid: firebaseUser.uid,

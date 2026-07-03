@@ -1,6 +1,29 @@
-import { memo } from 'react'
+'use client'
+
+import { memo, useState } from 'react'
 import Link from 'next/link'
-import { ExternalLink } from 'lucide-react'
+import { SupportModal, type SupportType } from '@/components/support/SupportModal'
+
+// Brand icons — lucide-react no longer ships brand logos, so these are inline
+function InstagramIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  )
+}
+
+function LinkedinIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+      <rect width="4" height="12" x="2" y="9" />
+      <circle cx="4" cy="4" r="2" />
+    </svg>
+  )
+}
 
 const PLATFORM_LINKS = [
   { href: '/', label: 'Home' },
@@ -8,9 +31,22 @@ const PLATFORM_LINKS = [
   { href: '/browse', label: 'Browse' },
 ]
 
-const SUPPORT_LINKS = [
-  { href: '/support/faq', label: 'Ask a Question' },
-  { href: '/support/report', label: 'Report an Issue' },
+const SUPPORT_ACTIONS: { type: SupportType; label: string }[] = [
+  { type: 'question', label: 'Ask a Question' },
+  { type: 'issue', label: 'Report an Issue' },
+]
+
+const SOCIAL_LINKS = [
+  {
+    href: 'https://www.instagram.com/toonflowstudiopaint/',
+    label: 'Follow Toonflow on Instagram (opens in new tab)',
+    Icon: InstagramIcon,
+  },
+  {
+    href: 'https://www.linkedin.com/company/toonflow-studio-paint/',
+    label: 'Follow Toonflow on LinkedIn (opens in new tab)',
+    Icon: LinkedinIcon,
+  },
 ]
 
 const LEGAL_LINKS = [
@@ -20,6 +56,8 @@ const LEGAL_LINKS = [
 ]
 
 function Footer() {
+  const [supportOpen, setSupportOpen] = useState<SupportType | null>(null)
+
   return (
     <footer
       className="bg-bg border-t border-bg-border mt-16"
@@ -43,15 +81,18 @@ function Footer() {
             A premium platform for reading, discovering, and creating webtoons and manga.
           </p>
           <div className="flex items-center gap-3">
-            <a
-              href="https://www.instagram.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-text-muted hover:text-accent transition-colors p-1 -ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
-              aria-label="Follow Toonflow on Instagram (opens in new tab)"
-            >
-              <ExternalLink size={18} aria-hidden="true" />
-            </a>
+            {SOCIAL_LINKS.map(({ href, label, Icon }) => (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-text-muted hover:text-accent transition-colors p-1 -ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
+                aria-label={label}
+              >
+                <Icon size={18} aria-hidden="true" />
+              </a>
+            ))}
           </div>
         </div>
 
@@ -80,14 +121,15 @@ function Footer() {
             Support
           </h3>
           <ul className="space-y-2" role="list">
-            {SUPPORT_LINKS.map(({ href, label }) => (
-              <li key={href}>
-                <Link
-                  href={href}
+            {SUPPORT_ACTIONS.map(({ type, label }) => (
+              <li key={type}>
+                <button
+                  type="button"
+                  onClick={() => setSupportOpen(type)}
                   className="text-sm text-text-secondary hover:text-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
                 >
                   {label}
-                </Link>
+                </button>
               </li>
             ))}
           </ul>
@@ -147,6 +189,12 @@ function Footer() {
           </nav>
         </div>
       </div>
+
+      <SupportModal
+        open={supportOpen !== null}
+        initialType={supportOpen ?? 'question'}
+        onClose={() => setSupportOpen(null)}
+      />
     </footer>
   )
 }
