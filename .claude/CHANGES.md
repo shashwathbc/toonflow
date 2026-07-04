@@ -776,3 +776,28 @@ Initialize Firebase Storage at https://console.firebase.google.com/project/toonf
 - Footer: converted to client component; real Instagram (instagram.com/toonflowstudiopaint) + LinkedIn (linkedin.com/company/toonflow-studio-paint) icons (inline SVGs — lucide dropped brand icons).
 - New legal pages with full content: /privacy, /terms, /ai-policy (server components, design tokens, cross-linked).
 - Deploy note: firebase deploy --only firestore:rules,firestore:indexes --project toonflow-studio-paint-f384c required for support inbox + analytics.
+
+## 2026-07-04 — Support form fix + lint zero-out
+
+### Support form ("Unexpected end of JSON input")
+- Root cause: `supportRequests` composite index (email ASC + createdAt ASC) was defined in firestore.indexes.json but never deployed; the rate-limit query in src/app/api/support/route.ts threw FAILED_PRECONDITION → empty 500 → client res.json() parse error.
+- Deployed indexes (`firebase deploy --only firestore:indexes --project toonflow-studio-paint-f384c`).
+- Hardened route: POST body now wrapped in try/catch that returns JSON `{error}` on any unexpected failure.
+- SupportModal: `res.json().catch(() => ({}))` so non-JSON responses show a friendly error.
+- Verified end-to-end: valid POST → `{ok:true}` 200; invalid email / missing subject / malformed JSON → clean 400 JSON errors.
+
+### ESLint zero-out (was 20 errors + 44 warnings → 0/0)
+- react-hooks/set-state-in-effect: replaced imperative `setLoading` in effects with derived loading state ("has current key been fetched") across useFirestore/useNovels/useWebtoons/useChapters/useEpisodes hooks, browse/originals/novel-detail/profile pages, novel+webtoon editors, dashboard, wallet, admin requests, CommentSection, RatingControl.
+- Async load useCallbacks converted to promise chains (.then/.finally callbacks) — the lint treats post-await setState in sync-called functions as violations.
+- Novel editor: active-chapter status sync moved to render-time state adjustment.
+- Removed ~35 unused imports/variables across 24 files.
+- Dashboard: `userProfile?.balance` extracted from useCallback deps (React Compiler memoization fix).
+- CreateNovelModal/CreateWebtoonModal: event-handler `watch()` → `getValues()`, reactive `watch()` → `useWatch`; impure Date.now/Math.random hoisted to module-scope helpers (react-hooks/purity).
+- tsc --noEmit clean; smoke-tested /, /browse, /originals, /ai-policy (200s); /api/support verified live.
+
+## 2026-07-04 (2) — Edge Tools a11y lint zero-out (13 problems)
+- Converted ARIA state attributes with JSX expressions to conditional spreads (`{...(cond ? {'aria-selected':'true'} : {'aria-selected':'false'})}`) in BrowseClient (aria-expanded + aria-selected), OriginalsClient, ProfilePageClient, wallet, webtoon editor span buttons, RatingControl.
+- CommentSection Avatar: inline width/height style → Tailwind size classes (w-8/w-[26px]).
+- Chapter reader progress bar: dynamic width + aria-value* now set via ref effect (DOM), removed from JSX.
+- Webtoon editor: canvas strip width via ref effect; panel span widths → Tailwind w-1/2, w-1/3, w-2/3, w-full classes; custom role="slider" resize handle replaced with pointer-only drag surface + visually-hidden native `<input type="range">` (implicit ARIA — keyboard resize preserved via native arrows, step 40).
+- tsc + eslint clean; /browse and /originals smoke-tested (200).

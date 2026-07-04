@@ -11,7 +11,7 @@ interface WebtoonCardProps {
   size?: 'sm' | 'md'
 }
 
-export default function WebtoonCard({ webtoon, size = 'md' }: WebtoonCardProps) {
+export default function WebtoonCard({ webtoon }: WebtoonCardProps) {
   return (
     <Link
       href={`/webtoon/${webtoon.id}`}

@@ -8,7 +8,6 @@ import {
   AlertCircle, FileText,
 } from 'lucide-react'
 import { formatCount } from '@/lib/utils/formatters'
-import { formatDate } from '@/lib/utils/formatters'
 import StatCard from '@/components/admin/StatCard'
 import {
   getPlatformStats, getRecentUsers, getRecentNovels, getRecentWebtoons,

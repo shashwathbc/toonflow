@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import {
   BookOpen, Search, ChevronDown, ChevronRight, Loader2, ExternalLink,
-  Trash2, EyeOff, Eye, RotateCcw, FileText,
+  Trash2, EyeOff, RotateCcw, FileText,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'

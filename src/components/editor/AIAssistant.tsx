@@ -413,7 +413,7 @@ export function AIAssistant({
           type="button"
           onClick={() => setShowActions((v) => !v)}
           className="w-full flex items-center justify-between py-1.5 text-[11px] text-white/40 hover:text-white/70 transition-colors"
-          {...(showActions ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
+          aria-expanded={quickActionsExpanded}
           aria-controls="quick-actions-panel"
         >
           <span className="flex items-center gap-1">

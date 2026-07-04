@@ -1,18 +1,15 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useState, useCallback } from 'react'
+import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Image from 'next/image'
 import {
   X,
-  Upload,
   ImageIcon,
   Loader2,
   ChevronDown,
-  Tag,
-  Plus,
   Check,
   Sparkles,
   Wand2,
@@ -23,6 +20,9 @@ import { uploadWebtoonCover } from '@/lib/firebase/storage'
 import { GENRES } from '@/lib/utils/constants'
 import type { Webtoon } from '@/types'
 import { AIImageGenerator } from '@/components/novel/AIImageGenerator'
+
+// module-scope: impure ID helper stays outside the compiled component (react-hooks/purity)
+const makeTempId = () => Math.random().toString(36).substring(7)
 
 const schema = z.object({
   title: z.string().min(1, 'Title is required').max(120, 'Title too long'),
@@ -123,7 +123,7 @@ export function CreateWebtoonModal({
     register,
     handleSubmit,
     control,
-    watch,
+    getValues,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
@@ -143,8 +143,10 @@ export function CreateWebtoonModal({
   const [newTag, setNewTag] = useState('')
   const [genreOpen, setGenreOpen] = useState(false)
 
-  const selectedGenres = watch('genres')
-  const tags = watch('tags')
+  const selectedGenres = useWatch({ control, name: 'genres' })
+  const tags = useWatch({ control, name: 'tags' })
+  const titleValue = useWatch({ control, name: 'title' })
+  const synopsisValue = useWatch({ control, name: 'synopsis' })
 
   const handleCoverUpload = useCallback(
     async (file: File, webtoonId: string) => {
@@ -167,8 +169,8 @@ export function CreateWebtoonModal({
   }
 
   async function handleSynopsisAI(action: 'generate-synopsis' | 'improve-synopsis' | 'expand-synopsis') {
-    const currentTitle = watch('title')
-    const currentSynopsis = watch('synopsis')
+    const currentTitle = getValues('title')
+    const currentSynopsis = getValues('synopsis')
     if (!currentTitle && action !== 'generate-synopsis') {
       toast.error('Enter a title first')
       return
@@ -223,7 +225,7 @@ export function CreateWebtoonModal({
         })
         toast.success('Webtoon updated')
       } else {
-        const tempId = Math.random().toString(36).substring(7)
+        const tempId = makeTempId()
         if (pendingCover) {
           finalCoverURL = await handleCoverUpload(pendingCover, tempId)
         }
@@ -287,8 +289,8 @@ export function CreateWebtoonModal({
               {aiPanel === 'cover' && (
                 <div className="mt-4 border border-bg-border rounded-xl p-3 bg-bg-elevated/40">
                   <AIImageGenerator
-                    novelTitle={watch('title') || 'Untitled Webtoon'}
-                    novelSynopsis={watch('synopsis') || ''}
+                    novelTitle={titleValue || 'Untitled Webtoon'}
+                    novelSynopsis={synopsisValue || ''}
                     imageType="cover"
                     onAccept={handleCoverFile}
                     onClose={() => setAiPanel(null)}

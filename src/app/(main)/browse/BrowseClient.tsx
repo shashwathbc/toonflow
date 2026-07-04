@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
-  Search, SlidersHorizontal, BookOpen, Layers, Eye, Star, X, ChevronDown,
+  Search, SlidersHorizontal, BookOpen, Layers, Eye, Star, X,
 } from 'lucide-react'
 import { browseContent, searchContent } from '@/lib/firebase/firestore'
 import { formatCount } from '@/lib/utils/formatters'
@@ -90,7 +90,6 @@ function SkeletonCard() {
 
 export function BrowseClient() {
   const searchParams = useSearchParams()
-  const router = useRouter()
 
   const [contentType, setContentType] = useState<ContentType>(
     (searchParams.get('type') as ContentType) ?? 'all'
@@ -173,7 +172,7 @@ export function BrowseClient() {
           onClick={() => setSidebarOpen((v) => !v)}
           className="btn-ghost text-sm md:hidden"
           aria-label="Toggle filters"
-          aria-expanded={sidebarOpen ? 'true' : 'false'}
+          {...(sidebarOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
         >
           <SlidersHorizontal size={16} aria-hidden="true" />
           Filters
@@ -210,7 +209,7 @@ export function BrowseClient() {
             key={t}
             type="button"
             role="tab"
-            aria-selected={contentType === t ? 'true' : 'false'}
+            {...(contentType === t ? { 'aria-selected': 'true' } : { 'aria-selected': 'false' })}
             onClick={() => setContentType(t)}
             className={cn(
               'px-4 py-2 text-sm font-medium border-b-2 transition-all capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-t',

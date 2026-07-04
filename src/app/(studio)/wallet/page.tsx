@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   Wallet, Coins, TrendingUp, ArrowDownLeft, ArrowUpRight, Clock, Check,
   X, AlertTriangle, Loader2, ArrowLeft, CreditCard, Banknote, Receipt,
-  BadgeIndianRupee, Plus, Lock,
+  Plus, Lock,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -97,7 +97,7 @@ function WithdrawalRow({ w }: { w: Withdrawal }) {
   )
 }
 
-function BuyTokensSection({ balance }: { balance: number }) {
+function BuyTokensSection() {
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null)
   const [buying, setBuying] = useState(false)
 
@@ -446,8 +446,6 @@ function WalletPageInner() {
 
   const balance = userProfile?.balance ?? 0
   const totalEarnings = userProfile?.totalEarnings ?? 0
-  const tokenPurchases = transactions.filter((t) => t.coins > 0).reduce((s, t) => s + t.coins, 0)
-  const tokenSpent = transactions.filter((t) => t.coins < 0).reduce((s, t) => s + Math.abs(t.coins), 0)
   const pendingWithdrawal = withdrawals.filter((w) => ['pending', 'approved', 'processing'].includes(w.status)).reduce((s, w) => s + w.amount, 0)
 
   return (
@@ -515,7 +513,7 @@ function WalletPageInner() {
               key={id}
               type="button"
               role="tab"
-              aria-selected={activeTab === id ? 'true' : 'false'}
+              {...(activeTab === id ? { 'aria-selected': 'true' } : { 'aria-selected': 'false' })}
               onClick={() => setActiveTab(id as typeof activeTab)}
               className={cn(
                 'px-4 py-2.5 text-sm font-medium border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-t',
@@ -530,7 +528,7 @@ function WalletPageInner() {
         </div>
 
         <div role="tabpanel">
-          {activeTab === 'tokens' && <BuyTokensSection balance={balance} />}
+          {activeTab === 'tokens' && <BuyTokensSection />}
 
           {activeTab === 'earnings' && (
             <WithdrawSection

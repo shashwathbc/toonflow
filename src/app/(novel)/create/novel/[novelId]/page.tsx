@@ -7,7 +7,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { useChapters } from '@/hooks/useChapters'
 import {
   getNovelById,
-  updateNovel,
   updateChapterContent,
   publishNovel,
   unpublishNovel,
@@ -56,7 +55,7 @@ export default function NovelEditorPage({ params }: PageProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [aiCollapsed, setAiCollapsed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
-  const [publishing, setPublishing] = useState(false)
+  const [, setPublishing] = useState(false)
   const [chapterPublishing, setChapterPublishing] = useState(false)
 
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)

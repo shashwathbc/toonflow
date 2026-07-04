@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, BookOpen, Search, Plus, LayoutDashboard, User } from 'lucide-react'
+import { Home, BookOpen, Search, Plus, User } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'

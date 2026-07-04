@@ -9,7 +9,6 @@ import {
   EyeOff,
   Download,
   Eye,
-  Settings,
   Check,
   Loader2,
   FileText,

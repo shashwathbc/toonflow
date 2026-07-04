@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils/cn'
 import toast from 'react-hot-toast'
 
 export default function UserMenu() {
-  const { isAuthenticated, userProfile, isAdmin, isSuperAdmin } = useAuth()
+  const { isAuthenticated, userProfile } = useAuth()
 
   if (!isAuthenticated) {
     return (

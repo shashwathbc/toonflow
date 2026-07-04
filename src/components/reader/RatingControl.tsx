@@ -80,7 +80,7 @@ export default function RatingControl({
             onFocus={() => setHovered(value)}
             onBlur={() => setHovered(null)}
             aria-label={`Rate ${value} star${value > 1 ? 's' : ''}${userRating === value ? ' (your rating — select again to remove)' : ''}`}
-            aria-pressed={userRating === value}
+            {...(userRating === value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
             className="p-0.5 rounded transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:opacity-60"
           >
             <Star

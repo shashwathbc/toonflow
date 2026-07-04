@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   ImageIcon, Eye, Heart, Users, Star, ChevronRight,
-  Loader2, Clock, Play,
+  Clock, Play,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { getWebtoonById, getEpisodesByWebtoon, followUser, unfollowUser, isFollowing } from '@/lib/firebase/firestore'

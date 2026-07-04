@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import {
-  MessageSquare, Send, Loader2, ChevronDown, ChevronUp,
+  MessageSquare, Send, Loader2, ChevronUp,
   Trash2, Heart, CornerDownRight,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -28,8 +28,10 @@ function timeAgo(ts: unknown): string {
 function Avatar({ name, url, size = 32 }: { name: string; url: string | null; size?: number }) {
   return (
     <div
-      className="rounded-full bg-bg-elevated overflow-hidden flex-shrink-0 flex items-center justify-center"
-      style={{ width: size, height: size }}
+      className={cn(
+        'rounded-full bg-bg-elevated overflow-hidden flex-shrink-0 flex items-center justify-center',
+        size <= 26 ? 'w-[26px] h-[26px]' : 'w-8 h-8'
+      )}
     >
       {url
         ? <Image src={url} alt={name} width={size} height={size} className="object-cover w-full h-full" />

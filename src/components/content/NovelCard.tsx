@@ -11,7 +11,7 @@ interface NovelCardProps {
   size?: 'sm' | 'md'
 }
 
-export default function NovelCard({ novel, size = 'md' }: NovelCardProps) {
+export default function NovelCard({ novel }: NovelCardProps) {
   return (
     <Link
       href={`/novel/${novel.id}`}

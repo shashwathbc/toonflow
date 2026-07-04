@@ -109,7 +109,7 @@ export function OriginalsClient() {
             key={opt.value}
             type="button"
             role="tab"
-            aria-selected={sortBy === opt.value ? 'true' : 'false'}
+            {...(sortBy === opt.value ? { 'aria-selected': 'true' } : { 'aria-selected': 'false' })}
             onClick={() => setSortBy(opt.value)}
             className={cn(
               'flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',

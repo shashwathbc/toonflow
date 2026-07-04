@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import type { PlatformStats } from '@/lib/firebase/admin'
@@ -9,7 +9,6 @@ import type { Novel, Webtoon } from '@/types'
 
 const ACCENT = '#00C896'
 const WARN = '#F59E0B'
-const DANGER = '#EF4444'
 const MUTED = '#4B5563'
 
 interface Props {

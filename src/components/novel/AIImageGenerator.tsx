@@ -68,7 +68,7 @@ export function AIImageGenerator({
     } finally {
       setLoadingPrompt(false)
     }
-  }, [novelTitle, novelSynopsis, imageType])
+  }, [novelTitle, novelSynopsis, imageType, userId])
 
   async function generateImage() {
     const fullPrompt = `${prompt.trim()}, ${style}`

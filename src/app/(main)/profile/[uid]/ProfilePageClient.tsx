@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   BookOpen, ImageIcon, Users, Heart, Eye, Bookmark, Edit3, Camera,
   AtSign, Globe, ExternalLink, Check, X, Loader2,
-  BadgeCheck, Layers, Star, Calendar,
+  BadgeCheck, Layers, Calendar,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -23,7 +23,7 @@ import type { UserProfile, Novel, Webtoon, BookmarkItem } from '@/types'
 
 type Tab = 'novels' | 'webtoons' | 'bookmarks' | 'about'
 
-function ContentCard({ title, coverURL, href, chapterCount, viewCount, status, type }: {
+function ContentCard({ title, coverURL, href, chapterCount, viewCount, status }: {
   title: string; coverURL: string | null; href: string
   chapterCount: number; viewCount: number; status: string; type: string
 }) {
@@ -545,7 +545,7 @@ export function ProfilePageClient({ uid }: { uid: string }) {
               key={id}
               type="button"
               role="tab"
-              aria-selected={activeTab === id ? 'true' : 'false'}
+              {...(activeTab === id ? { 'aria-selected': 'true' } : { 'aria-selected': 'false' })}
               aria-controls={`panel-${id}`}
               onClick={() => setActiveTab(id)}
               className={cn(

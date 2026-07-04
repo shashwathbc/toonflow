@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
-  Search, Users, ChevronDown, Loader2, AlertCircle,
-  ShieldCheck, ShieldOff, Trash2, RotateCcw, ExternalLink, Mail,
+  Search, Users, ChevronDown, Loader2,
+  ShieldCheck, ShieldOff, Trash2, ExternalLink, Mail,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'

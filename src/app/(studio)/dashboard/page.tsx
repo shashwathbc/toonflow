@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
-  BookOpen, ImageIcon, Eye, Heart, Users, Plus, Loader2,
+  BookOpen, ImageIcon, Eye, Heart, Plus, Loader2,
   Coins, IndianRupee, ArrowDownToLine, X, CheckCircle,
   Clock, AlertCircle, TrendingUp, Wallet, CreditCard,
   Building2, Smartphone,

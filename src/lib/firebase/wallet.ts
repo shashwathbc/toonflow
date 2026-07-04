@@ -1,6 +1,6 @@
 import {
   collection, doc, addDoc, updateDoc, getDocs,
-  query, where, orderBy, limit, serverTimestamp, increment,
+  query, where, limit, serverTimestamp, increment,
 } from 'firebase/firestore'
 import { db } from './config'
 import type { Transaction, Withdrawal, WithdrawalMethod } from '@/types'

@@ -1,13 +1,12 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Image from 'next/image'
 import {
   X,
-  Upload,
   ImageIcon,
   Loader2,
   ChevronDown,
@@ -24,6 +23,9 @@ import { GENRES } from '@/lib/utils/constants'
 import { slugify } from '@/lib/utils/formatters'
 import type { Novel } from '@/types'
 import { AIImageGenerator } from './AIImageGenerator'
+
+// module-scope: impure ID helpers stay outside the compiled component (react-hooks/purity)
+const makeSlug = (title: string) => slugify(title) + '-' + Date.now().toString(36)
 
 const schema = z.object({
   title: z.string().min(1, 'Title is required').max(120, 'Title too long'),
@@ -127,7 +129,7 @@ export function CreateNovelModal({
     register,
     handleSubmit,
     control,
-    watch,
+    getValues,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
@@ -149,8 +151,9 @@ export function CreateNovelModal({
   const [newTag, setNewTag] = useState('')
   const [genreOpen, setGenreOpen] = useState(false)
 
-  const selectedGenres = watch('genres')
-  const tags = watch('tags')
+  const tags = useWatch({ control, name: 'tags' })
+  const titleValue = useWatch({ control, name: 'title' })
+  const synopsisValue = useWatch({ control, name: 'synopsis' })
 
   const handleCoverUpload = useCallback(
     async (file: File, novelId: string) => {
@@ -206,8 +209,8 @@ export function CreateNovelModal({
   }
 
   async function handleSynopsisAI(action: 'generate-synopsis' | 'improve-synopsis' | 'expand-synopsis') {
-    const currentTitle = watch('title')
-    const currentSynopsis = watch('synopsis')
+    const currentTitle = getValues('title')
+    const currentSynopsis = getValues('synopsis')
     if (!currentTitle && action !== 'generate-synopsis') {
       toast.error('Enter a title first')
       return
@@ -279,7 +282,7 @@ export function CreateNovelModal({
         onCreated(editNovel.id)
       } else {
         // Create first, then upload
-        const slug = slugify(data.title) + '-' + Date.now().toString(36)
+        const slug = makeSlug(data.title)
         const id = await createNovel(authorId, authorName, authorPhotoURL, {
           title: data.title,
           slug,
@@ -379,8 +382,8 @@ export function CreateNovelModal({
             {/* AI Image Generator panel */}
             {aiPanel && (
               <AIImageGenerator
-                novelTitle={watch('title')}
-                novelSynopsis={watch('synopsis')}
+                novelTitle={titleValue}
+                novelSynopsis={synopsisValue}
                 imageType={aiPanel}
                 userId={userId}
                 onAccept={(file) => {
