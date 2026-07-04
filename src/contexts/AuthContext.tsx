@@ -10,7 +10,6 @@ import {
 } from 'react'
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth'
 import { auth } from '@/lib/firebase/config'
-import { getUserProfile, createUserDocument } from '@/lib/firebase/firestore'
 import type { UserProfile } from '@/types'
 import { SUPER_ADMIN_EMAIL } from '@/lib/utils/constants'
 
@@ -29,6 +28,13 @@ interface AuthContextValue extends AuthState {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+
+// Firestore is imported on demand so the heavy firebase/firestore SDK
+// stays out of the shared root bundle (AuthProvider wraps every page).
+// Signed-out visitors never pay for it at all.
+function firestoreService() {
+  return import('@/lib/firebase/firestore')
+}
 
 async function setSessionCookie(
   idToken: string,
@@ -56,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async () => {
     const currentUser = auth.currentUser
     if (!currentUser) return
+    const { getUserProfile } = await firestoreService()
     const profile = await getUserProfile(currentUser.uid)
     const isSuperAdmin =
       profile?.role === 'superadmin' || currentUser.email === SUPER_ADMIN_EMAIL
@@ -71,6 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        const { getUserProfile, createUserDocument } = await firestoreService()
+
         // Never let document-creation or profile-fetch errors block auth from resolving
         try { await createUserDocument(firebaseUser) } catch (e) {
           console.error('[Auth] createUserDocument error:', e)

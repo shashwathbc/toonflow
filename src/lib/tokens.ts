@@ -1,5 +1,5 @@
 import { doc, getDoc, updateDoc, increment, addDoc, collection, serverTimestamp } from 'firebase/firestore'
-import { db } from './firebase/config'
+import { db } from './firebase/db'
 
 export const TOKEN_COSTS = {
   'synopsis-generate': 3,

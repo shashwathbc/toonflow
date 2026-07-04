@@ -106,7 +106,7 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+    <div className="px-4 py-5 sm:p-6 space-y-6 max-w-screen-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

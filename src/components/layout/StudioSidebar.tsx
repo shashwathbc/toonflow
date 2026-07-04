@@ -11,6 +11,7 @@ import {
   Star,
   ChevronLeft,
   Home,
+  X,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'
@@ -32,7 +33,14 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { href: '/admin/super', label: 'Super Admin', icon: <Star size={18} />, superAdminOnly: true },
 ]
 
-export default function StudioSidebar() {
+interface StudioSidebarProps {
+  /** Rendered inside the mobile drawer: shows a close button in the header. */
+  onClose?: () => void
+  /** Called when any nav link is clicked (used to dismiss the mobile drawer). */
+  onNavigate?: () => void
+}
+
+export default function StudioSidebar({ onClose, onNavigate }: StudioSidebarProps) {
   const pathname = usePathname()
   const { isAdmin, isSuperAdmin } = useAuth()
 
@@ -44,20 +52,31 @@ export default function StudioSidebar() {
 
   return (
     <aside
-      className="w-56 shrink-0 border-r border-bg-border flex flex-col bg-bg-card min-h-screen"
+      className="w-56 shrink-0 border-r border-bg-border flex flex-col bg-bg-card min-h-full h-full overflow-y-auto"
       aria-label="Studio navigation"
     >
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-bg-border">
+      <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-bg-border">
         <span className="text-sm font-bold text-text">
           TOONFLOW <span className="text-accent">STUDIO</span>
         </span>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 -mr-1.5 rounded-lg text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-label="Close studio menu"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {/* Back to site */}
       <div className="px-3 pt-3">
         <Link
           href="/"
+          onClick={onNavigate}
           className={cn(
             'flex items-center gap-2 px-2 py-2 rounded-lg text-xs text-text-muted hover:text-text',
             'hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
@@ -79,6 +98,7 @@ export default function StudioSidebar() {
               <li key={href}>
                 <Link
                   href={href}
+                  onClick={onNavigate}
                   className={cn(
                     'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',

@@ -12,7 +12,7 @@ Professional webtoon/manga SaaS platform. Next.js 15 (App Router) + TypeScript s
 - **Forms**: react-hook-form + zod resolvers
 - **Auth/DB**: Firebase (Auth + Firestore + Storage)
 - **Animation**: Framer Motion
-- **PWA**: next-pwa v5
+- **PWA**: hand-rolled `public/sw.js` + `<PwaRegister />` in root layout (NO next-pwa — removed so builds run on Turbopack)
 
 ## File Conventions
 - Components: PascalCase (`.tsx`), one per file
@@ -69,8 +69,8 @@ Never use raw hex in JSX. Use design tokens:
 - `/admin/super/**` → requires `email === 'shashwathbc@gmail.com'`
 
 ## PWA / Config
-- `next.config.js` must be `.js` (CJS) — next-pwa uses `require()`
-- PWA disabled in development
+- Dev AND build run on Turbopack (`next dev` / `next build`) — never add `--webpack` or webpack-only plugins
+- Service worker: `public/sw.js` (hand-written, versioned via `CACHE_VERSION`) registered by `src/components/pwa/PwaRegister.tsx` in production only; in dev it unregisters stale workers
 - Icons must exist at `public/icons/` before production build
 
 ## After Every Change

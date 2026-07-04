@@ -2,7 +2,7 @@ import {
   collection, doc, addDoc, updateDoc, getDocs,
   query, where, limit, serverTimestamp, increment,
 } from 'firebase/firestore'
-import { db } from './config'
+import { db } from './db'
 import type { Transaction, Withdrawal, WithdrawalMethod } from '@/types'
 
 // ₹0.007 per view (platform earns ₹0.01; creator keeps 70%)

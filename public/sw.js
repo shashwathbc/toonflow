@@ -1,100 +1,90 @@
 /**
- * Copyright 2018 Google Inc. All Rights Reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *     http://www.apache.org/licenses/LICENSE-2.0
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Toonflow service worker (hand-rolled, replaces next-pwa/workbox).
+ *
+ * Strategy:
+ *  - Navigations:        network-first, cache fallback when offline.
+ *  - /_next/static, fonts, icons, images: cache-first (content-hashed or immutable).
+ *  - Everything else (APIs, Firebase, auth): never intercepted.
+ *
+ * Bump CACHE_VERSION to invalidate all runtime caches on deploy.
  */
+const CACHE_VERSION = 'v1'
+const STATIC_CACHE = `tf-static-${CACHE_VERSION}`
+const PAGE_CACHE = `tf-pages-${CACHE_VERSION}`
+const KNOWN_CACHES = [STATIC_CACHE, PAGE_CACHE]
 
-// If the loader is already loaded, just stop.
-if (!self.define) {
-  let registry = {};
+self.addEventListener('install', () => {
+  self.skipWaiting()
+})
 
-  // Used for `eval` and `importScripts` where we can't get script URL by other means.
-  // In both cases, it's safe to use a global var because those functions are synchronous.
-  let nextDefineUri;
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      // Drop old workbox/next-pwa caches and any versioned caches we no longer use.
+      const keys = await caches.keys()
+      await Promise.all(
+        keys.filter((k) => !KNOWN_CACHES.includes(k)).map((k) => caches.delete(k))
+      )
+      await self.clients.claim()
+    })()
+  )
+})
 
-  const singleRequire = (uri, parentUri) => {
-    uri = new URL(uri + ".js", parentUri).href;
-    return registry[uri] || (
-      
-        new Promise(resolve => {
-          if ("document" in self) {
-            const script = document.createElement("script");
-            script.src = uri;
-            script.onload = resolve;
-            document.head.appendChild(script);
-          } else {
-            nextDefineUri = uri;
-            importScripts(uri);
-            resolve();
-          }
-        })
-      
-      .then(() => {
-        let promise = registry[uri];
-        if (!promise) {
-          throw new Error(`Module ${uri} didn’t register its module`);
-        }
-        return promise;
-      })
-    );
-  };
+const STATIC_PATTERNS = [
+  /^\/_next\/static\//,
+  /^\/icons\//,
+  /^\/images\//,
+  /^\/og-image\.png$/,
+  /^\/favicon\.ico$/,
+  /^\/manifest\.json$/,
+]
 
-  self.define = (depsNames, factory) => {
-    const uri = nextDefineUri || ("document" in self ? document.currentScript.src : "") || location.href;
-    if (registry[uri]) {
-      // Module is already loading or loaded.
-      return;
-    }
-    let exports = {};
-    const require = depUri => singleRequire(depUri, uri);
-    const specialDeps = {
-      module: { uri },
-      exports,
-      require
-    };
-    registry[uri] = Promise.all(depsNames.map(
-      depName => specialDeps[depName] || require(depName)
-    )).then(deps => {
-      factory(...deps);
-      return exports;
-    });
-  };
+function isStaticAsset(url) {
+  return STATIC_PATTERNS.some((re) => re.test(url.pathname))
 }
-define(['./workbox-e43f5367'], (function (workbox) { 'use strict';
 
-  importScripts();
-  self.skipWaiting();
-  workbox.clientsClaim();
-  workbox.registerRoute("/", new workbox.NetworkFirst({
-    "cacheName": "start-url",
-    plugins: [{
-      cacheWillUpdate: async ({
-        request,
-        response,
-        event,
-        state
-      }) => {
-        if (response && response.type === 'opaqueredirect') {
-          return new Response(response.body, {
-            status: 200,
-            statusText: 'OK',
-            headers: response.headers
-          });
+self.addEventListener('fetch', (event) => {
+  const { request } = event
+  if (request.method !== 'GET') return
+
+  const url = new URL(request.url)
+  if (url.origin !== self.location.origin) return
+  if (url.pathname.startsWith('/api/')) return
+
+  // Static assets: cache-first.
+  if (isStaticAsset(url)) {
+    event.respondWith(
+      (async () => {
+        const cached = await caches.match(request)
+        if (cached) return cached
+        const response = await fetch(request)
+        if (response.ok) {
+          const cache = await caches.open(STATIC_CACHE)
+          cache.put(request, response.clone())
         }
-        return response;
-      }
-    }]
-  }), 'GET');
-  workbox.registerRoute(/.*/i, new workbox.NetworkOnly({
-    "cacheName": "dev",
-    plugins: []
-  }), 'GET');
+        return response
+      })()
+    )
+    return
+  }
 
-}));
+  // Page navigations: network-first with cache fallback for offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          const response = await fetch(request)
+          if (response.ok) {
+            const cache = await caches.open(PAGE_CACHE)
+            cache.put(request, response.clone())
+          }
+          return response
+        } catch {
+          const cached = await caches.match(request)
+          if (cached) return cached
+          throw new Error('offline and not cached')
+        }
+      })()
+    )
+  }
+})

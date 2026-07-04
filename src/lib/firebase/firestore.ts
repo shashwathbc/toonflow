@@ -19,7 +19,7 @@ import {
   type FirestoreError,
   onSnapshot,
 } from 'firebase/firestore'
-import { db } from './config'
+import { db } from './db'
 import type { User as FirebaseUser } from 'firebase/auth'
 import type {
   UserProfile,

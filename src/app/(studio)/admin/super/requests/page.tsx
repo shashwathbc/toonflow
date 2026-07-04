@@ -121,7 +121,7 @@ export default function AdminRequestsPage() {
   const pending = reports.filter((r) => r.status === 'pending').length
 
   return (
-    <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+    <div className="px-4 py-5 sm:p-6 space-y-6 max-w-screen-2xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-text flex items-center gap-2">

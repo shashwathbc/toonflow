@@ -174,7 +174,7 @@ function BuyTokensModal({ open, onClose, onSuccess }: {
           onClick={onClose}
         >
           <motion.div
-            className="bg-bg-card border border-bg-border rounded-2xl w-full max-w-md shadow-2xl"
+            className="bg-bg-card border border-bg-border rounded-2xl w-full max-w-md shadow-2xl max-h-[85dvh] overflow-y-auto"
             initial={{ scale: 0.95, opacity: 0, y: 10 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 10 }}
@@ -312,7 +312,7 @@ function WithdrawModal({ open, onClose, availableInr, onSuccess }: {
           onClick={onClose}
         >
           <motion.div
-            className="bg-bg-card border border-bg-border rounded-2xl w-full max-w-md shadow-2xl"
+            className="bg-bg-card border border-bg-border rounded-2xl w-full max-w-md shadow-2xl max-h-[85dvh] overflow-y-auto"
             initial={{ scale: 0.95, opacity: 0, y: 10 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 10 }}
@@ -507,7 +507,7 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="p-6 space-y-7 max-w-screen-xl mx-auto">
+    <div className="px-4 py-5 sm:p-6 space-y-6 sm:space-y-7 max-w-screen-xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, BookOpen, ImageIcon,
-  Flag, Settings, ChevronLeft, Star,
+  Flag, Settings, ChevronLeft, Star, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -17,25 +17,43 @@ const NAV = [
   { href: '/admin/super/settings', label: 'Settings', icon: Settings },
 ]
 
-export default function SuperAdminSidebar() {
+interface SuperAdminSidebarProps {
+  /** Rendered inside the mobile drawer: shows a close button in the header. */
+  onClose?: () => void
+  /** Called when any nav link is clicked (used to dismiss the mobile drawer). */
+  onNavigate?: () => void
+}
+
+export default function SuperAdminSidebar({ onClose, onNavigate }: SuperAdminSidebarProps) {
   const pathname = usePathname()
 
   return (
     <aside
-      className="w-60 shrink-0 border-r border-bg-border flex flex-col bg-bg-card min-h-screen"
+      className="w-60 shrink-0 border-r border-bg-border flex flex-col bg-bg-card min-h-full h-full overflow-y-auto"
       aria-label="Super admin navigation"
       role="navigation"
     >
       {/* Branding */}
-      <div className="h-14 flex items-center gap-2.5 px-5 border-b border-bg-border">
+      <div className="h-14 shrink-0 flex items-center gap-2.5 px-5 border-b border-bg-border">
         <Star size={16} className="text-warning" aria-hidden="true" />
         <span className="text-sm font-bold text-text tracking-wide">SUPER ADMIN</span>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto p-1.5 -mr-2 rounded-lg text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-label="Close super admin menu"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {/* Back */}
       <div className="px-3 pt-3">
         <Link
           href="/"
+          onClick={onNavigate}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
           aria-label="Back to main site"
         >
@@ -53,6 +71,7 @@ export default function SuperAdminSidebar() {
               <li key={href}>
                 <Link
                   href={href}
+                  onClick={onNavigate}
                   className={cn(
                     'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',

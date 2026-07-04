@@ -115,7 +115,7 @@ export default function AdminWebtoonsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+    <div className="px-4 py-5 sm:p-6 space-y-6 max-w-screen-2xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-text flex items-center gap-2">
           <ImageIcon size={18} aria-hidden="true" /> Webtoon Moderation

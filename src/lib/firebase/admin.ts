@@ -5,7 +5,8 @@ import {
   type QueryDocumentSnapshot, type DocumentData,
 } from 'firebase/firestore'
 import { sendPasswordResetEmail } from 'firebase/auth'
-import { db, auth } from './config'
+import { auth } from './config'
+import { db } from './db'
 import type { UserProfile, Novel, Webtoon, FirestoreTimestamp } from '@/types'
 
 function fromDoc<T>(snap: QueryDocumentSnapshot<DocumentData>): T {

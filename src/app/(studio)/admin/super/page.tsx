@@ -88,7 +88,7 @@ export default function SuperAdminDashboard() {
   )
 
   return (
-    <div className="p-6 space-y-8 max-w-screen-2xl mx-auto">
+    <div className="px-4 py-5 sm:p-6 space-y-6 sm:space-y-8 max-w-screen-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Star size={20} className="text-warning" aria-hidden="true" />

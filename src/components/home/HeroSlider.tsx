@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { BookOpen, Tv2, Eye, ChevronLeft, ChevronRight, Play } from 'lucide-react'
 import { getTrendingNovels, getTrendingWebtoons } from '@/lib/firebase/firestore'
+import { cachedRequest } from '@/lib/utils/requestCache'
 import { formatCount } from '@/lib/utils/formatters'
 import type { Novel, Webtoon } from '@/types'
 
@@ -40,7 +41,12 @@ export function HeroSlider() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    Promise.all([getTrendingNovels(5), getTrendingWebtoons(5)])
+    // Same cache keys as HomeFeed — one pair of Firestore queries serves
+    // both components; the hero just takes the top 5 of the 12 fetched.
+    Promise.all([
+      cachedRequest('trending-novels-12', 60_000, () => getTrendingNovels(12)),
+      cachedRequest('trending-webtoons-12', 60_000, () => getTrendingWebtoons(12)),
+    ])
       .then(([novels, webtoons]) => {
         const combined: SlideItem[] = [
           ...novels.map((n) => ({ item: n, type: 'novel' as const })),
@@ -220,7 +226,9 @@ export function HeroSlider() {
               key={i}
               type="button"
               role="tab"
-              aria-selected={i === current ? 'true' : 'false'}
+              // spread instead of an inline expression: Edge Tools' static
+              // ARIA scanner can't evaluate expressions and flags them
+              {...(i === current ? { 'aria-selected': 'true' as const } : { 'aria-selected': 'false' as const })}
               aria-label={`Slide ${i + 1}`}
               onClick={() => setCurrent(i)}
               className={`rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${

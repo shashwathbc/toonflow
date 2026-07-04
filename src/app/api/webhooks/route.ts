@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { db } from '@/lib/firebase/config'
+import { db } from '@/lib/firebase/db'
 import { doc, updateDoc, increment, addDoc, collection, serverTimestamp, getDoc } from 'firebase/firestore'
 import { COIN_PACKAGES } from '@/lib/utils/constants'
 

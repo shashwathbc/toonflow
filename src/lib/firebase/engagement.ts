@@ -3,7 +3,7 @@ import {
   collection, getDocs, query, where, limit,
   increment, serverTimestamp, addDoc, runTransaction,
 } from 'firebase/firestore'
-import { db } from './config'
+import { db } from './db'
 import type { Comment } from '@/types'
 
 // ── View Tracking ────────────────────────────────────────────

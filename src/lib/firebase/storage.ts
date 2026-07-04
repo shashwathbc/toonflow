@@ -1,11 +1,14 @@
 import {
   ref,
+  getStorage,
   uploadBytesResumable,
   getDownloadURL,
   deleteObject,
   type UploadTask,
 } from 'firebase/storage'
-import { storage } from './config'
+import app from './config'
+
+const storage = getStorage(app)
 
 export interface UploadProgress {
   progress: number

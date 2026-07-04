@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { BookOpen, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'lucide-react'
 import { getTrendingNovels, getTrendingWebtoons, getNewReleases } from '@/lib/firebase/firestore'
+import { cachedRequest } from '@/lib/utils/requestCache'
 import { formatCount } from '@/lib/utils/formatters'
 import type { Novel, Webtoon } from '@/types'
 
@@ -103,10 +104,12 @@ export function HomeFeed() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Shared 60s cache: HeroSlider reuses the same two trending requests,
+    // and back-navigation to the home page renders instantly from cache.
     Promise.all([
-      getTrendingNovels(12),
-      getTrendingWebtoons(12),
-      getNewReleases(6),
+      cachedRequest('trending-novels-12', 60_000, () => getTrendingNovels(12)),
+      cachedRequest('trending-webtoons-12', 60_000, () => getTrendingWebtoons(12)),
+      cachedRequest('new-releases-6', 60_000, () => getNewReleases(6)),
     ])
       .then(([n, w, releases]) => {
         setNovels(n)

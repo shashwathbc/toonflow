@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'react-hot-toast'
+import PwaRegister from '@/components/pwa/PwaRegister'
 
 export const metadata: Metadata = {
   title: {
@@ -37,14 +39,21 @@ export const viewport: Viewport = {
   maximumScale: 5,
 }
 
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={`dark ${inter.variable}`}>
       <body>
         {/* WCAG 2.4.1: Skip navigation */}
         <a href="#main-content" className="skip-to-main">
           Skip to main content
         </a>
+        <PwaRegister />
         <AuthProvider>
           {children}
           <Toaster
