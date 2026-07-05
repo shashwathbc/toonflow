@@ -4,6 +4,13 @@ import Link from 'next/link'
 import { PenLine, BookOpen, ArrowLeft } from 'lucide-react'
 import type { Novel } from '@/types'
 
+// Ending / outro credits page — the closing "page" after the last chapter.
+// Mirrors the scanlation-style ending card (misty hero, title logo, production
+// credits, studio mark, copyright line) but branded Toonflow and data-driven,
+// staying visually cohesive with the intro CreditsPoster (purple accent).
+
+const ACCENT = '#8B5CF6'
+
 const PARTICLES = Array.from({ length: 20 }, (_, i) => ({
   id: i,
   left:     `${(i * 43 + 17) % 97}%`,
@@ -18,10 +25,23 @@ interface EndingPosterProps {
   novel: Novel
 }
 
+// Production-credit line — "ROLE  ·  value", like the ending card's staff list.
+function CreditLine({ role, value }: { role: string; value: string }) {
+  return (
+    <p className="text-sm text-white/45">
+      <span className="tracking-[0.3em] text-white/30 uppercase text-[11px] mr-2">{role}</span>
+      <span className="font-semibold text-white/70">{value}</span>
+    </p>
+  )
+}
+
 export function EndingPoster({ novel }: EndingPosterProps) {
+  const year = new Date().getFullYear()
+  const genre = novel.genres?.[0] ? novel.genres[0].replace(/\b\w/g, (c) => c.toUpperCase()) : 'Story'
+
   return (
     <section
-      className="relative min-h-screen flex flex-col items-center justify-center bg-black overflow-hidden"
+      className="relative min-h-screen flex flex-col items-center justify-center bg-black overflow-hidden px-4 py-20"
       aria-label="Story ending"
     >
       {/* Particles */}
@@ -34,7 +54,7 @@ export function EndingPoster({ novel }: EndingPosterProps) {
             top:             p.top,
             width:           p.size,
             height:          p.size,
-            background:      'white',
+            background:      '#C4B5FD',
             ['--p-opacity' as string]: p.opacity,
             opacity:         p.opacity,
             animationName:        'reader-particle-float',
@@ -47,50 +67,57 @@ export function EndingPoster({ novel }: EndingPosterProps) {
         />
       ))}
 
-      {/* Gradient overlays */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(255,255,255,0.025) 0%, transparent 70%)' }} aria-hidden="true" />
-      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black to-transparent pointer-events-none" aria-hidden="true" />
+      {/* Misty purple veils */}
+      <div className="absolute inset-x-0 top-0 h-1/2 pointer-events-none" style={{ background: `radial-gradient(ellipse 80% 100% at 50% 0%, ${ACCENT}22 0%, transparent 65%)` }} aria-hidden="true" />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 45%, rgba(255,255,255,0.03) 0%, transparent 70%)' }} aria-hidden="true" />
 
       <div
-        className="relative z-10 text-center px-6 max-w-xl mx-auto space-y-10"
+        className="relative z-10 text-center px-2 max-w-xl mx-auto flex flex-col items-center gap-9"
         style={{ animationName: 'reader-fade-in', animationDuration: '1s', animationFillMode: 'both' }}
       >
         {/* Fin divider */}
         <div className="flex items-center justify-center gap-5">
-          <div className="h-px w-16 bg-gradient-to-r from-transparent to-white/20" />
-          <span className="text-[9px] tracking-[0.6em] text-white/20 uppercase">The End</span>
-          <div className="h-px w-16 bg-gradient-to-l from-transparent to-white/20" />
+          <div className="h-px w-16" style={{ background: `linear-gradient(to right, transparent, ${ACCENT}88)` }} />
+          <span className="text-[9px] tracking-[0.6em] uppercase" style={{ color: `${ACCENT}` }}>The End</span>
+          <div className="h-px w-16" style={{ background: `linear-gradient(to left, transparent, ${ACCENT}88)` }} />
         </div>
 
-        {/* Thank you */}
+        {/* Title logo — the story's mark, centered and dramatic */}
         <div className="space-y-3">
           <h2
-            className="font-black text-white leading-tight"
-            style={{ fontSize: 'clamp(2rem, 7vw, 4rem)', fontFamily: 'Georgia, "Times New Roman", serif' }}
+            className="font-black text-white leading-[1.05]"
+            style={{
+              fontSize: 'clamp(2.4rem, 8vw, 4.5rem)',
+              fontFamily: 'Georgia, "Times New Roman", serif',
+              textShadow: `0 0 40px ${ACCENT}55, 0 2px 6px rgba(0,0,0,0.8)`,
+            }}
           >
-            Thank You<br />For Reading
+            {novel.title || 'Untitled'}
           </h2>
-          <p className="text-lg text-white/40 font-light">{novel.title}</p>
-        </div>
-
-        {/* Creator pitch */}
-        <div className="py-2 space-y-3">
-          <p className="text-xl sm:text-2xl font-bold text-white">Your Story Could Be Next.</p>
-          <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-white/30">
-            {['Create', 'Publish', 'Earn'].map((word, i) => (
-              <span key={word} className="flex items-center gap-2">
-                <span className="font-semibold text-white/50">{word}</span>
-                {i < 2 && <span className="text-white/15">·</span>}
-              </span>
-            ))}
-          </div>
-          <p className="text-sm text-white/25 leading-relaxed">
-            Write novels. Draw webtoons.<br />Build your audience.
+          <p className="text-[10px] tracking-[0.45em] text-white/35 uppercase">
+            {genre} · {novel.status}
           </p>
         </div>
 
-        {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+        {/* Production credits */}
+        <div className="space-y-2 pt-1">
+          <CreditLine role="Written by" value={novel.authorName} />
+          <CreditLine role="Genre" value={genre} />
+          <CreditLine role="Chapters" value={String(novel.chapterCount || 1)} />
+          <CreditLine role="Language" value={(novel.language || 'EN').toUpperCase()} />
+        </div>
+
+        {/* Studio mark — like the ending card's publisher logo */}
+        <div className="flex flex-col items-center gap-1.5 pt-2">
+          <p className="font-black tracking-[0.15em] text-lg">
+            <span className="text-white">TOONFLOW</span>{' '}
+            <span style={{ color: '#C4B5FD' }}>STUDIO&nbsp;PAINT</span>
+          </p>
+          <div className="h-px w-24" style={{ background: `linear-gradient(to right, transparent, ${ACCENT}, transparent)` }} />
+        </div>
+
+        {/* Creator CTAs */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/create/novel"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white text-black font-bold text-sm hover:bg-white/90 transition-all hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
@@ -108,19 +135,19 @@ export function EndingPoster({ novel }: EndingPosterProps) {
         </div>
 
         {/* Back link */}
-        <div>
-          <Link
-            href={`/novel/${novel.id}`}
-            className="inline-flex items-center gap-1.5 text-xs text-white/25 hover:text-white/60 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none rounded"
-          >
-            <ArrowLeft size={11} aria-hidden="true" />
-            Back to {novel.title}
-          </Link>
-        </div>
+        <Link
+          href={`/novel/${novel.id}`}
+          className="inline-flex items-center gap-1.5 text-xs text-white/25 hover:text-white/60 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none rounded"
+        >
+          <ArrowLeft size={11} aria-hidden="true" />
+          Back to {novel.title}
+        </Link>
 
-        {/* Brand */}
-        <p className="text-[9px] tracking-[0.6em] text-white/15 uppercase pt-4">
-          Toonflow Studio Paint
+        {/* Copyright notice */}
+        <p className="text-[10px] leading-relaxed text-white/20 max-w-sm pt-2">
+          © {year} {novel.authorName} · Toonflow Studio Paint.<br />
+          This work is protected by copyright. Unauthorized reproduction or
+          distribution is prohibited.
         </p>
       </div>
     </section>

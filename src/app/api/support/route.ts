@@ -6,8 +6,13 @@ import { FieldValue } from 'firebase-admin/firestore'
 import nodemailer from 'nodemailer'
 import { adminAuth, adminDb } from '@/lib/firebase/serverApp'
 import { AUTH_COOKIE_NAME, APP_NAME } from '@/lib/utils/constants'
+import { bodyTooLarge, escapeHtml } from '@/lib/api/guard'
+import { checkRateLimit } from '@/lib/views/rateLimit'
+import { getClientIp } from '@/lib/views/botDetection'
 
 export const runtime = 'nodejs'
+
+const MAX_BODY_BYTES = 16 * 1024
 
 const SUPPORT_EMAIL = 'toonflowstudiopaint@gmail.com'
 const TYPES = ['question', 'issue'] as const
@@ -39,6 +44,8 @@ async function sendAutoReply(to: string, name: string, type: SupportType): Promi
   })
 
   const topic = type === 'issue' ? 'issue report' : 'question'
+  // Escape the user-controlled name before it lands in the HTML email body.
+  const safeName = escapeHtml(name || 'there')
   await transporter.sendMail({
     from: `"${APP_NAME}" <${SUPPORT_EMAIL}>`,
     to,
@@ -59,7 +66,7 @@ This is an automated confirmation. Please don't reply to this email; we'll reach
     html:
 `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a">
   <h2 style="margin:0 0 16px;font-size:18px">TOONFLOW <span style="color:#2DCA72">STUDIO PAINT</span></h2>
-  <p>Hi ${name || 'there'},</p>
+  <p>Hi ${safeName},</p>
   <p>Thanks for connecting with us! We've received your <strong>${topic}</strong> and our team will review it shortly.</p>
   <p>We'll get back to you at this email address as soon as possible — usually within <strong>24–48 hours</strong>.</p>
   <p>In the meantime, feel free to keep reading and exploring on Toonflow.</p>
@@ -84,6 +91,17 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleSupportRequest(req: NextRequest): Promise<NextResponse> {
+  if (bodyTooLarge(req, MAX_BODY_BYTES)) {
+    return NextResponse.json({ error: 'Request too large' }, { status: 413 })
+  }
+
+  // Per-IP throttle in front of the per-email cap (an attacker can rotate emails
+  // but not their source IP as cheaply): 8 submissions / 10 min.
+  const ip = getClientIp(req)
+  if (!checkRateLimit(`support:ip:${ip}`, 8, 10 * 60 * 1000).allowed) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
+
   let body: SupportBody
   try {
     body = await req.json()

@@ -13,13 +13,14 @@ import { useAuth } from '@/hooks/useAuth'
 import {
   getUserProfile, getNovelsByAuthor, getWebtoonsByAuthor,
   getUserBookmarks, followUser, unfollowUser, isFollowing,
-  updateUserProfile, createUserDocument,
+  updateUserProfile, syncAuthorContent, createUserDocument,
   getNovelById, getWebtoonById,
 } from '@/lib/firebase/firestore'
 import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
+import { safeHttpUrl } from '@/lib/utils/url'
 import { cn } from '@/lib/utils/cn'
-import type { UserProfile, Novel, Webtoon, BookmarkItem } from '@/types'
+import type { UserProfile, Novel, Webtoon, BookmarkItem, SocialLinks } from '@/types'
 
 type Tab = 'novels' | 'webtoons' | 'bookmarks' | 'about'
 
@@ -108,8 +109,9 @@ function EditProfileModal({
     if (!firebaseUser) return
     setSaving(true)
     try {
-      let photoURL = profile.photoURL
-      let bannerURL = profile.bannerURL
+      // Coerce to null (never undefined) — Firestore's updateDoc rejects undefined.
+      let photoURL: string | null = profile.photoURL ?? null
+      let bannerURL: string | null = profile.bannerURL ?? null
 
       if (avatarFile) {
         photoURL = await uploadUserAvatar(firebaseUser.uid, avatarFile)
@@ -120,19 +122,37 @@ function EditProfileModal({
 
       if (!form.displayName.trim()) { toast.error('Display name is required'); return }
 
+      // Only include links the user actually filled in. Firestore's updateDoc
+      // rejects `undefined` values, so empty fields must be omitted, not set to
+      // undefined (this was the "failed to save" error on an empty Social Links).
+      const socialLinks: SocialLinks = {}
+      const website = form.website.trim()
+      const twitter = form.twitter.trim()
+      const instagram = form.instagram.trim()
+      if (website) socialLinks.website = website
+      if (twitter) socialLinks.twitter = twitter
+      if (instagram) socialLinks.instagram = instagram
+
       const updates: Partial<UserProfile> = {
         displayName: form.displayName.trim(),
         bio: form.bio.trim(),
         photoURL,
         bannerURL,
-        socialLinks: {
-          website: form.website.trim() || undefined,
-          twitter: form.twitter.trim() || undefined,
-          instagram: form.instagram.trim() || undefined,
-        },
+        socialLinks,
       }
 
       await updateUserProfile(firebaseUser.uid, updates)
+
+      // Keep authored novels/webtoons showing the current name + avatar.
+      // authorName/authorPhotoURL are denormalized onto content docs, so this
+      // fans the current profile identity out to every work — unifying any that
+      // still carry an older name. Never blocks the profile save on failure.
+      try {
+        await syncAuthorContent(firebaseUser.uid, updates.displayName!.trim(), photoURL)
+      } catch (e) {
+        console.error('[EditProfile] author content sync failed:', e)
+      }
+
       toast.success('Profile updated!')
       onSaved({ ...profile, ...updates })
       onClose()
@@ -355,6 +375,25 @@ export function ProfilePageClient({ uid }: { uid: string }) {
         setNovels(novs)
         setWebtoons(wts)
 
+        // Self-heal denormalized author identity: if the owner is viewing their
+        // own profile and any work still carries an older name/avatar, bring it
+        // in line with the current profile (so cards everywhere match).
+        if (isOwnProfile && firebaseUser && resolvedProfile) {
+          const name = resolvedProfile.displayName
+          const photo = resolvedProfile.photoURL ?? null
+          const stale = [...novs, ...wts].some(
+            (w) => w.authorName !== name || (w.authorPhotoURL ?? null) !== photo
+          )
+          if (stale) {
+            syncAuthorContent(firebaseUser.uid, name, photo)
+              .then(() => {
+                setNovels((prev) => prev.map((n) => ({ ...n, authorName: name, authorPhotoURL: photo })))
+                setWebtoons((prev) => prev.map((w) => ({ ...w, authorName: name, authorPhotoURL: photo })))
+              })
+              .catch((e) => console.error('[Profile] author identity sync failed:', e))
+          }
+        }
+
         if (firebaseUser && !isOwnProfile) {
           const following = await isFollowing(firebaseUser.uid, uid)
           setUserIsFollowing(following)
@@ -507,8 +546,8 @@ export function ProfilePageClient({ uid }: { uid: string }) {
       {/* Social links */}
       {(profile.socialLinks?.website || profile.socialLinks?.twitter || profile.socialLinks?.instagram) && (
         <div className="px-4 sm:px-6 flex flex-wrap items-center gap-4 mb-6 text-sm text-white/50">
-          {profile.socialLinks?.website && (
-            <a href={profile.socialLinks.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-accent rounded">
+          {safeHttpUrl(profile.socialLinks?.website) && (
+            <a href={safeHttpUrl(profile.socialLinks?.website)!} target="_blank" rel="noopener noreferrer nofollow ugc" className="flex items-center gap-1.5 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-accent rounded">
               <Globe size={13} aria-hidden="true" /> Website <ExternalLink size={10} aria-hidden="true" />
             </a>
           )}

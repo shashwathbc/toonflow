@@ -173,6 +173,8 @@ export default function UserSeedPage() {
     setStep(0, { status: 'running' })
     let nId = ''
     try {
+      // viewCount/likeCount are server-managed and must start at 0 — Firestore
+      // rules reject seeded counters (clients can't inflate stats at creation).
       nId = await createNovel(authorId, authorName, authorPhotoURL, {
         title: NOVEL_DATA.title,
         synopsis: NOVEL_DATA.synopsis,
@@ -180,8 +182,6 @@ export default function UserSeedPage() {
         tags: NOVEL_DATA.tags,
         status: NOVEL_DATA.status,
         coverURL: COVER_URL,
-        viewCount: NOVEL_DATA.viewCount,
-        likeCount: NOVEL_DATA.likeCount,
         isFeatured: NOVEL_DATA.isFeatured,
         isOriginal: NOVEL_DATA.isOriginal,
       })
@@ -224,8 +224,6 @@ export default function UserSeedPage() {
         tags: WEBTOON_DATA.tags,
         status: WEBTOON_DATA.status,
         coverURL: COVER_URL,
-        viewCount: WEBTOON_DATA.viewCount,
-        likeCount: WEBTOON_DATA.likeCount,
         isFeatured: WEBTOON_DATA.isFeatured,
         isOriginal: WEBTOON_DATA.isOriginal,
       })

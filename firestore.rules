@@ -26,7 +26,12 @@ service cloud.firestore {
     // Public content — anyone can read published novels/webtoons
     match /novels/{novelId} {
       allow read: if true;
-      allow create: if isSignedIn();
+      // Author must be the creator, and counters cannot be seeded — viewCount is
+      // server-managed and likeCount/rating start at zero (no create-time inflation).
+      allow create: if isSignedIn()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.viewCount == 0
+        && request.resource.data.likeCount == 0;
       // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it
       allow update: if isOwner(resource.data.authorId) || isAdmin()
         || onlyUpdates(['likeCount', 'rating', 'ratingCount']);
@@ -42,7 +47,10 @@ service cloud.firestore {
 
     match /webtoons/{webtoonId} {
       allow read: if true;
-      allow create: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.viewCount == 0
+        && request.resource.data.likeCount == 0;
       // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it
       allow update: if isOwner(resource.data.authorId) || isAdmin()
         || onlyUpdates(['likeCount', 'rating', 'ratingCount']);
@@ -66,7 +74,18 @@ service cloud.firestore {
       // escalate to superadmin by writing to their own document.
       allow update: if isAdmin()
         || (isOwner(userId) && onlyUpdates(['displayName', 'bio', 'photoURL', 'bannerURL', 'socialLinks', 'updatedAt']))
-        || onlyUpdates(['followerCount', 'followingCount']);
+        // Following someone bumps THEIR followerCount by exactly ±1 (any signed-in
+        // user). Bounding the delta stops arbitrary count injection / griefing.
+        // .get(key, 0) tolerates legacy docs that predate the counter field.
+        || (onlyUpdates(['followerCount'])
+            && request.resource.data.followerCount is int
+            && (request.resource.data.followerCount == resource.data.get('followerCount', 0) + 1
+                || request.resource.data.followerCount == resource.data.get('followerCount', 0) - 1))
+        // The follower adjusts their OWN followingCount by exactly ±1.
+        || (isOwner(userId) && onlyUpdates(['followingCount'])
+            && request.resource.data.followingCount is int
+            && (request.resource.data.followingCount == resource.data.get('followingCount', 0) + 1
+                || request.resource.data.followingCount == resource.data.get('followingCount', 0) - 1));
       allow delete: if isAdmin();
     }
 
@@ -80,10 +99,16 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
-    // Comments — public read, auth write
+    // Comments — public read, auth write. Author is bound to the caller (no
+    // impersonation), likeCount starts at zero, and the body is length-capped
+    // so a client can't store multi-megabyte payloads.
     match /comments/{commentId} {
       allow read: if true;
-      allow create: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.likeCount == 0
+        && request.resource.data.content is string
+        && request.resource.data.content.size() <= 5000;
       allow update: if isOwner(resource.data.authorId) || isAdmin()
         || onlyUpdates(['likeCount']);
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
@@ -96,10 +121,13 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == resource.data.followerId;
     }
 
-    // Transactions — owner read, owner or admin write
+    // Transactions — owner read; writes are SERVER ONLY. AI spend (chargeTokens)
+    // and coin purchases (Razorpay webhook) are written with the Admin SDK, which
+    // bypasses these rules. Blocking client creates stops forged "coin_purchase"
+    // history that could be used to social-engineer support or fake balances.
     match /transactions/{txId} {
       allow read: if isOwner(resource.data.userId) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
@@ -116,10 +144,16 @@ service cloud.firestore {
       allow create: if false;
     }
 
-    // Withdrawals — owner read/create, admin manage
+    // Withdrawals — owner read/create, admin manage. Amount must be a positive
+    // number and status must start 'pending' (a client can't self-approve a payout;
+    // admin flips status via the Admin SDK). Balance sufficiency is verified admin-side.
     match /withdrawals/{wId} {
       allow read: if isOwner(resource.data.creatorId) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.status == 'pending';
       allow update: if isAdmin();
     }
 
@@ -159,10 +193,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
-    // Likes — signed-in users manage their own likes
+    // Likes — signed-in users manage their own likes (uid bound to caller so a
+    // like can't be attributed to another user)
     match /likes/{likeId} {
       allow read: if true;
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 

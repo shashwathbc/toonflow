@@ -116,6 +116,36 @@ export async function updateUserProfile(
   await updateDoc(doc(db, 'users', uid), { ...data, updatedAt: serverTimestamp() })
 }
 
+/**
+ * Propagate a creator's display name + avatar onto every novel and webtoon they
+ * authored. `authorName`/`authorPhotoURL` are denormalized onto content docs for
+ * fast reads, so renaming the profile must fan out — otherwise old works keep the
+ * stale name. Call after a profile update whenever displayName/photoURL changed.
+ */
+export async function syncAuthorContent(
+  uid: string,
+  authorName: string,
+  authorPhotoURL: string | null
+): Promise<void> {
+  const [novels, webtoons] = await Promise.all([
+    getDocs(query(collection(db, 'novels'), where('authorId', '==', uid))),
+    getDocs(query(collection(db, 'webtoons'), where('authorId', '==', uid))),
+  ])
+
+  const refs = [...novels.docs, ...webtoons.docs].map((d) => d.ref)
+  if (refs.length === 0) return
+
+  // Firestore caps a batch at 500 writes — chunk to stay safely under.
+  const CHUNK = 400
+  for (let i = 0; i < refs.length; i += CHUNK) {
+    const batch = writeBatch(db)
+    for (const ref of refs.slice(i, i + CHUNK)) {
+      batch.update(ref, { authorName, authorPhotoURL })
+    }
+    await batch.commit()
+  }
+}
+
 export async function setUserRole(uid: string, role: UserRole): Promise<void> {
   const isCreator = ['creator', 'admin', 'superadmin'].includes(role)
   await updateDoc(doc(db, 'users', uid), { role, isCreator, updatedAt: serverTimestamp() })

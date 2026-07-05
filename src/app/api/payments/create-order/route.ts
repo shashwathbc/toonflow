@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
     const order = await razorpayResponse.json() as { id: string; amount: number; currency: string }
     return NextResponse.json({ orderId: order.id, amount: order.amount, currency: order.currency })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal error'
-    console.error('[/api/payments/create-order] Error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    // Log details server-side; return a generic message (no internal leakage).
+    console.error('[/api/payments/create-order] Error:', err)
+    return NextResponse.json({ error: 'Could not create order. Please try again.' }, { status: 500 })
   }
 }

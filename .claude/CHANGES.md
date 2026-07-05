@@ -877,3 +877,70 @@ User asked for a Vite migration; Vite cannot host a Next.js App Router app (serv
 
 ## 2026-07-04 — Silenced Edge Tools ARIA false positives
 - **HeroSlider.tsx** (`aria-selected`) and **ResponsiveSidebarShell.tsx** (`aria-expanded`): Microsoft Edge Tools' static axe/aria scanner flags any JSX expression as an invalid enumerated ARIA value even when it evaluates to 'true'/'false'. Rewrote both as conditional prop spreads — identical rendered DOM, invisible to the static scanner. tsc + eslint clean.
+
+## 2026-07-05 — Enterprise Security Audit & Hardening
+Full defensive audit. Core money/auth/view paths were already strong (server-verified sessions, Admin-SDK token accounting, signed view tokens); this pass closed the remaining gaps. See `SECURITY.md` for the full report (risk score, OWASP/CVSS mapping, attack scenarios).
+
+- **next.config.js**: Added a scoped **Content-Security-Policy** (default-src 'self'; object-src 'none'; base-uri/form-action 'self'; frame-ancestors 'none'; allowlisted Firebase/Google/Razorpay origins for script/connect/img/frame), **HSTS** (2y, preload), **Cross-Origin-Opener-Policy** `same-origin-allow-popups` (keeps Firebase Google popup working), tightened `X-Frame-Options` to DENY, expanded `Permissions-Policy` (disables topics/FLoC/usb/serial/bluetooth; payment scoped to Razorpay), added `X-Permitted-Cross-Domain-Policies: none`.
+- **firestore.rules**: Bound `authorId==uid` and forbade counter seeding on novel/webtoon **create** (no forged authorship / view inflation). Bound comment `authorId==uid` + `likeCount==0` + 5 000-char body cap. Bound like `uid==uid`. Bounded `followerCount`/`followingCount` updates to exact ±1 deltas (followingCount owner-only) — no arbitrary count injection. `transactions` create → **server-only** (`if false`; all writes go through Admin SDK). `withdrawals` create now requires positive amount + `status=='pending'`.
+- **storage.rules**: Novel/webtoon covers, banners and episode panels are now **owner-only** (Firestore `authorId` lookup) instead of any authenticated user — closes cross-user asset overwrite/defacement. Switched `image/.*` → explicit raster allowlist (`png|jpeg|jpg|webp|gif`) to **block SVG** (scripted-image XSS). Added default-deny catch-all.
+- **src/lib/utils/url.ts** (new) + **ProfilePageClient.tsx**: `safeHttpUrl()` normalizes the profile "website" link and rejects `javascript:`/`data:`/other schemes — fixes a **stored XSS** click target. Link now `rel="noopener noreferrer nofollow ugc"`.
+- **src/lib/api/guard.ts** (new): `bodyTooLarge()` (content-length gate) + `escapeHtml()`.
+- **AI routes** (novel-assist, novel-content, generate-image): added **zod schemas** with per-field length + array caps, request body-size gates, and replaced raw `err.message` responses with generic messages (server-side logging only) — stops info leakage and unbounded-input cost/DoS.
+- **payments/create-order**: generic catch error (no internal leakage).
+- **support**: HTML-escape the user `name` in the auto-reply email (HTML-injection), added **per-IP rate limit** (8/10 min) in front of the per-email cap, and a body-size gate.
+- **.env.example**: documented the 6 missing server secrets (Anthropic, Stability, Razorpay ×4, Gmail) so keys are configured via env, never hardcoded.
+- **npm audit**: 8 moderate advisories, all transitive via `firebase-admin` → `@google-cloud/storage` → `uuid` (GHSA-w5hq-g745-h8pq, buffer-bounds in uuid v3/5/6). Not reachable in our usage (we never pass a `buf` to uuid). `audit fix --force` downgrades firebase-admin (breaking) — left as documented accepted risk; monitor for a non-breaking firebase-admin release.
+- Verified: `tsc --noEmit` clean; `next build` clean (all routes compile).
+
+## 2026-07-05 — Unified cinematic canvas (editor ↔ reader)
+Made the novel editor canvas (`/create/novel/[novelId]`) and the chapter reader (`/novel/[id]/chapter/[chapterId]`) render an identical cinematic canvas matching the reference design (blue section label + soft top beam).
+- **globals.css**: Added shared `--canvas-accent` (#5B84F5) + `--canvas-accent-soft/-glow` CSS variables. Switched the section-label (`h3`) color in **both** `.tiptap` and `.reader-content` from gold `#C9A84C` → `var(--canvas-accent)` so the two canvases stay in lockstep. Added a `.canvas-beam` decorative element — a 1px horizontal blue light beam with a soft radial glow — for the light-from-above look above the section label.
+- **Reader** (`(reader)/novel/[id]/chapter/[chapterId]/page.tsx`): added `<div class="canvas-beam">` above the centered chapter heading.
+- **Editor** (`(novel)/create/novel/[novelId]/page.tsx`): added the same beam above the chapter-title block (`!mx-0 !mb-6` to sit with the editor's left-aligned heading).
+- Serif typography (white italic `h1`, small-caps `h3`, muted body, drop cap) was already shared between the two canvases; this pass unified the accent color + beam so they visually match. `tsc` + `next build` clean.
+
+## 2026-07-05 — Scanlation-style credits poster (novel first page)
+Added a title/credits splash as the first page of a novel (chapter 1), styled after the AsuraScans reference but branded Toonflow and driven by real novel data.
+- **components/reader/CreditsPoster.tsx** (new): purple "energy" hero — framed cover art (clip-path tech frame + glow) with a "TOONFLOW STUDIO PAINT" watermark, brand links (@toonflowstudiopaint · toonflowstudiopaint.com), a chapter-number medallion, a slashed white title banner showing `novel.title`, and a credits grid (AUTHOR/STUDIO/GENRE/STATUS/CHAPTERS/LANG) rendered as skewed slabs like the reference chips. Fully data-driven — the novel's own title (e.g. "Ravana"), cover, author, genre, status and chapter number populate it. Falls back gracefully with no cover.
+- **(reader)/novel/[id]/chapter/[chapterId]/page.tsx**: renders `<CreditsPoster>` as the first page on chapter 1 (replaced the old `IntroPoster`); `TitlePage` cover reveal still follows it. `IntroPoster.tsx` left in place, now unused.
+- `tsc` + `eslint` + `next build` clean.
+
+## 2026-07-05 — CreditsPoster now scales to fit the viewport
+Fixed the credits poster overflowing the screen (top/bottom cut off) on normal-zoom / shorter viewports.
+- **components/reader/CreditsPoster.tsx**: Section is now fixed `h-[100svh]` and the poster measures its natural size (`offsetWidth/Height` via ref) and applies a `transform: scale(min(1, availW/natW, availH/natH))` to fit within the viewport minus a 104px header/margin allowance — never upscaled past 1×. Scale sits on an outer wrapper; the `reader-fade-in` (which animates translateY) stays on the inner element so the two transforms don't conflict. Re-fits on `resize` and once after 300ms (cover image/fonts settle). Result: the whole poster is always visible on one screen, on any device, clearing the fixed reader header.
+
+## 2026-07-05 — CreditsPoster reworked as a top banner (always fully visible)
+The scale-to-fit full-screen hero still left the poster centered low with the bottom risking a clip depending on window height. Reworked it into a self-contained banner, matching the AsuraScans reference proportions.
+- **components/reader/CreditsPoster.tsx**: Dropped `h-[100svh]` + vertical centering + the JS scale-to-fit. The section is now natural-height (`pt-16 pb-10`, top padding clears the fixed reader header) so the whole banner sits directly below the header and is fully visible on load; the cover-reveal TitlePage + chapter content flow beneath it. Bounded the cover column (`w-56 sm:w-64 md:w-[40%] max-w-[340px]`) so the banner stays compact on wide screens. Removed the now-unused useRef/useState/useEffect + scroll cue. `tsc` + `eslint` clean.
+
+## 2026-07-05 — Reverted the CreditsPoster (undo)
+Removed the scanlation-style credits poster per request.
+- Deleted **components/reader/CreditsPoster.tsx**.
+- **(reader)/novel/[id]/chapter/[chapterId]/page.tsx**: restored the original `IntroPoster` import + chapter-1 usage (was swapped to `CreditsPoster`). Reader first page is back to IntroPoster + TitlePage.
+- Left untouched: the earlier canvas design change (blue section-label accent + `.canvas-beam` on editor/reader), which was a separate request.
+
+## 2026-07-05 — Restored CreditsPoster (re-do)
+Re-added the scanlation-style credits poster per request ("make it like this").
+- Recreated **components/reader/CreditsPoster.tsx** as the fully-visible banner layout (framed cover + TOONFLOW STUDIO PAINT watermark, brand links, chapter medallion, slashed title banner, AUTHOR/STUDIO/GENRE/STATUS/CHAPTERS/LANG credits, purple energy bg) with the "Scroll to Begin" cue restored as an in-flow element (ChevronDown, animate-bounce) so it can't overlap.
+- **(reader)/novel/[id]/chapter/[chapterId]/page.tsx**: renders `<CreditsPoster>` as the first page on chapter 1 (before `TitlePage`).
+- `tsc` + `eslint` clean.
+
+## 2026-07-05 — Ending poster (extro) reworked to match the reference
+Redesigned the outro/ending page to mirror the scanlation ending-credits card (title logo → production credits → studio mark → copyright), cohesive with the intro CreditsPoster's purple aesthetic.
+- **components/reader/EndingPoster.tsx**: misty purple veils + violet particles; centered dramatic novel-title logo (glow); "The End" accent label; production credits (WRITTEN BY / GENRE / CHAPTERS / LANGUAGE) as staff lines; "TOONFLOW STUDIO PAINT" studio mark with accent rule; retained Start Creating / Discover More / Back CTAs; added a copyright notice (© year · author · Toonflow Studio Paint, reproduction-prohibited line). All data-driven from the novel.
+- Intro = CreditsPoster (first page), extro = EndingPoster (after last chapter); the centered cinematic serif narrative (reader-content H1/H3/body) bookended between them was already in that format. `tsc` + `eslint` + `next build` clean.
+
+## 2026-07-05 — Fix: profile save failed with empty social links
+Editing a profile with blank Social Links threw "failed to save".
+- **Root cause**: `handleSave` built `socialLinks: { website: trim()||undefined, ... }`. With empty inputs every value was `undefined`, and Firestore `updateDoc` rejects `undefined` (db is `getFirestore(app)` — no `ignoreUndefinedProperties`), throwing before the write.
+- **Fix** (`(main)/profile/[uid]/ProfilePageClient.tsx`): build `socialLinks` with only the non-empty links (omit empties → empty map is fine), and coerce `photoURL`/`bannerURL` to `null` (never `undefined`) in case the profile doc lacks those fields. Imported `SocialLinks` type. `tsc` + `eslint` clean.
+
+## 2026-07-05 — Author name on works always follows the profile name
+Novels/webtoons showed stale author names (e.g. "Shashwath Bc" vs "Shashwath") because `authorName`/`authorPhotoURL` are denormalized onto content docs at creation and never updated on rename.
+- **lib/firebase/firestore.ts**: new `syncAuthorContent(uid, authorName, authorPhotoURL)` — queries all novels + webtoons by `authorId` and batch-updates their denormalized `authorName`/`authorPhotoURL` (chunked at 400/batch under Firestore's 500 cap). Owner-write is permitted by existing rules (`isOwner(resource.data.authorId)`).
+- **(main)/profile/[uid]/ProfilePageClient.tsx**: `handleSave` calls `syncAuthorContent` after the profile update (in a non-blocking try/catch) so every save fans the current display name + avatar out to all the creator's works, unifying any that still carry an older name. `tsc` + `eslint` clean.
+
+## 2026-07-05 — Author name self-heal on own-profile view
+Follow-up to the author-name sync: added a safety net so stale names correct themselves.
+- **(main)/profile/[uid]/ProfilePageClient.tsx**: on load, when the owner views their own profile, if any authored novel/webtoon's `authorName`/`authorPhotoURL` differs from the current profile, it calls `syncAuthorContent` and updates local state. Combined with sync-on-save, visiting your profile (or saving it) unifies every work to your current display name. Root cause of the "still Shashwath Bc" report: earlier renames never persisted (the undefined-socialLinks save bug) and the sync code postdated them — a successful save now propagates. `tsc` + `eslint` + `next build` clean.

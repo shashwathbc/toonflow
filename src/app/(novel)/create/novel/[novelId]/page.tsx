@@ -371,6 +371,7 @@ export default function NovelEditorPage({ params }: PageProps) {
               {/* Chapter title input — styled like the reader heading */}
               <div className="bg-black border-b border-white/8">
                 <div className="max-w-[680px] mx-auto px-6 sm:px-10 pt-10 pb-4">
+                  <div className="canvas-beam !mx-0 !mb-6" aria-hidden="true" />
                   <p className="text-[10px] tracking-[0.5em] text-white/25 uppercase mb-2">
                     Chapter {activeChapter.chapterNumber}
                   </p>

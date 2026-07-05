@@ -10,8 +10,10 @@ service firebase.storage {
       return isAuth() && request.auth.uid == uid;
     }
 
-    function isImage() {
-      return request.resource.contentType.matches('image/.*');
+    // Explicit allowlist — excludes image/svg+xml, which can carry <script> and
+    // is an XSS/scripted-image vector when served inline. Raster formats only.
+    function isSafeImage() {
+      return request.resource.contentType.matches('image/(png|jpeg|jpg|webp|gif)');
     }
 
     function isUnder10MB() {
@@ -22,40 +24,57 @@ service firebase.storage {
       return request.resource.size < 25 * 1024 * 1024;
     }
 
-    // User avatars
+    // Only the novel/webtoon author may write its assets. The content document is
+    // created (Admin/client) before any asset upload, so this lookup resolves.
+    function ownsNovel(novelId) {
+      return isAuth() &&
+        firestore.get(/databases/(default)/documents/novels/$(novelId)).data.authorId == request.auth.uid;
+    }
+
+    function ownsWebtoon(webtoonId) {
+      return isAuth() &&
+        firestore.get(/databases/(default)/documents/webtoons/$(webtoonId)).data.authorId == request.auth.uid;
+    }
+
+    // User avatars — owner only
     match /users/{uid}/avatar/{file} {
       allow read: if true;
-      allow write: if isOwner(uid) && isImage() && isUnder10MB();
+      allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
     }
 
-    // User banners
+    // User banners — owner only
     match /users/{uid}/banner/{file} {
       allow read: if true;
-      allow write: if isOwner(uid) && isImage() && isUnder10MB();
+      allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
     }
 
-    // Novel covers
+    // Novel covers — author only (was any authenticated user → cross-user deface)
     match /novels/{novelId}/cover/{file} {
       allow read: if true;
-      allow write: if isAuth() && isImage() && isUnder10MB();
+      allow write: if ownsNovel(novelId) && isSafeImage() && isUnder10MB();
     }
 
-    // Novel banners
+    // Novel banners — author only
     match /novels/{novelId}/banner/{file} {
       allow read: if true;
-      allow write: if isAuth() && isImage() && isUnder10MB();
+      allow write: if ownsNovel(novelId) && isSafeImage() && isUnder10MB();
     }
 
-    // Webtoon covers
+    // Webtoon covers — author only
     match /webtoons/{webtoonId}/cover/{file} {
       allow read: if true;
-      allow write: if isAuth() && isImage() && isUnder10MB();
+      allow write: if ownsWebtoon(webtoonId) && isSafeImage() && isUnder10MB();
     }
 
-    // Webtoon episode panels (up to 25MB per image)
+    // Webtoon episode panels (up to 25MB per image) — author only
     match /webtoons/{webtoonId}/episodes/{episodeId}/{file} {
       allow read: if true;
-      allow write: if isAuth() && isImage() && isUnder25MB();
+      allow write: if ownsWebtoon(webtoonId) && isSafeImage() && isUnder25MB();
+    }
+
+    // Deny everything else by default.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

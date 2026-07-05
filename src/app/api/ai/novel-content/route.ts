@@ -1,7 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { chargeTokens } from '@/lib/tokens'
 import { verifiedUid } from '@/lib/auth/serverUser'
+import { bodyTooLarge } from '@/lib/api/guard'
 
 export const runtime = 'nodejs'
 
@@ -15,30 +17,36 @@ const ACTION_TOKEN_MAP: Record<Action, 'synopsis-generate' | 'synopsis-improve' 
   'expand-synopsis': 'synopsis-expand',
 }
 
+const MAX_BODY_BYTES = 64 * 1024
+
+const bodySchema = z.object({
+  action: z.enum(['generate-synopsis', 'improve-synopsis', 'expand-synopsis']),
+  novelTitle: z.string().max(300),
+  currentSynopsis: z.string().max(8000).optional(),
+  userPrompt: z.string().max(2000).optional(),
+})
+
 export async function POST(request: NextRequest) {
   const uid = await verifiedUid(request)
   if (!uid) {
     return NextResponse.json({ error: 'Authentication required — please sign in again' }, { status: 401 })
   }
 
+  if (bodyTooLarge(request, MAX_BODY_BYTES)) {
+    return NextResponse.json({ error: 'Request too large' }, { status: 413 })
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error('[/api/ai/novel-content] ANTHROPIC_API_KEY is not set')
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured on the server' }, { status: 503 })
+    return NextResponse.json({ error: 'AI service is not configured' }, { status: 503 })
   }
 
   try {
-    const body = await request.json() as {
-      action: Action
-      novelTitle: string
-      currentSynopsis?: string
-      userPrompt?: string
+    const parsed = bodySchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
-
-    const { action, novelTitle, currentSynopsis, userPrompt } = body
-
-    if (!['generate-synopsis', 'improve-synopsis', 'expand-synopsis'].includes(action)) {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
-    }
+    const { action, novelTitle, currentSynopsis, userPrompt } = parsed.data
 
     // Charge tokens against the VERIFIED user — never a client-supplied id
     const tokenAction = ACTION_TOKEN_MAP[action]
@@ -98,8 +106,8 @@ Return ONLY the expanded synopsis text.`
       response.content[0]?.type === 'text' ? response.content[0].text.trim() : ''
     return NextResponse.json({ result })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal error'
-    console.error('[/api/ai/novel-content] Error:', message, err)
-    return NextResponse.json({ error: message }, { status: 500 })
+    // Log details server-side; never echo raw error text (may leak internals).
+    console.error('[/api/ai/novel-content] Error:', err)
+    return NextResponse.json({ error: 'AI service temporarily unavailable' }, { status: 502 })
   }
 }

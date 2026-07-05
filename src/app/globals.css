@@ -22,6 +22,13 @@
   --scrollbar-thumb: #3F3F3F;
   --scrollbar-thumb-hover: #717171;
   --scrollbar-track: transparent;
+
+  /* Immersive writing/reading canvas — shared by the novel editor (.tiptap)
+     and the chapter reader (.reader-content) so both render identically.
+     The section-label accent + top beam. */
+  --canvas-accent: #5B84F5;
+  --canvas-accent-soft: rgba(91, 132, 245, 0.7);
+  --canvas-accent-glow: rgba(91, 132, 245, 0.16);
 }
 
 /* ── Base Reset ─────────────────────────────────────────── */
@@ -233,7 +240,7 @@ body {
 }
 
 .tiptap h3 {
-  /* Small caps label — like "THE DEMON KING" in orange/accent */
+  /* Small-caps section label — e.g. "BOOK I · THE BEGINNING" in canvas accent */
   font-size: 0.75rem;
   font-weight: 700;
   font-family: Georgia, "Times New Roman", serif;
@@ -242,7 +249,7 @@ body {
   margin-top: 3em;
   margin-bottom: 0.5em;
   line-height: 1.4;
-  color: #C9A84C;
+  color: var(--canvas-accent);
 }
 
 .tiptap ul,
@@ -314,6 +321,28 @@ body {
   font-size: clamp(1.8rem, 5vw, 3rem);
   font-family: Georgia, "Times New Roman", serif;
   line-height: 1.2;
+}
+
+/* ── Cinematic canvas beam ─────────────────────────────────
+   Soft blue light beam sitting above the section label. Shared by the
+   novel editor canvas and the chapter reader so both match. */
+.canvas-beam {
+  position: relative;
+  height: 1px;
+  width: min(300px, 55%);
+  margin: 0 auto 2.75rem;
+  background: linear-gradient(90deg, transparent, var(--canvas-accent-soft), transparent);
+}
+.canvas-beam::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -55%);
+  width: 280px;
+  height: 130px;
+  background: radial-gradient(ellipse at center, var(--canvas-accent-glow) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 .tiptap p.is-editor-empty:first-child::before {
@@ -458,7 +487,7 @@ body {
   font-family: Georgia, "Times New Roman", serif;
   letter-spacing: 0.4em;
   text-transform: uppercase;
-  color: #C9A84C;
+  color: var(--canvas-accent);
   margin-top: 3em;
   margin-bottom: 0.5em;
   line-height: 1.4;

@@ -17,7 +17,7 @@ import { useViewTracking } from '@/hooks/useViewTracking'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import CommentSection from '@/components/reader/CommentSection'
-import { IntroPoster } from '@/components/reader/IntroPoster'
+import { CreditsPoster } from '@/components/reader/CreditsPoster'
 import { TitlePage } from '@/components/reader/TitlePage'
 import { EndingPoster } from '@/components/reader/EndingPoster'
 import { cn } from '@/lib/utils/cn'
@@ -288,8 +288,10 @@ export default function ChapterReaderPage() {
         )}
       </header>
 
-      {/* ── Cinematic intro (chapter 1 only) ─────────────── */}
-      {isFirstChapter && <IntroPoster novel={novel} />}
+      {/* ── First page: scanlation-style credits poster (chapter 1 only) ── */}
+      {isFirstChapter && (
+        <CreditsPoster novel={novel} chapterNumber={chapter.chapterNumber ?? 1} />
+      )}
       {isFirstChapter && (
         <TitlePage
           novel={novel}
@@ -307,6 +309,7 @@ export default function ChapterReaderPage() {
       >
         {/* Chapter heading */}
         <header className="mb-12 text-center reader-chapter-heading">
+          <div className="canvas-beam" aria-hidden="true" />
           <p className="text-[10px] tracking-[0.5em] text-white/25 uppercase mb-3">
             Chapter {chapter.chapterNumber}
           </p>

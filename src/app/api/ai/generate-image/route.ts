@@ -1,11 +1,27 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { chargeTokens } from '@/lib/tokens'
 import { verifiedUid } from '@/lib/auth/serverUser'
+import { bodyTooLarge } from '@/lib/api/guard'
 
 export const runtime = 'nodejs'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const MAX_BODY_BYTES = 64 * 1024
+
+const promptSchema = z.object({
+  action: z.literal('prompt'),
+  novelTitle: z.string().max(300),
+  novelSynopsis: z.string().max(4000).optional().default(''),
+  imageType: z.enum(['cover', 'banner']),
+})
+const generateSchema = z.object({
+  action: z.literal('generate'),
+  prompt: z.string().min(1).max(2000),
+  imageType: z.enum(['cover', 'banner']),
+})
 
 export async function POST(request: NextRequest) {
   const uid = await verifiedUid(request)
@@ -13,20 +29,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required — please sign in again' }, { status: 401 })
   }
 
+  if (bodyTooLarge(request, MAX_BODY_BYTES)) {
+    return NextResponse.json({ error: 'Request too large' }, { status: 413 })
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error('[/api/ai/generate-image] ANTHROPIC_API_KEY is not set')
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured on the server' }, { status: 503 })
+    return NextResponse.json({ error: 'AI service is not configured' }, { status: 503 })
   }
 
   try {
     const body = await request.json()
 
-    if (body.action === 'prompt') {
-      const { novelTitle, novelSynopsis, imageType } = body as {
-        novelTitle: string
-        novelSynopsis: string
-        imageType: 'cover' | 'banner'
-      }
+    if (body?.action === 'prompt') {
+      const parsed = promptSchema.safeParse(body)
+      if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+      const { novelTitle, novelSynopsis, imageType } = parsed.data
 
       // Charge 1 token for prompt generation (verified user only)
       const charge = await chargeTokens(uid, 'image-prompt', `AI image prompt for "${novelTitle}"`)
@@ -68,11 +86,10 @@ Return ONLY the image prompt text.`,
       return NextResponse.json({ prompt })
     }
 
-    if (body.action === 'generate') {
-      const { prompt, imageType } = body as {
-        prompt: string
-        imageType: 'cover' | 'banner'
-      }
+    if (body?.action === 'generate') {
+      const parsed = generateSchema.safeParse(body)
+      if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+      const { prompt, imageType } = parsed.data
 
       // Charge 15 tokens for image generation (verified user only)
       const charge = await chargeTokens(uid, 'image-generate', `AI ${imageType} image generation`)
@@ -128,8 +145,7 @@ Return ONLY the image prompt text.`,
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal error'
-    console.error('[/api/ai/generate-image] Error:', message, err)
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[/api/ai/generate-image] Error:', err)
+    return NextResponse.json({ error: 'Image service temporarily unavailable' }, { status: 502 })
   }
 }
