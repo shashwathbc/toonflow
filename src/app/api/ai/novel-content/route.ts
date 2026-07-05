@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { chargeTokens } from '@/lib/tokens'
+import { verifiedUid } from '@/lib/auth/serverUser'
+
+export const runtime = 'nodejs'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -13,9 +16,8 @@ const ACTION_TOKEN_MAP: Record<Action, 'synopsis-generate' | 'synopsis-improve' 
 }
 
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('toonflow-auth-token')?.value
-  if (!authToken) {
-    console.warn('[/api/ai/novel-content] Missing auth cookie')
+  const uid = await verifiedUid(request)
+  if (!uid) {
     return NextResponse.json({ error: 'Authentication required — please sign in again' }, { status: 401 })
   }
 
@@ -30,25 +32,22 @@ export async function POST(request: NextRequest) {
       novelTitle: string
       currentSynopsis?: string
       userPrompt?: string
-      userId?: string
     }
 
-    const { action, novelTitle, currentSynopsis, userPrompt, userId } = body
+    const { action, novelTitle, currentSynopsis, userPrompt } = body
 
     if (!['generate-synopsis', 'improve-synopsis', 'expand-synopsis'].includes(action)) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
-    // Charge tokens if userId provided
-    if (userId) {
-      const tokenAction = ACTION_TOKEN_MAP[action]
-      const charge = await chargeTokens(userId, tokenAction, `AI ${action.replace(/-/g, ' ')} for "${novelTitle}"`)
-      if (!charge.ok) {
-        return NextResponse.json(
-          { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
-          { status: 402 }
-        )
-      }
+    // Charge tokens against the VERIFIED user — never a client-supplied id
+    const tokenAction = ACTION_TOKEN_MAP[action]
+    const charge = await chargeTokens(uid, tokenAction, `AI ${action.replace(/-/g, ' ')} for "${novelTitle}"`)
+    if (!charge.ok) {
+      return NextResponse.json(
+        { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
+        { status: 402 }
+      )
     }
 
     let userMessage = ''

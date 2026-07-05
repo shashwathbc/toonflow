@@ -1,5 +1,36 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-07-04 — Production security audit: fixed critical privilege-escalation, free-currency & billing-bypass holes
+
+Full-project engineering audit. All changes verified: `tsc` clean, `eslint` clean (0 warnings), production build clean (38 routes). Net −18 LOC.
+
+### Critical — Firestore rules let users self-grant balance & escalate to superadmin
+- **firestore.rules** (`/users/{userId}`): the `update` rule allowed `isOwner(userId)` to write **any** field on their own document. A user could set `balance` to any value or `role: 'superadmin'` directly via the client SDK — free tokens + full admin (rules' `isAdmin()` reads that same `role`). Owner update is now restricted to profile fields only (`displayName, bio, photoURL, bannerURL, socialLinks, updatedAt`); `balance/role/isCreator/totalEarnings` are server-only (Admin SDK bypasses rules). Follower/following counter carve-out unchanged; admin branch unchanged.
+
+### Critical — /api/session trusted client-supplied role & email (auth bypass)
+- **src/app/api/session/route.ts**: set the `role`/`email` cookies straight from the request body and never verified the `idToken`. The middleware (`src/proxy.ts`) gates `/admin` and `/admin/super` on those cookies, so anyone could POST `{role:'superadmin', email:'shashwathbc@gmail.com'}` and pass the gate. Now verifies the token with the Admin SDK, takes `email` from the decoded token, and reads `role` from Firestore — client body values ignored. `runtime = 'nodejs'`.
+
+### Critical — dashboard "Buy Coins" credited tokens with no payment
+- **dashboard/page.tsx** + **lib/firebase/wallet.ts**: `BuyTokensModal` called client-side `purchaseCoins()` which wrote `balance` directly — clicking Buy granted free coins. Removed `purchaseCoins`/client crediting entirely; the modal now runs the real Razorpay order flow. Coins are credited only by the verified webhook.
+
+### High — AI routes billed a client-supplied userId
+- **api/ai/{novel-assist,novel-content,generate-image}**: billing used `body.userId`, so a user could omit it (free AI) or pass another user's uid (drain their balance). All three now derive the uid from the verified session cookie via new **src/lib/auth/serverUser.ts** and charge that uid unconditionally.
+
+### High — token spend & purchase crediting were broken and racy
+- **src/lib/tokens.ts**: `chargeTokens` used the client SDK from server code (denied under the hardened rules) and did a non-atomic read-then-write (TOCTOU — concurrent requests could overspend). Rewritten on the Admin SDK inside a `runTransaction`.
+- **api/webhooks/route.ts**: credited via client SDK (also denied under hardened rules); `create-order` never put `userId` in the order notes, so the webhook always bailed and no real purchase ever credited. Now: `create-order` embeds the **verified** uid in notes; webhook credits via Admin SDK transaction with idempotency keyed on the payment id; signature compare is length-safe (`crypto.timingSafeEqual` previously threw on a mismatched-length signature).
+
+### Medium — stored XSS in the chapter reader
+- **src/lib/utils/sanitizeHtml.ts** (new) + chapter reader: chapter HTML was rendered raw via `dangerouslySetInnerHTML`. A creator owns their content docs and can write arbitrary HTML through the client SDK, so a crafted `<img onerror>`/`<script>` executed for every reader. Content is now run through an allowlist sanitizer (DOM-based in browser, conservative strip on server), memoized per chapter.
+
+### Auth session freshness
+- **src/contexts/AuthContext.tsx**: switched `onAuthStateChanged` → `onIdTokenChanged` so the 7-day session cookie is refreshed on hourly token rotation (it would otherwise carry an expired token that the now-verifying `/api/session` and API routes reject). Profile reload guarded to fire only on uid change.
+
+### Cleanup / SEO / deps
+- Removed dead client-side balance mutators `deductTokens`/`creditTokens` (0 callers, `firestore.ts`).
+- Added **src/app/robots.ts** and **src/app/sitemap.ts** (both were missing); sitemap best-effort includes published novels with a static fallback.
+- Removed unused runtime deps `embla-carousel-react`, `react-intersection-observer`.
+
 ## 2026-07-01 — Novel detail page: real-time chapter list + improved chapter row UI
 
 ### Root cause

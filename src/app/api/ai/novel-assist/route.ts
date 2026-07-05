@@ -1,7 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { chargeTokens } from '@/lib/tokens'
+import { verifiedUid } from '@/lib/auth/serverUser'
 
+export const runtime = 'nodejs'
 // Full-chapter generation streams for minutes — extend the serverless timeout
 export const maxDuration = 300
 
@@ -83,8 +85,8 @@ OUTPUT FORMAT — STRICT:
 - Maximum 300 words total`
 
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('toonflow-auth-token')?.value
-  if (!authToken) {
+  const uid = await verifiedUid(request)
+  if (!uid) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
@@ -100,7 +102,6 @@ export async function POST(request: NextRequest) {
       chapterContent,
       previousChapters,
       history,
-      userId,
       mode = 'chat',
     } = body
 
@@ -108,15 +109,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
 
-    // Charge tokens for AI assistant usage
-    if (userId) {
-      const charge = await chargeTokens(userId, 'novel-assist', `AI story assistant for "${novelTitle}"`)
-      if (!charge.ok) {
-        return NextResponse.json(
-          { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
-          { status: 402 }
-        )
-      }
+    // Charge tokens against the VERIFIED user — never a client-supplied id
+    const charge = await chargeTokens(uid, 'novel-assist', `AI story assistant for "${novelTitle}"`)
+    if (!charge.ok) {
+      return NextResponse.json(
+        { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
+        { status: 402 }
+      )
     }
 
     // Previous chapters power the consistency engine — cap total size to protect the context window

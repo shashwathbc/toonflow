@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { COIN_PACKAGES } from '@/lib/utils/constants'
+import { verifiedUid } from '@/lib/auth/serverUser'
+
+export const runtime = 'nodejs'
 
 // Razorpay order creation — requires RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env.local
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('toonflow-auth-token')?.value
-  if (!authToken) {
+  const uid = await verifiedUid(request)
+  if (!uid) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
@@ -37,7 +40,9 @@ export async function POST(request: NextRequest) {
       amount: amountInPaise,
       currency: 'INR',
       receipt,
-      notes: { packageId: pkg.id, coins: pkg.coins + pkg.bonus },
+      // userId is the VERIFIED uid — the webhook credits this account, so it must
+      // never be sourced from the client. Razorpay note values must be strings.
+      notes: { packageId: pkg.id, coins: String(pkg.coins + pkg.bonus), userId: uid },
     }
 
     const credentials = Buffer.from(`${keyId}:${keySecret}`).toString('base64')

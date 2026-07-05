@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
@@ -21,6 +21,7 @@ import { IntroPoster } from '@/components/reader/IntroPoster'
 import { TitlePage } from '@/components/reader/TitlePage'
 import { EndingPoster } from '@/components/reader/EndingPoster'
 import { cn } from '@/lib/utils/cn'
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml'
 import type { Novel, Chapter } from '@/types'
 
 // ── Font size options ─────────────────────────────────────────
@@ -49,6 +50,10 @@ export default function ChapterReaderPage() {
   const [showChapterList, setShowChapterList] = useState(false)
   const [headerVisible, setHeaderVisible] = useState(true)
   const [progress, setProgress] = useState(0)
+
+  // Sanitize the stored HTML once per chapter (defends readers against a
+  // creator embedding a script/onerror payload in their own content doc).
+  const safeContent = useMemo(() => sanitizeHtml(chapter?.content), [chapter?.content])
 
   const headerTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef    = useRef<HTMLDivElement>(null)
@@ -320,7 +325,7 @@ export default function ChapterReaderPage() {
         {chapter.content ? (
           <div
             className={cn('reader-content', FONT_OPTIONS[fontIdx].cls, centered && 'text-center')}
-            dangerouslySetInnerHTML={{ __html: chapter.content }}
+            dangerouslySetInnerHTML={{ __html: safeContent }}
           />
         ) : (
           <p className="text-white/30 italic text-center py-16">This chapter has no content yet.</p>

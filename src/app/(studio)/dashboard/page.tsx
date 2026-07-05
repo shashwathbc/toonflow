@@ -15,7 +15,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { getNovelsByAuthor, getWebtoonsByAuthor } from '@/lib/firebase/firestore'
 import {
   getUserTransactions, getUserWithdrawals,
-  createWithdrawal, purchaseCoins,
+  createWithdrawal,
   viewsToInr, EARNINGS_PER_VIEW,
 } from '@/lib/firebase/wallet'
 import { formatCount } from '@/lib/utils/formatters'
@@ -142,7 +142,7 @@ function ContentRow({ item, type, earnedInr }: {
 // ── Buy Tokens Modal ─────────────────────────────────────────
 
 function BuyTokensModal({ open, onClose, onSuccess }: {
-  open: boolean; onClose: () => void; onSuccess: (coins: number) => void
+  open: boolean; onClose: () => void; onSuccess: () => void
 }) {
   const { firebaseUser } = useAuth()
   const [selected, setSelected] = useState<string | null>(null)
@@ -150,14 +150,43 @@ function BuyTokensModal({ open, onClose, onSuccess }: {
 
   const pkg = COIN_PACKAGES.find((p) => p.id === selected) ?? null
 
+  // Coins are credited ONLY by the verified Razorpay webhook — never client-side.
   const handleBuy = async () => {
     if (!pkg || !firebaseUser) return
+
+    const Razorpay = typeof window !== 'undefined'
+      ? (window as typeof window & { Razorpay?: new (opts: Record<string, unknown>) => { open(): void } }).Razorpay
+      : undefined
+    if (!Razorpay) {
+      toast.error('Payment gateway not loaded — please try again in a moment.')
+      return
+    }
+
     setLoading(true)
     try {
-      await purchaseCoins(firebaseUser.uid, pkg.id, pkg.coins + pkg.bonus, pkg.priceInr)
-      toast.success(`${pkg.coins + pkg.bonus} coins added to your wallet!`)
-      onSuccess(pkg.coins + pkg.bonus)
-      onClose()
+      const res = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId: pkg.id, priceInr: pkg.priceInr }),
+      })
+      const data = await res.json() as { orderId?: string; amount?: number; currency?: string; error?: string }
+      if (!res.ok || !data.orderId) throw new Error(data.error ?? 'Failed to create order')
+
+      const rzp = new Razorpay({
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: data.amount,
+        currency: data.currency,
+        name: 'Toonflow Studio Paint',
+        description: `${pkg.coins + pkg.bonus} Coins`,
+        order_id: data.orderId,
+        theme: { color: '#00C896' },
+        handler: () => {
+          toast.success('Payment received — coins will appear shortly.')
+          onSuccess()
+          onClose()
+        },
+      })
+      rzp.open()
     } catch (e: unknown) {
       toast.error((e as Error).message)
     } finally {
@@ -750,7 +779,7 @@ export default function DashboardPage() {
       <BuyTokensModal
         open={showBuy}
         onClose={() => setShowBuy(false)}
-        onSuccess={(coins) => setCoinBalance((prev) => prev + coins)}
+        onSuccess={load}
       />
       <WithdrawModal
         open={showWithdraw}

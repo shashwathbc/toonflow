@@ -4,11 +4,12 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
 } from 'react'
-import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth'
+import { onIdTokenChanged, type User as FirebaseUser } from 'firebase/auth'
 import { auth } from '@/lib/firebase/config'
 import type { UserProfile } from '@/types'
 import { SUPER_ADMIN_EMAIL } from '@/lib/utils/constants'
@@ -36,15 +37,14 @@ function firestoreService() {
   return import('@/lib/firebase/firestore')
 }
 
-async function setSessionCookie(
-  idToken: string,
-  role: string,
-  email: string
-): Promise<void> {
+// The server verifies the idToken and derives role/email itself — we only send
+// the token. Called on every token refresh so the 7-day cookie never holds a
+// stale/expired token.
+async function setSessionCookie(idToken: string): Promise<void> {
   await fetch('/api/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken, role, email }),
+    body: JSON.stringify({ idToken }),
   })
 }
 
@@ -75,9 +75,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  // Tracks the uid whose profile is already loaded, so an hourly token refresh
+  // (which also fires onIdTokenChanged) refreshes the cookie without re-fetching
+  // the profile from Firestore on every tick.
+  const loadedUid = useRef<string | null>(null)
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    // onIdTokenChanged fires on sign-in, sign-out AND token refresh — keeping the
+    // verified session cookie fresh, unlike onAuthStateChanged.
+    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Always refresh the session cookie so it never carries a stale token.
+        firebaseUser
+          .getIdToken()
+          .then((idToken) => setSessionCookie(idToken))
+          .catch((e) => console.error('[Auth] session cookie error:', e))
+
+        // Only reload the profile when the signed-in user actually changes.
+        if (loadedUid.current === firebaseUser.uid) return
+        loadedUid.current = firebaseUser.uid
+
         const { getUserProfile, createUserDocument } = await firestoreService()
 
         // Never let document-creation or profile-fetch errors block auth from resolving
@@ -86,14 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         let profile: UserProfile | null = null
-        let idToken = ''
         try {
-          ;[profile, idToken] = await Promise.all([
-            getUserProfile(firebaseUser.uid),
-            firebaseUser.getIdToken(),
-          ])
+          profile = await getUserProfile(firebaseUser.uid)
         } catch (e) {
-          console.error('[Auth] profile/token fetch error:', e)
+          console.error('[Auth] profile fetch error:', e)
           // Fall through — auth still resolves with firebaseUser but no profile
         }
 
@@ -109,15 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAdmin: ['admin', 'superadmin'].includes(profile?.role ?? ''),
           isSuperAdmin,
         })
-
-        if (idToken) {
-          await setSessionCookie(
-            idToken,
-            isSuperAdmin ? 'superadmin' : (profile?.role ?? 'user'),
-            firebaseUser.email ?? ''
-          ).catch((e) => console.error('[Auth] session cookie error:', e))
-        }
       } else {
+        loadedUid.current = null
         setState({
           firebaseUser: null,
           userProfile: null,

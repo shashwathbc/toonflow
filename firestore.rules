@@ -60,7 +60,12 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true;
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin()
+      // Owner may edit ONLY profile fields. balance/role/isCreator/totalEarnings
+      // are server-managed via the Admin SDK (which bypasses these rules) — a
+      // client must never write them, or a user could self-grant tokens or
+      // escalate to superadmin by writing to their own document.
+      allow update: if isAdmin()
+        || (isOwner(userId) && onlyUpdates(['displayName', 'bio', 'photoURL', 'bannerURL', 'socialLinks', 'updatedAt']))
         || onlyUpdates(['followerCount', 'followingCount']);
       allow delete: if isAdmin();
     }

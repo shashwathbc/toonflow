@@ -36,7 +36,6 @@ import type {
   ReadingHistoryItem,
   FollowRecord,
   Transaction,
-  TransactionType,
   FirestoreTimestamp,
 } from '@/types'
 import { SUPER_ADMIN_EMAIL, TRENDING_LIMIT, BROWSE_LIMIT } from '@/lib/utils/constants'
@@ -878,46 +877,9 @@ export async function getUserTransactions(uid: string, limitCount = 50): Promise
   return snaps.docs.map((d) => fromDoc<Transaction>(d))
 }
 
-export async function deductTokens(
-  uid: string,
-  coins: number,
-  type: TransactionType,
-  description: string
-): Promise<void> {
-  const batch = writeBatch(db)
-  const txRef = doc(collection(db, 'transactions'))
-  batch.set(txRef, {
-    userId: uid,
-    type,
-    amount: 0,
-    coins: -coins,
-    description,
-    createdAt: serverTimestamp(),
-  })
-  batch.update(doc(db, 'users', uid), { balance: increment(-coins) })
-  await batch.commit()
-}
-
-export async function creditTokens(
-  uid: string,
-  coins: number,
-  amount: number,
-  type: TransactionType,
-  description: string
-): Promise<void> {
-  const batch = writeBatch(db)
-  const txRef = doc(collection(db, 'transactions'))
-  batch.set(txRef, {
-    userId: uid,
-    type,
-    amount,
-    coins,
-    description,
-    createdAt: serverTimestamp(),
-  })
-  batch.update(doc(db, 'users', uid), { balance: increment(coins) })
-  await batch.commit()
-}
+// Token balance mutations are server-only (Admin SDK): AI spend lives in
+// src/lib/tokens.ts and purchases are credited by the Razorpay webhook.
+// Clients cannot write `balance` — Firestore rules forbid it.
 
 // ── Withdrawal Requests ───────────────────────────────────────
 

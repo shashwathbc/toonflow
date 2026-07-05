@@ -1,6 +1,6 @@
 import {
-  collection, doc, addDoc, updateDoc, getDocs,
-  query, where, limit, serverTimestamp, increment,
+  collection, addDoc, getDocs,
+  query, where, limit, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from './db'
 import type { Transaction, Withdrawal, WithdrawalMethod } from '@/types'
@@ -61,22 +61,7 @@ export async function createWithdrawal(
   return ref.id
 }
 
-export async function purchaseCoins(
-  uid: string,
-  packageId: string,
-  coins: number,
-  priceInr: number,
-): Promise<void> {
-  await addDoc(collection(db, 'transactions'), {
-    userId: uid,
-    type: 'coin_purchase',
-    amount: priceInr,
-    coins,
-    description: `Purchased ${coins} coins`,
-    relatedContentId: packageId,
-    createdAt: serverTimestamp(),
-  })
-  await updateDoc(doc(db, 'users', uid), {
-    balance: increment(coins),
-  })
-}
+// NOTE: coins are credited only by the verified Razorpay webhook
+// (src/app/api/webhooks) via the Admin SDK. There is deliberately no
+// client-side crediting function — a browser must never be able to write
+// `balance` (Firestore rules forbid it).
