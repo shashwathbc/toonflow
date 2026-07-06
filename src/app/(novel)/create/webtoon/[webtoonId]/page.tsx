@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -14,6 +14,9 @@ import {
 } from '@/lib/firebase/firestore'
 import { EpisodeSidebar } from '@/components/editor/EpisodeSidebar'
 import { WebtoonToolbar } from '@/components/editor/WebtoonToolbar'
+import { BrandingMetaDialog } from '@/components/editor/BrandingMetaDialog'
+import { EpisodeIntroPage } from '@/components/webtoon/EpisodeIntroPage'
+import { EpisodeOutroPage } from '@/components/webtoon/EpisodeOutroPage'
 import dynamic from 'next/dynamic'
 
 const AIImageGenerator = dynamic(
@@ -30,6 +33,8 @@ import {
   ArrowDown,
   Sparkles,
   Check,
+  Lock,
+  Pencil,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { Webtoon, Episode, PanelSpan } from '@/types'
@@ -59,16 +64,17 @@ export default function WebtoonEditorPage({ params }: PageProps) {
   const [, setPublishing] = useState(false)
   const [uploadingProgress, setUploadingProgress] = useState<Record<string, number>>({})
   const [canvasWidth, setCanvasWidth] = useState(800)
+  const [brandingEdit, setBrandingEdit] = useState<'intro' | 'outro' | null>(null)
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
-  const canvasStripRef = useRef<HTMLDivElement>(null)
 
   const CANVAS_MIN = 360
   const CANVAS_MAX = 1400
 
-  // Width is set via the DOM: static-analysis a11y linters reject
-  // dynamic inline style attributes in JSX
-  useEffect(() => {
-    if (canvasStripRef.current) canvasStripRef.current.style.width = `${canvasWidth}px`
+  // Width is set via the DOM: static-analysis a11y linters reject dynamic
+  // inline style attributes in JSX. A callback ref (recreated per width) keeps
+  // the strip sized on mount and on every width change.
+  const canvasStripRef = useCallback((node: HTMLDivElement | null) => {
+    if (node) node.style.width = `${canvasWidth}px`
   }, [canvasWidth])
 
   const clampCanvas = (w: number) => Math.min(CANVAS_MAX, Math.max(CANVAS_MIN, w))
@@ -256,6 +262,25 @@ export default function WebtoonEditorPage({ params }: PageProps) {
       setTimeout(() => setSaveState('idle'), 2000)
     } catch {
       setSaveState('error')
+    }
+  }
+
+  // Persists the editable text of the locked intro/outro branding pages.
+  // Rethrows on failure so the dialog stays open with the user's edits intact.
+  const saveBrandingMeta = async (meta: Record<string, string>) => {
+    if (!activeEpisode || !brandingEdit) return
+    setSaveState('saving')
+    const patch: Partial<Episode> = brandingEdit === 'intro' ? { intro: meta } : { outro: meta }
+    try {
+      await updateEpisode(webtoonId, activeEpisode.id, patch)
+      setActiveEpisode((prev) => (prev ? { ...prev, ...patch } : prev))
+      setSaveState('saved')
+      toast.success(brandingEdit === 'intro' ? 'Intro page updated' : 'Outro page updated')
+      setTimeout(() => setSaveState('idle'), 2000)
+    } catch (err) {
+      setSaveState('error')
+      toast.error('Failed to save page text')
+      throw err
     }
   }
 
@@ -473,17 +498,29 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {(activeEpisode.panels ?? []).length === 0 && !isUploading ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center p-12 max-w-sm">
-                    <Upload size={36} className="text-white/20 mb-3" aria-hidden="true" />
-                    <h3 className="font-semibold text-white/80 text-sm mb-1">Canvas is empty</h3>
-                    <p className="text-xs text-white/40 mb-4 leading-relaxed">
-                      Upload vertical panel image strips or generate them with our Stability AI integration.
-                    </p>
-                  </div>
-                ) : (
                   <div ref={canvasStripRef} className="relative flex-shrink-0">
                     <div className="bg-black shadow-2xl rounded-sm overflow-hidden flex flex-wrap items-start">
+                    {/* Mandatory intro page — structural, not a panel: no panel
+                        operation can delete, move or duplicate it */}
+                    <div className="group/intro relative w-full">
+                      <EpisodeIntroPage webtoon={webtoon} episode={activeEpisode} />
+                      <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2 opacity-0 group-hover/intro:opacity-100 focus-within:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
+                        <span className="flex items-center gap-1 text-[10px] bg-black/70 backdrop-blur-sm text-warning font-semibold px-2 py-0.5 rounded-full mt-0.5">
+                          <Lock size={9} aria-hidden="true" />
+                          Intro · Locked
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setBrandingEdit('intro')}
+                          className="pointer-events-auto flex items-center gap-1.5 text-[11px] font-medium bg-black/70 backdrop-blur-sm text-white/70 hover:text-white px-2.5 py-1 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent"
+                          aria-label="Edit intro page text"
+                        >
+                          <Pencil size={11} aria-hidden="true" />
+                          Edit Text
+                        </button>
+                      </div>
+                    </div>
+
                     {(activeEpisode.panels ?? []).map((panel, idx) => {
                       const isThumb = activeEpisode.thumbnailURL === panel.url
                       const span = panel.span ?? 'full'
@@ -590,7 +627,18 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                       )
                     })}
 
-                    {/* End-of-strip append zone */}
+                    {(activeEpisode.panels ?? []).length === 0 && !isUploading && (
+                      <div className="w-full flex flex-col items-center gap-1.5 py-10 border-t border-dashed border-white/10 text-center px-6">
+                        <Upload size={22} className="text-white/20" aria-hidden="true" />
+                        <p className="text-xs font-semibold text-white/50">No story panels yet</p>
+                        <p className="text-[11px] text-white/30 leading-relaxed max-w-xs">
+                          Your story lives between the locked Intro and Outro pages.
+                          Upload vertical panel strips below or generate them with AI.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* End-of-strip append zone — always inserts before the outro */}
                     <label className="w-full flex flex-col items-center justify-center gap-2 py-10 border-t border-dashed border-white/10 cursor-pointer text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors">
                       <Plus size={18} aria-hidden="true" />
                       <span className="text-xs font-medium">Add panels to the strip</span>
@@ -602,6 +650,26 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                         onChange={handlePanelUpload}
                       />
                     </label>
+
+                    {/* Mandatory outro page — structural twin of the intro */}
+                    <div className="group/outro relative w-full">
+                      <EpisodeOutroPage webtoon={webtoon} episode={activeEpisode} interactive={false} />
+                      <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2 opacity-0 group-hover/outro:opacity-100 focus-within:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
+                        <span className="flex items-center gap-1 text-[10px] bg-black/70 backdrop-blur-sm text-warning font-semibold px-2 py-0.5 rounded-full mt-0.5">
+                          <Lock size={9} aria-hidden="true" />
+                          Outro · Locked
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setBrandingEdit('outro')}
+                          className="pointer-events-auto flex items-center gap-1.5 text-[11px] font-medium bg-black/70 backdrop-blur-sm text-white/70 hover:text-white px-2.5 py-1 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent"
+                          aria-label="Edit outro page text"
+                        >
+                          <Pencil size={11} aria-hidden="true" />
+                          Edit Text
+                        </button>
+                      </div>
+                    </div>
                     </div>
 
                     {/* Canvas resize handle — pointer drag surface; keyboard/AT
@@ -629,7 +697,6 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                       className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:bottom-2 focus-visible:right-2 focus-visible:ring-2 focus-visible:ring-accent"
                     />
                   </div>
-                )}
               </div>
             </>
           ) : (
@@ -676,6 +743,17 @@ export default function WebtoonEditorPage({ params }: PageProps) {
           </aside>
         )}
       </div>
+
+      {/* Intro/Outro text editor */}
+      {brandingEdit && activeEpisode && (
+        <BrandingMetaDialog
+          kind={brandingEdit}
+          webtoon={webtoon}
+          episode={activeEpisode}
+          onClose={() => setBrandingEdit(null)}
+          onSave={saveBrandingMeta}
+        />
+      )}
     </div>
   )
 }

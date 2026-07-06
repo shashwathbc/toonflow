@@ -1044,6 +1044,9 @@ export async function duplicateEpisode(
     title: `${data.title} (Copy)`,
     panels: data.panels ?? [],
     thumbnailURL: data.thumbnailURL ?? null,
+    // Branding-page text overrides travel with the episode ({} = defaults)
+    intro: data.intro ?? {},
+    outro: data.outro ?? {},
     episodeNumber: afterNumber + 0.5,
     isPremium: false,
     coinCost: 0,

@@ -11,9 +11,14 @@
 // with inline scripts allowed, this policy still blocks the high-value vectors:
 // no arbitrary external script hosts, no object/embed, no framing, locked
 // base-uri and form-action, restricted connect/img/frame origins.
+//
+// 'unsafe-eval' is dev-only: React/Next dev tooling (error overlay, callstack
+// reconstruction, source maps) needs eval(); React never uses eval() in prod.
+const isDev = process.env.NODE_ENV === 'development'
+
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://apis.google.com https://www.gstatic.com",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://checkout.razorpay.com https://apis.google.com https://www.gstatic.com`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://picsum.photos https://*.gstatic.com https://*.googleusercontent.com",
   "font-src 'self' data:",

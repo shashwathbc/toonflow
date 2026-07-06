@@ -10,6 +10,8 @@ import { getWebtoonById, getEpisodesByWebtoon, upsertReadingHistory } from '@/li
 import { useViewTracking } from '@/hooks/useViewTracking'
 import LikeButton from '@/components/reader/LikeButton'
 import CommentSection from '@/components/reader/CommentSection'
+import { EpisodeIntroPage } from '@/components/webtoon/EpisodeIntroPage'
+import { EpisodeOutroPage } from '@/components/webtoon/EpisodeOutroPage'
 import type { Webtoon, Episode } from '@/types'
 
 export default function EpisodeReaderPage() {
@@ -92,8 +94,11 @@ export default function EpisodeReaderPage() {
         </div>
       </header>
 
-      {/* Panels — vertical scroll webtoon format */}
+      {/* Panels — vertical scroll webtoon format, always framed by the
+          mandatory Toonflow intro and outro branding pages */}
       <main id="main-content" className="max-w-2xl mx-auto" tabIndex={-1}>
+        {webtoon && <EpisodeIntroPage webtoon={webtoon} episode={episode} />}
+
         {panels.length > 0 ? (
           <div className="flex flex-col">
             {panels.map((url, i) => (
@@ -116,6 +121,8 @@ export default function EpisodeReaderPage() {
             <p className="text-sm">No panels in this episode yet</p>
           </div>
         )}
+
+        {webtoon && <EpisodeOutroPage webtoon={webtoon} episode={episode} />}
 
         {/* Navigation */}
         <nav aria-label="Episode navigation" className="flex items-center justify-between gap-4 px-4 py-8 border-t border-bg-border">

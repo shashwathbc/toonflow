@@ -10,7 +10,7 @@ export const EMAIL_COOKIE_NAME = 'toonflow-user-email'
  * Flip to true when the feature is ready to ship.
  */
 export const FEATURE_FLAGS = {
-  webtoonStudio: false, // /create/webtoon/** — Webtoon Studio (locked card on /create grid)
+  webtoonStudio: true, // /create/webtoon/** — Webtoon Studio (unlocked)
   wallet: false, // /wallet/** — token purchases & payouts (locked in place)
 } as const
 

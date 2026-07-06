@@ -40,6 +40,29 @@ export interface Webtoon {
   publishedAt: FirestoreTimestamp | null
 }
 
+/**
+ * Editable text overrides for the mandatory branded intro page every episode
+ * opens with. The page itself is structural (always rendered before the panel
+ * strip in editor and reader — it is not a panel, so it can never be deleted,
+ * moved or duplicated); absent/empty fields fall back to series data.
+ */
+export interface EpisodeIntroMeta {
+  /** Short hook line under the title. Default: first sentence of the synopsis. */
+  tagline?: string
+  /** "Story & Art" credit. Default: the webtoon's authorName. */
+  creditLine?: string
+}
+
+/** Same contract as {@link EpisodeIntroMeta}, for the mandatory closing page. */
+export interface EpisodeOutroMeta {
+  /** Big farewell headline. Default: "Thank You for Reading". */
+  message?: string
+  /** Teaser under the headline. Default: "Next episode coming soon". */
+  teaser?: string
+  /** Creator handle / social line shown with the follow CTA. */
+  handle?: string
+}
+
 export interface Episode {
   id: string
   webtoonId: string
@@ -51,6 +74,8 @@ export interface Episode {
   coinCost: number
   viewCount: number
   status: 'draft' | 'published'
+  intro?: EpisodeIntroMeta
+  outro?: EpisodeOutroMeta
   createdAt: FirestoreTimestamp
   publishedAt: FirestoreTimestamp | null
 }

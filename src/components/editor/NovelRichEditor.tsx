@@ -22,6 +22,11 @@ interface NovelRichEditorProps {
   onChange: (html: string, wordCount: number) => void
   placeholder?: string
   readOnly?: boolean
+  /** Rendered inside the canvas scroll area above the editable content —
+      used for the locked branding pages readers see before the chapter */
+  beforeContent?: React.ReactNode
+  /** Rendered inside the canvas scroll area below the editable content */
+  afterContent?: React.ReactNode
 }
 
 // Text color swatches for the palette
@@ -71,6 +76,8 @@ export function NovelRichEditor({
   onChange,
   placeholder = 'Begin your story here…',
   readOnly = false,
+  beforeContent,
+  afterContent,
 }: NovelRichEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -217,11 +224,14 @@ export function NovelRichEditor({
         </div>
       )}
 
-      {/* Editor content */}
+      {/* Editor content — optionally framed by the locked branding pages so
+          the canvas scrolls exactly like the published reader */}
       <div className="flex-1 overflow-y-auto bg-black">
+        {beforeContent}
         <div className="max-w-[680px] mx-auto px-6 sm:px-10 py-10 pb-24">
           <EditorContent editor={editor} />
         </div>
+        {afterContent}
       </div>
 
       {/* Stats footer */}
