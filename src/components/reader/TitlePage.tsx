@@ -28,15 +28,11 @@ export function TitlePage({ novel, chapterTitle, chapterNumber }: TitlePageProps
 
       {/* Subtle centre glow */}
       <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%)' }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(255,255,255,0.03)_0%,transparent_70%)]"
         aria-hidden="true"
       />
 
-      <div
-        className="relative z-10 flex flex-col md:flex-row items-center gap-10 px-6 py-16 max-w-4xl mx-auto w-full"
-        style={{ animationName: 'reader-fade-in', animationDuration: '1s', animationFillMode: 'both', animationDelay: '0.2s' }}
-      >
+      <div className="relative z-10 flex flex-col md:flex-row items-center gap-10 px-6 py-16 max-w-4xl mx-auto w-full animate-[reader-fade-in_1s_0.2s_both]">
         {/* Cover */}
         {novel.coverURL && (
           <div className="flex-shrink-0 w-36 sm:w-48 aspect-[2/3] rounded-2xl overflow-hidden shadow-[0_20px_80px_rgba(0,0,0,0.8)] border border-white/10">
@@ -60,14 +56,7 @@ export function TitlePage({ novel, chapterTitle, chapterNumber }: TitlePageProps
           )}
 
           {/* Title */}
-          <h2
-            className="font-black text-white leading-none"
-            style={{
-              fontSize:   'clamp(2.2rem, 7vw, 5rem)',
-              fontFamily: 'Georgia, "Times New Roman", serif',
-              textShadow: '0 2px 8px rgba(0,0,0,0.6)',
-            }}
-          >
+          <h2 className="font-black text-white leading-none text-[length:clamp(2.2rem,7vw,5rem)] [font-family:Georgia,'Times_New_Roman',serif] [text-shadow:0_2px_8px_rgba(0,0,0,0.6)]">
             {novel.title}
           </h2>
 

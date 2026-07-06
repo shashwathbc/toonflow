@@ -944,3 +944,19 @@ Novels/webtoons showed stale author names (e.g. "Shashwath Bc" vs "Shashwath") b
 ## 2026-07-05 — Author name self-heal on own-profile view
 Follow-up to the author-name sync: added a safety net so stale names correct themselves.
 - **(main)/profile/[uid]/ProfilePageClient.tsx**: on load, when the owner views their own profile, if any authored novel/webtoon's `authorName`/`authorPhotoURL` differs from the current profile, it calls `syncAuthorContent` and updates local state. Combined with sync-on-save, visiting your profile (or saving it) unifies every work to your current display name. Root cause of the "still Shashwath Bc" report: earlier renames never persisted (the undefined-socialLinks save bug) and the sync code postdated them — a successful save now propagates. `tsc` + `eslint` + `next build` clean.
+
+## 2026-07-06 — Cleared "no-inline-styles" warnings (34 Problems from MS Edge Tools)
+Converted every inline `style={{…}}` to Tailwind arbitrary-value classes so webhint's no-inline-styles rule passes; visual output is byte-identical (verified against compiled CSS).
+- **reader/CreditsPoster.tsx, EndingPoster.tsx, IntroPoster.tsx, TitlePage.tsx**: clip-paths, radial/repeating gradients, grid+mask overlay, box/text/drop shadows, Georgia font stacks, clamp() font sizes and all `reader-*` animations moved into classes (e.g. `[clip-path:polygon(…)]`, `bg-[radial-gradient(…)]`, `animate-[reader-fade-in_0.9s_both]`, `text-[length:clamp(…)]`). `ACCENT` consts removed — #8B5CF6 = `violet-500`, #C4B5FD = `violet-300`, used as named classes where a plain color applies.
+- **Particles (Intro 28 / Ending 20)**: per-particle position/opacity/timing precomputed into literal class arrays (same `(i*k+c)%m` values, incl. `--p-opacity`); shared class animates `reader-particle-float` via `var(--p-dur)`/`var(--p-delay)`. Sizes were constant all along (2px intro / 3px ending) so they live in the shared class.
+- **admin/BusinessCharts.tsx**: legend swatches → `bg-[#3987e5]`/`bg-[#9085e9]` (sync comment added; SERIES consts still drive the Recharts props).
+- **(reader)/loading.tsx**: skeleton line widths → literal `w-[NN%]` class array (same ragged pattern).
+- **admin/super/settings/page.tsx**: toggle sizing → `w-10 h-[22px]` (also kills the invalid `h-5.5` class the inline style was papering over).
+- **editor/ChapterSidebar.tsx**: opacity/z-index while dragging → classes; only dnd-kit's runtime `transform`/`transition` stay inline (unavoidable — flagged row commented).
+- `tsc` + `eslint` clean; Tailwind CLI compile confirms every new arbitrary class emits the exact CSS the inline styles produced.
+
+## 2026-07-06 — Cleared the 3 remaining Edge Tools problems
+Follow-up to the no-inline-styles sweep.
+- **admin/super/settings/page.tsx (ToggleRow)**: replaced the `button role="switch" aria-checked={…}` with a native `<input type="checkbox">` styled as the same switch (`appearance-none` track + `after:` knob, identical geometry/colors). Native `checked` carries the state so there is no aria-checked for the static analyzer to choke on (axe/aria), and the control now has a discernible name (axe/name-role-value) via `aria-label` plus a real `<label htmlFor>` (CLAUDE.md WCAG rule) — clicking the label toggles it too.
+- **.hintrc** (new, repo root): webhint config extending `development`, ignoring only `no-inline-styles` for `ChapterSidebar.tsx` — dnd-kit's per-frame drag `transform`/`transition` must be inline; every other file/hint is still checked.
+- `tsc` + `eslint` clean; Tailwind compile confirms `appearance-none` / `after:translate-x-[18px]` emit.

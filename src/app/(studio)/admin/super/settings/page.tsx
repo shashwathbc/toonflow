@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Settings, Loader2, Save, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -10,30 +10,31 @@ import {
 } from '@/lib/firebase/admin'
 import { cn } from '@/lib/utils/cn'
 
+// Native checkbox styled as a switch — native `checked` carries the on/off
+// state (no aria-checked needed) and the connected <label> names the control.
 function ToggleRow({ label, description, checked, onChange }: {
   label: string; description: string; checked: boolean; onChange: (v: boolean) => void
 }) {
+  const id = useId()
   return (
     <div className="flex items-start justify-between py-4 border-b border-bg-border/50 last:border-0">
       <div className="flex-1 pr-4">
-        <p className="text-sm font-medium text-text">{label}</p>
+        <label htmlFor={id} className="block text-sm font-medium text-text cursor-pointer">{label}</label>
         <p className="text-xs text-text-muted mt-0.5">{description}</p>
       </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        aria-label={label}
         className={cn(
-          'relative w-10 h-5.5 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none flex-shrink-0',
-          checked ? 'bg-accent' : 'bg-bg-elevated border border-bg-border'
+          'relative w-10 h-[22px] rounded-full appearance-none cursor-pointer transition-colors flex-shrink-0',
+          'focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
+          'after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:shadow after:transition-transform',
+          checked ? 'bg-accent after:translate-x-[18px]' : 'bg-bg-elevated border border-bg-border'
         )}
-        style={{ height: '22px', width: '40px' }}
-      >
-        <span className={cn(
-          'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
-          checked ? 'translate-x-[18px]' : 'translate-x-0'
-        )} />
-      </button>
+      />
     </div>
   )
 }

@@ -1,0 +1,9 @@
+{
+  "extends": ["development"],
+  "ignoredUrls": [
+    {
+      "domain": "ChapterSidebar\\.tsx",
+      "hints": ["no-inline-styles"]
+    }
+  ]
+}

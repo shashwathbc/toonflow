@@ -132,8 +132,9 @@ export default function BusinessCharts({ data }: { data: BusinessAnalytics }) {
           <div className="h-44 flex items-center justify-center text-sm text-text-muted">No content yet</div>
         )}
         <div className="flex items-center gap-4 mt-2 text-[11px] text-text-secondary" aria-hidden="true">
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: SERIES_1 }} /> Novel</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: SERIES_4 }} /> Webtoon</span>
+          {/* swatch classes must stay in sync with SERIES_1 / SERIES_4 above */}
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block bg-[#3987e5]" /> Novel</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block bg-[#9085e9]" /> Webtoon</span>
         </div>
       </div>
     </div>

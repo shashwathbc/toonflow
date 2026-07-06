@@ -81,11 +81,10 @@ function SortableChapterRow({
     isDragging,
   } = useSortable({ id: chapter.id })
 
+  // dnd-kit computes drag transforms at runtime, so these two must stay inline
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
-    zIndex: isDragging ? 10 : undefined,
   }
 
   const wordCount = chapter.wordCount ?? 0
@@ -96,7 +95,7 @@ function SortableChapterRow({
       style={style}
       className={`group relative rounded-lg transition-colors ${
         isActive ? 'bg-white/10' : 'hover:bg-white/5'
-      }`}
+      } ${isDragging ? 'z-10 opacity-40' : ''}`}
     >
       <div className="flex items-start gap-1 p-2">
         {/* Drag handle */}
