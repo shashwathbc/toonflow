@@ -788,11 +788,24 @@ export async function deleteWebtoon(id: string): Promise<void> {
 }
 
 export async function publishWebtoon(id: string): Promise<void> {
-  await updateDoc(doc(db, 'webtoons', id), {
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'webtoons', id), {
     status: 'ongoing',
     publishedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
+  // Auto-publish all draft episodes that have at least one panel so the
+  // series immediately shows content to readers.
+  const episodes = await getEpisodesByWebtoon(id)
+  for (const ep of episodes) {
+    if (ep.status === 'draft' && (ep.panels?.length ?? 0) > 0) {
+      batch.update(doc(db, 'webtoons', id, 'episodes', ep.id), {
+        status: 'published',
+        publishedAt: serverTimestamp(),
+      })
+    }
+  }
+  await batch.commit()
 }
 
 export async function unpublishWebtoon(id: string): Promise<void> {
@@ -800,6 +813,20 @@ export async function unpublishWebtoon(id: string): Promise<void> {
     status: 'draft',
     publishedAt: null,
     updatedAt: serverTimestamp(),
+  })
+}
+
+export async function publishEpisode(webtoonId: string, episodeId: string): Promise<void> {
+  await updateDoc(doc(db, 'webtoons', webtoonId, 'episodes', episodeId), {
+    status: 'published',
+    publishedAt: serverTimestamp(),
+  })
+}
+
+export async function unpublishEpisode(webtoonId: string, episodeId: string): Promise<void> {
+  await updateDoc(doc(db, 'webtoons', webtoonId, 'episodes', episodeId), {
+    status: 'draft',
+    publishedAt: null,
   })
 }
 

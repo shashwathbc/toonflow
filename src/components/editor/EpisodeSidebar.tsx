@@ -26,6 +26,8 @@ import {
   ChevronRight,
   ImageIcon,
   Loader2,
+  Globe,
+  EyeOff,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -33,6 +35,8 @@ import {
   deleteEpisode,
   duplicateEpisode,
   reorderEpisodes,
+  publishEpisode,
+  unpublishEpisode,
 } from '@/lib/firebase/firestore'
 import { nowTimestamp } from '@/lib/utils/time'
 import type { Episode } from '@/types'
@@ -52,6 +56,7 @@ interface SortableEpisodeRowProps {
   pendingDeleteId: string | null
   onSelect: () => void
   onDuplicate: () => void
+  onTogglePublish: () => void
   onRequestDelete: () => void
   onConfirmDelete: () => void
   onCancelDelete: () => void
@@ -63,6 +68,7 @@ function SortableEpisodeRow({
   pendingDeleteId,
   onSelect,
   onDuplicate,
+  onTogglePublish,
   onRequestDelete,
   onConfirmDelete,
   onCancelDelete,
@@ -158,6 +164,19 @@ function SortableEpisodeRow({
           <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               type="button"
+              onClick={(e) => { e.stopPropagation(); onTogglePublish() }}
+              className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-white ${
+                episode.status === 'published'
+                  ? 'text-accent hover:text-warning hover:bg-warning/10'
+                  : 'text-white/40 hover:text-accent hover:bg-accent/10'
+              }`}
+              aria-label={episode.status === 'published' ? `Unpublish episode ${episode.episodeNumber}` : `Publish episode ${episode.episodeNumber}`}
+              title={episode.status === 'published' ? 'Unpublish' : 'Publish'}
+            >
+              {episode.status === 'published' ? <EyeOff size={11} aria-hidden="true" /> : <Globe size={11} aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); onDuplicate() }}
               className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
               aria-label={`Duplicate episode ${episode.episodeNumber}`}
@@ -251,6 +270,20 @@ export function EpisodeSidebar({
       toast.success('Episode duplicated')
     } catch {
       toast.error('Failed to duplicate episode')
+    }
+  }
+
+  async function handleTogglePublish(episode: Episode) {
+    try {
+      if (episode.status === 'published') {
+        await unpublishEpisode(webtoonId, episode.id)
+        toast.success(`Episode ${episode.episodeNumber} unpublished`)
+      } else {
+        await publishEpisode(webtoonId, episode.id)
+        toast.success(`Episode ${episode.episodeNumber} published`)
+      }
+    } catch {
+      toast.error('Failed to update episode status')
     }
   }
 
@@ -359,6 +392,7 @@ export function EpisodeSidebar({
                     pendingDeleteId={pendingDeleteId}
                     onSelect={() => onSelectEpisode(episode)}
                     onDuplicate={() => handleDuplicate(episode)}
+                    onTogglePublish={() => handleTogglePublish(episode)}
                     onRequestDelete={() => setPendingDeleteId(episode.id)}
                     onConfirmDelete={() => handleConfirmDelete(episode)}
                     onCancelDelete={() => setPendingDeleteId(null)}
