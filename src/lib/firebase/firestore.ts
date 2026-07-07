@@ -14,6 +14,7 @@ import {
   increment,
   serverTimestamp,
   writeBatch,
+  runTransaction,
   type QueryDocumentSnapshot,
   type DocumentData,
   type FirestoreError,
@@ -862,26 +863,55 @@ export async function reorderEpisodes(
 }
 
 // ── Followers ───────────────────────────────────────────────
+//
+// A subscription writes three documents in ONE transaction so counters can
+// never drift from the actual relationship docs:
+//   users/{authorId}/followers/{followerId}   — who follows this creator
+//   users/{followerId}/following/{authorId}   — who this user follows
+//   follows/{followerId_followingId}          — flat edge (legacy + fast lookup)
+// plus followerCount / followingCount increments on both user docs.
+// The transaction reads the edge first and no-ops when it already exists, so a
+// double-click (or replayed request) can never double-increment a counter.
 
 export async function followUser(followerId: string, followingId: string): Promise<void> {
-  const batch = writeBatch(db)
-  const followRef = doc(db, 'follows', `${followerId}_${followingId}`)
-  batch.set(followRef, {
-    followerId,
-    followingId,
-    createdAt: serverTimestamp(),
+  if (followerId === followingId) throw new Error('You cannot subscribe to yourself')
+  await runTransaction(db, async (tx) => {
+    const edgeRef = doc(db, 'follows', `${followerId}_${followingId}`)
+    const followingRef = doc(db, 'users', followerId, 'following', followingId)
+    const [edgeSnap, followingSnap] = await Promise.all([tx.get(edgeRef), tx.get(followingRef)])
+    if (edgeSnap.exists() || followingSnap.exists()) return // already subscribed — idempotent
+
+    tx.set(edgeRef, {
+      followerId,
+      followingId,
+      createdAt: serverTimestamp(),
+    })
+    tx.set(doc(db, 'users', followingId, 'followers', followerId), {
+      followerId,
+      createdAt: serverTimestamp(),
+    })
+    tx.set(followingRef, {
+      followingId,
+      createdAt: serverTimestamp(),
+    })
+    tx.update(doc(db, 'users', followingId), { followerCount: increment(1) })
+    tx.update(doc(db, 'users', followerId), { followingCount: increment(1) })
   })
-  batch.update(doc(db, 'users', followingId), { followerCount: increment(1) })
-  batch.update(doc(db, 'users', followerId), { followingCount: increment(1) })
-  await batch.commit()
 }
 
 export async function unfollowUser(followerId: string, followingId: string): Promise<void> {
-  const batch = writeBatch(db)
-  batch.delete(doc(db, 'follows', `${followerId}_${followingId}`))
-  batch.update(doc(db, 'users', followingId), { followerCount: increment(-1) })
-  batch.update(doc(db, 'users', followerId), { followingCount: increment(-1) })
-  await batch.commit()
+  await runTransaction(db, async (tx) => {
+    const edgeRef = doc(db, 'follows', `${followerId}_${followingId}`)
+    const followingRef = doc(db, 'users', followerId, 'following', followingId)
+    const [edgeSnap, followingSnap] = await Promise.all([tx.get(edgeRef), tx.get(followingRef)])
+    if (!edgeSnap.exists() && !followingSnap.exists()) return // nothing to remove
+
+    tx.delete(edgeRef)
+    tx.delete(doc(db, 'users', followingId, 'followers', followerId))
+    tx.delete(followingRef)
+    tx.update(doc(db, 'users', followingId), { followerCount: increment(-1) })
+    tx.update(doc(db, 'users', followerId), { followingCount: increment(-1) })
+  })
 }
 
 export async function isFollowing(followerId: string, followingId: string): Promise<boolean> {

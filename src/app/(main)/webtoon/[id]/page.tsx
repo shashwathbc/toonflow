@@ -5,14 +5,14 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
-  ImageIcon, Eye, Heart, Users, Star, ChevronRight,
+  ImageIcon, Eye, Heart, Star, ChevronRight,
   Clock, Play,
 } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
-import { getWebtoonById, getEpisodesByWebtoon, followUser, unfollowUser, isFollowing } from '@/lib/firebase/firestore'
+import { getWebtoonById, getEpisodesByWebtoon } from '@/lib/firebase/firestore'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
+import AuthorCard from '@/components/social/AuthorCard'
 import { cn } from '@/lib/utils/cn'
 import type { Webtoon, Episode } from '@/types'
 
@@ -26,12 +26,9 @@ const STATUS_BADGE: Record<string, { label: string; color: string }> = {
 
 export default function WebtoonDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { firebaseUser } = useAuth()
   const [webtoon, setWebtoon] = useState<Webtoon | null>(null)
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [loading, setLoading] = useState(true)
-  const [following, setFollowing] = useState(false)
-  const [followLoading, setFollowLoading] = useState(false)
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
 
   useEffect(() => {
@@ -45,26 +42,6 @@ export default function WebtoonDetailPage() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [id])
-
-  useEffect(() => {
-    if (!firebaseUser || !webtoon) return
-    isFollowing(firebaseUser.uid, webtoon.authorId).then(setFollowing).catch(() => {})
-  }, [firebaseUser, webtoon])
-
-  const handleFollow = async () => {
-    if (!firebaseUser || !webtoon || followLoading) return
-    setFollowLoading(true)
-    const prev = following
-    setFollowing(!prev)
-    try {
-      if (prev) await unfollowUser(firebaseUser.uid, webtoon.authorId)
-      else await followUser(firebaseUser.uid, webtoon.authorId)
-    } catch {
-      setFollowing(prev)
-    } finally {
-      setFollowLoading(false)
-    }
-  }
 
   if (loading) return (
     <div className="max-w-screen-lg mx-auto px-4 py-8 animate-pulse space-y-6">
@@ -110,26 +87,13 @@ export default function WebtoonDetailPage() {
               {badge.label}
             </span>
             <h1 className="text-2xl font-bold text-text leading-tight">{webtoon.title}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <Link href={`/profile/${webtoon.authorId}`} className="text-sm text-text-secondary hover:text-accent transition-colors">
-                by {webtoon.authorName}
-              </Link>
-              {firebaseUser && firebaseUser.uid !== webtoon.authorId && (
-                <button
-                  type="button"
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                  className={cn(
-                    'flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-all focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
-                    following
-                      ? 'border-accent/30 text-accent bg-accent/10'
-                      : 'border-bg-border text-text-muted hover:border-accent/20 hover:text-text'
-                  )}
-                >
-                  <Users size={10} aria-hidden="true" />
-                  {following ? 'Following' : 'Follow'}
-                </button>
-              )}
+            <div className="mt-3 max-w-sm">
+              <AuthorCard
+                authorId={webtoon.authorId}
+                authorName={webtoon.authorName}
+                authorPhotoURL={webtoon.authorPhotoURL}
+                size="sm"
+              />
             </div>
           </div>
 

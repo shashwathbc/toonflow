@@ -5,16 +5,16 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
-  BookOpen, Eye, Users, Star, ChevronRight, Loader2, Clock,
-  Activity, Hash, Calendar, User, ArrowUpDown, Search, ChevronsRight,
+  BookOpen, Eye, Star, ChevronRight, Loader2, Clock,
+  Activity, Hash, Calendar, ArrowUpDown, Search, ChevronsRight,
 } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
 import { useChapters } from '@/hooks/useChapters'
-import { getNovelById, followUser, unfollowUser, isFollowing } from '@/lib/firebase/firestore'
+import { getNovelById } from '@/lib/firebase/firestore'
 import { formatCount, formatDate, fromTimestamp } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import RatingControl from '@/components/reader/RatingControl'
+import AuthorCard from '@/components/social/AuthorCard'
 import { cn } from '@/lib/utils/cn'
 import type { Novel } from '@/types'
 
@@ -59,14 +59,11 @@ function DetailTile({ icon: Icon, label, children, className }: {
 
 export default function NovelDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { firebaseUser } = useAuth()
   const [novel, setNovel] = useState<Novel | null>(null)
   // loading derives from "has the current id been fetched" so the effect
   // never calls setState synchronously (react-hooks/set-state-in-effect)
   const [fetchedId, setFetchedId] = useState<string | null>(null)
   const novelLoading = fetchedId !== id
-  const [following, setFollowing] = useState(false)
-  const [followLoading, setFollowLoading] = useState(false)
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [chapterQuery, setChapterQuery] = useState('')
@@ -98,26 +95,6 @@ export default function NovelDetailPage() {
       .catch(console.error)
       .finally(() => setFetchedId(id))
   }, [id])
-
-  useEffect(() => {
-    if (!firebaseUser || !novel) return
-    isFollowing(firebaseUser.uid, novel.authorId).then(setFollowing).catch(() => {})
-  }, [firebaseUser, novel])
-
-  const handleFollow = async () => {
-    if (!firebaseUser || !novel || followLoading) return
-    setFollowLoading(true)
-    const prev = following
-    setFollowing(!prev)
-    try {
-      if (prev) await unfollowUser(firebaseUser.uid, novel.authorId)
-      else await followUser(firebaseUser.uid, novel.authorId)
-    } catch {
-      setFollowing(prev)
-    } finally {
-      setFollowLoading(false)
-    }
-  }
 
   if (novelLoading) return (
     <div className="animate-pulse">
@@ -277,32 +254,17 @@ export default function NovelDetailPage() {
               <DetailTile icon={Hash} label="Chapters">{chapters.length}</DetailTile>
               <DetailTile icon={Eye} label="Views">{formatCount(novel.viewCount ?? 0)}</DetailTile>
               <DetailTile icon={Calendar} label="Year">{publishedYear ?? '—'}</DetailTile>
-              <DetailTile icon={User} label="Author" className="col-span-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Link
-                    href={`/profile/${novel.authorId}`}
-                    className="hover:text-accent transition-colors truncate focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
-                  >
-                    {novel.authorName}
-                  </Link>
-                  {firebaseUser && firebaseUser.uid !== novel.authorId && (
-                    <button
-                      type="button"
-                      onClick={handleFollow}
-                      disabled={followLoading}
-                      className={cn(
-                        'flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border transition-all flex-shrink-0 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
-                        following
-                          ? 'border-accent/30 text-accent bg-accent/10'
-                          : 'border-bg-border text-text-muted hover:border-accent/20 hover:text-text'
-                      )}
-                    >
-                      <Users size={10} aria-hidden="true" />
-                      {following ? 'Following' : 'Follow'}
-                    </button>
-                  )}
-                </div>
-              </DetailTile>
+            </div>
+
+            {/* Author — identity, follower count and one-click subscribe */}
+            <div className="mt-3 bg-bg-elevated/60 border border-bg-border/60 rounded-xl px-3.5 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-2">Author</p>
+              <AuthorCard
+                authorId={novel.authorId}
+                authorName={novel.authorName}
+                authorPhotoURL={novel.authorPhotoURL}
+                size="sm"
+              />
             </div>
           </section>
 

@@ -16,8 +16,10 @@ import { getNovelsByAuthor, getWebtoonsByAuthor } from '@/lib/firebase/firestore
 import {
   getUserTransactions, getUserWithdrawals,
   createWithdrawal,
-  viewsToInr, EARNINGS_PER_VIEW,
+  viewsToInr,
 } from '@/lib/firebase/wallet'
+import { REVENUE_CONFIG, CREATOR_RPM } from '@/lib/revenue/config'
+import CreatorAnalyticsSection from '@/components/dashboard/CreatorAnalyticsSection'
 import { formatCount } from '@/lib/utils/formatters'
 import { COIN_PACKAGES } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
@@ -292,7 +294,7 @@ function BuyTokensModal({ open, onClose, onSuccess }: {
 
 // ── Withdraw Modal ───────────────────────────────────────────
 
-const MIN_WITHDRAWAL = 200
+const MIN_WITHDRAWAL = REVENUE_CONFIG.minWithdrawalInr
 
 function WithdrawModal({ open, onClose, availableInr, onSuccess }: {
   open: boolean; onClose: () => void; availableInr: number; onSuccess: () => void
@@ -553,7 +555,7 @@ export default function DashboardPage() {
               {userProfile?.displayName ?? 'Creator'}&apos;s Dashboard
             </h1>
             <p className="text-xs text-text-muted">
-              {fmtInr(EARNINGS_PER_VIEW * 1000)} per 1K views · 70% creator share
+              {fmtInr(CREATOR_RPM)} per 1K views · {REVENUE_CONFIG.creatorSharePct}% creator share
             </p>
           </div>
         </div>
@@ -588,16 +590,16 @@ export default function DashboardPage() {
             }
           />
           <WalletCard
-            label="Total Earned"
+            label="Total Revenue"
             value={fmtInr(totalEarningsInr)}
-            sub={`${formatCount(totalViews)} views × ₹${EARNINGS_PER_VIEW}/view`}
+            sub={`${formatCount(totalViews)} lifetime views · ${fmtInr(CREATOR_RPM)}/1K`}
             icon={<TrendingUp size={16} />}
             color="bg-accent/10 text-accent"
           />
           <WalletCard
             label="Available to Withdraw"
             value={fmtInr(availableInr)}
-            sub={pendingWithdrawals > 0 ? `₹${pendingWithdrawals.toFixed(2)} pending` : 'Min ₹200 to withdraw'}
+            sub={pendingWithdrawals > 0 ? `₹${pendingWithdrawals.toFixed(2)} pending` : `Min ₹${MIN_WITHDRAWAL} to withdraw`}
             icon={<Wallet size={16} />}
             color="bg-green-500/10 text-green-400"
             action={
@@ -611,14 +613,19 @@ export default function DashboardPage() {
             }
           />
           <WalletCard
-            label="Total Withdrawn"
+            label="Paid Out"
             value={fmtInr(totalWithdrawn)}
-            sub={`${withdrawals.filter((w) => w.status === 'completed').length} completed`}
+            sub={pendingWithdrawals > 0
+              ? `${fmtInr(pendingWithdrawals)} pending payout`
+              : `${withdrawals.filter((w) => w.status === 'completed').length} completed payouts`}
             icon={<ArrowDownToLine size={16} />}
             color="bg-purple-500/10 text-purple-400"
           />
         </div>
       </section>
+
+      {/* Creator analytics — views, revenue, subscribers, top content */}
+      <CreatorAnalyticsSection />
 
       {/* Content Performance */}
       <section aria-labelledby="performance-heading" className="bg-bg-card border border-bg-border rounded-2xl overflow-hidden">

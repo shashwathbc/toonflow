@@ -3,14 +3,14 @@ import {
   query, where, limit, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from './db'
+import { CREATOR_EARNINGS_PER_VIEW, viewsToCreatorInr } from '@/lib/revenue/config'
 import type { Transaction, Withdrawal, WithdrawalMethod } from '@/types'
 
-// ₹0.007 per view (platform earns ₹0.01; creator keeps 70%)
-export const EARNINGS_PER_VIEW = 0.007
+// Creator earnings per view — derived from the central revenue config
+// (platform gross × creator share). Re-exported here for existing callers.
+export const EARNINGS_PER_VIEW = CREATOR_EARNINGS_PER_VIEW
 
-export function viewsToInr(views: number): number {
-  return Math.floor(views * EARNINGS_PER_VIEW * 100) / 100
-}
+export const viewsToInr = viewsToCreatorInr
 
 export async function getUserTransactions(uid: string, limitCount = 20): Promise<Transaction[]> {
   const q = query(

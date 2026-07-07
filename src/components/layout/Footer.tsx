@@ -29,6 +29,7 @@ const PLATFORM_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/originals', label: 'Originals' },
   { href: '/browse', label: 'Browse' },
+  { href: '/earnings', label: 'Creator Earnings' },
 ]
 
 const SUPPORT_ACTIONS: { type: SupportType; label: string }[] = [

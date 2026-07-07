@@ -12,10 +12,12 @@ import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import {
   getUserProfile, getNovelsByAuthor, getWebtoonsByAuthor,
-  getUserBookmarks, followUser, unfollowUser, isFollowing,
+  getUserBookmarks,
   updateUserProfile, syncAuthorContent, createUserDocument,
   getNovelById, getWebtoonById,
 } from '@/lib/firebase/firestore'
+import SubscribeButton from '@/components/social/SubscribeButton'
+import AnimatedNumber, { type NumberFormatter } from '@/components/ui/AnimatedNumber'
 import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import { safeHttpUrl } from '@/lib/utils/url'
@@ -51,11 +53,15 @@ function ContentCard({ title, coverURL, href, chapterCount, viewCount, status }:
   )
 }
 
-function StatCard({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
+const compactFormat: NumberFormatter = (n) => formatCount(Math.round(n))
+
+function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
   return (
     <div className="bg-bg-card border border-bg-border rounded-xl p-4 text-center">
       <div className="flex justify-center text-white/40 mb-2" aria-hidden="true">{icon}</div>
-      <p className="text-xl font-bold text-white">{value}</p>
+      <p className="text-xl font-bold text-white">
+        <AnimatedNumber value={value} format={compactFormat} />
+      </p>
       <p className="text-xs text-white/50 mt-0.5">{label}</p>
     </div>
   )
@@ -286,59 +292,6 @@ function EditProfileModal({
   )
 }
 
-function FollowButton({ targetUid, initialFollowing, onCountChange }: {
-  targetUid: string
-  initialFollowing: boolean
-  onCountChange: (delta: number) => void
-}) {
-  const { firebaseUser } = useAuth()
-  const [following, setFollowing] = useState(initialFollowing)
-  const [loading, setLoading] = useState(false)
-
-  async function toggle() {
-    if (!firebaseUser) { toast.error('Sign in to follow creators'); return }
-    setLoading(true)
-    try {
-      if (following) {
-        await unfollowUser(firebaseUser.uid, targetUid)
-        setFollowing(false)
-        onCountChange(-1)
-        toast.success('Unfollowed')
-      } else {
-        await followUser(firebaseUser.uid, targetUid)
-        setFollowing(true)
-        onCountChange(1)
-        toast.success('Following!')
-      }
-    } catch (err) {
-      toast.error('Action failed — please try again')
-      console.error('[FollowButton] error:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      disabled={loading}
-      className={cn(
-        'flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
-        following
-          ? 'bg-white/10 text-white border border-white/20 hover:bg-danger/10 hover:text-danger hover:border-danger/30'
-          : 'btn-accent'
-      )}
-      aria-label={following ? 'Unfollow creator' : 'Follow creator'}
-      {...(following ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-    >
-      {loading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : (
-        following ? <><Check size={14} aria-hidden="true" /> Following</> : <><Users size={14} aria-hidden="true" /> Follow</>
-      )}
-    </button>
-  )
-}
-
 export function ProfilePageClient({ uid }: { uid: string }) {
   const { firebaseUser, loading: authLoading } = useAuth()
   const isOwnProfile = !authLoading && firebaseUser?.uid === uid
@@ -353,7 +306,6 @@ export function ProfilePageClient({ uid }: { uid: string }) {
   const loading = loadedUid !== uid
   const [activeTab, setActiveTab] = useState<Tab>('novels')
   const [showEdit, setShowEdit] = useState(false)
-  const [userIsFollowing, setUserIsFollowing] = useState(false)
   const [followerCount, setFollowerCount] = useState(0)
 
   const load = useCallback(() => {
@@ -392,11 +344,6 @@ export function ProfilePageClient({ uid }: { uid: string }) {
               })
               .catch((e) => console.error('[Profile] author identity sync failed:', e))
           }
-        }
-
-        if (firebaseUser && !isOwnProfile) {
-          const following = await isFollowing(firebaseUser.uid, uid)
-          setUserIsFollowing(following)
         }
 
         if (isOwnProfile && firebaseUser) {
@@ -515,7 +462,16 @@ export function ProfilePageClient({ uid }: { uid: string }) {
                 </span>
               )}
             </div>
-            <p className="text-sm text-white/50 mt-0.5">@{profile.uid.slice(0, 8)}</p>
+            <p className="text-sm text-white/50 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>@{profile.uid.slice(0, 8)}</span>
+              {profile.createdAt && (
+                <span className="flex items-center gap-1">
+                  <span aria-hidden="true">·</span>
+                  <Calendar size={11} aria-hidden="true" />
+                  Joined {formatDate(profile.createdAt)}
+                </span>
+              )}
+            </p>
             {profile.bio && (
               <p className="text-sm text-white/70 mt-1.5 max-w-md line-clamp-2">{profile.bio}</p>
             )}
@@ -534,10 +490,9 @@ export function ProfilePageClient({ uid }: { uid: string }) {
               <Edit3 size={14} aria-hidden="true" /> Edit Profile
             </button>
           ) : (
-            <FollowButton
+            <SubscribeButton
               targetUid={uid}
-              initialFollowing={userIsFollowing}
-              onCountChange={(delta) => setFollowerCount((c) => c + delta)}
+              onToggled={(delta) => setFollowerCount((c) => Math.max(0, c + delta))}
             />
           )}
         </div>
@@ -567,12 +522,12 @@ export function ProfilePageClient({ uid }: { uid: string }) {
       {/* Stats */}
       <div className="px-4 sm:px-6 mb-8">
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          <StatCard label="Followers" value={formatCount(followerCount)} icon={<Users size={16} />} />
-          <StatCard label="Following" value={formatCount(profile.followingCount)} icon={<Users size={16} />} />
+          <StatCard label="Followers" value={followerCount} icon={<Users size={16} />} />
+          <StatCard label="Following" value={profile.followingCount ?? 0} icon={<Users size={16} />} />
           <StatCard label="Novels" value={tabNovels.length} icon={<BookOpen size={16} />} />
           <StatCard label="Webtoons" value={tabWebtoons.length} icon={<ImageIcon size={16} />} />
-          <StatCard label="Total Views" value={formatCount(totalViews)} icon={<Eye size={16} />} />
-          <StatCard label="Total Likes" value={formatCount(totalLikes)} icon={<Heart size={16} />} />
+          <StatCard label="Total Views" value={totalViews} icon={<Eye size={16} />} />
+          <StatCard label="Total Likes" value={totalLikes} icon={<Heart size={16} />} />
         </div>
       </div>
 
@@ -605,6 +560,10 @@ export function ProfilePageClient({ uid }: { uid: string }) {
               )}
             </button>
           ))}
+          <span className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white/25 whitespace-nowrap cursor-default select-none">
+            Anime
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/30">Coming soon</span>
+          </span>
         </div>
 
         {/* Tab panels */}

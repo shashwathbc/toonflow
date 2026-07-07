@@ -12,6 +12,14 @@
       "collectionGroup": "chapterViews",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "parentId", "order": "ASCENDING" },
+        { "fieldPath": "viewedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "chapterViews",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "hashedIp", "order": "ASCENDING" },
         { "fieldPath": "viewedAt", "order": "DESCENDING" }
       ]

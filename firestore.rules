@@ -87,6 +87,24 @@ service cloud.firestore {
             && (request.resource.data.followingCount == resource.data.get('followingCount', 0) + 1
                 || request.resource.data.followingCount == resource.data.get('followingCount', 0) - 1));
       allow delete: if isAdmin();
+
+      // Followers of this user — the doc id IS the follower's uid, so a
+      // signed-in user can only ever create/delete their own follow edge and
+      // can never follow themselves. One doc per relationship, written inside
+      // the follow transaction, means no spam amplification is possible.
+      match /followers/{followerId} {
+        allow read: if true;
+        allow create: if isOwner(followerId) && followerId != userId;
+        allow delete: if isOwner(followerId);
+      }
+
+      // Who this user follows — only the owner writes their own list, and
+      // cannot add themselves.
+      match /following/{targetId} {
+        allow read: if true;
+        allow create: if isOwner(userId) && targetId != userId;
+        allow delete: if isOwner(userId);
+      }
     }
 
     // Bookmarks — owner only
@@ -179,6 +197,19 @@ service cloud.firestore {
     match /suspiciousViews/{logId} {
       allow read: if isAdmin();
       allow write: if false;
+    }
+
+    // Creator analytics, revenue & view history — reserved for server-side
+    // (Admin SDK) aggregation. Clients get creator analytics only through
+    // /api/creator/analytics, which scopes results to the verified caller.
+    match /creatorAnalytics/{docId} {
+      allow read, write: if false;
+    }
+    match /revenueHistory/{docId} {
+      allow read, write: if false;
+    }
+    match /viewHistory/{docId} {
+      allow read, write: if false;
     }
 
     // Ratings — signed-in users manage their own 1–5 star ratings
