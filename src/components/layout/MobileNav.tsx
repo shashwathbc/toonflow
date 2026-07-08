@@ -7,6 +7,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'
 import * as Avatar from '@radix-ui/react-avatar'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { UserDropdownContent } from './UserMenu'
 
 export default function MobileNav() {
@@ -80,52 +81,56 @@ export default function MobileNav() {
         if (idx === items.length - 1 && isAuthenticated) {
           return (
             <DropdownMenu.Root key={idx}>
-              <DropdownMenu.Trigger asChild>
-                <button
-                  className={cn(
-                    'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'
-                  )}
-                  aria-label={item.label}
-                >
-                  <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
-                    {content}
-                  </span>
-                  {item.isActive && (
-                    <span
-                      className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
-                      aria-hidden="true"
-                    />
-                  )}
-                </button>
-              </DropdownMenu.Trigger>
+              <Tooltip label={item.label} side="top">
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                      item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'
+                    )}
+                    aria-label={item.label}
+                  >
+                    <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
+                      {content}
+                    </span>
+                    {item.isActive && (
+                      <span
+                        className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </button>
+                </DropdownMenu.Trigger>
+              </Tooltip>
               <UserDropdownContent side="top" align="end" sideOffset={12} />
             </DropdownMenu.Root>
           )
         }
 
         return (
-          <Link
-            key={idx}
-            href={item.href}
-            onClick={(item as { onClick?: () => void }).onClick}
-            className={cn(
-              'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'
-            )}
-            aria-label={item.label}
-            aria-current={item.isActive ? 'page' : undefined}
-          >
-            <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
-              {content}
-            </span>
-            {item.isActive && (
-              <span
-                className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
-                aria-hidden="true"
-              />
-            )}
-          </Link>
+          <Tooltip key={idx} label={item.label} side="top">
+            <Link
+              href={item.href}
+              onClick={(item as { onClick?: () => void }).onClick}
+              className={cn(
+                'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'
+              )}
+              aria-label={item.label}
+              aria-current={item.isActive ? 'page' : undefined}
+            >
+              <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
+                {content}
+              </span>
+              {item.isActive && (
+                <span
+                  className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
+                  aria-hidden="true"
+                />
+              )}
+            </Link>
+          </Tooltip>
         )
       })}
     </nav>

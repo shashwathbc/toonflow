@@ -380,39 +380,39 @@ export default function NovelEditorPage({ params }: PageProps) {
         <div className="flex-1 flex flex-col overflow-hidden bg-black">
           {activeChapter ? (
             <>
-              {/* Chapter title input — styled like the reader heading */}
-              <div className="bg-black border-b border-white/8">
-                <div className="max-w-[680px] mx-auto px-6 sm:px-10 pt-10 pb-4">
-                  <div className="canvas-beam !mx-0 !mb-6" aria-hidden="true" />
-                  <p className="text-[10px] tracking-[0.5em] text-white/25 uppercase mb-2">
-                    Chapter {activeChapter.chapterNumber}
-                  </p>
-                  <input
-                    type="text"
-                    value={chapterTitle}
-                    onChange={(e) => setChapterTitle(e.target.value)}
-                    placeholder="Chapter Title"
-                    className="editor-chapter-title w-full bg-transparent font-black text-white placeholder:text-white/15 outline-none focus-visible:outline-none"
-                    aria-label="Chapter title"
-                    onBlur={() => {
-                      if (activeChapter && chapterTitle !== activeChapter.title) {
-                        import('@/lib/firebase/firestore').then(({ updateChapter }) => {
-                          updateChapter(novelId, activeChapter.id, { title: chapterTitle }).catch(() => {})
-                        })
-                      }
-                    }}
-                  />
-                  <div className="h-px w-12 bg-white/15 mt-5" />
-                </div>
-              </div>
-
-              {/* TipTap editor — canvas framed by the locked branding pages
-                  exactly where readers see them */}
+              {/* TipTap editor — the formatting toolbar sits at the very top,
+                  the chapter title header directly beneath it (titleSlot), then
+                  the canvas framed by the locked branding pages readers see */}
               <div className="flex-1 overflow-hidden">
                 <NovelRichEditor
                   content={editorContent}
                   onChange={handleEditorChange}
                   placeholder="Begin your story here…"
+                  titleSlot={
+                    <div className="bg-black border-b border-white/8">
+                      <div className="max-w-[680px] mx-auto px-6 sm:px-10 pt-8 pb-4">
+                        <p className="text-[10px] tracking-[0.5em] text-white/25 uppercase mb-2">
+                          Chapter {activeChapter.chapterNumber}
+                        </p>
+                        <input
+                          type="text"
+                          value={chapterTitle}
+                          onChange={(e) => setChapterTitle(e.target.value)}
+                          placeholder="Chapter Title"
+                          className="editor-chapter-title w-full bg-transparent font-black text-white placeholder:text-white/15 outline-none focus-visible:outline-none"
+                          aria-label="Chapter title"
+                          onBlur={() => {
+                            if (activeChapter && chapterTitle !== activeChapter.title) {
+                              import('@/lib/firebase/firestore').then(({ updateChapter }) => {
+                                updateChapter(novelId, activeChapter.id, { title: chapterTitle }).catch(() => {})
+                              })
+                            }
+                          }}
+                        />
+                        <div className="h-px w-12 bg-white/15 mt-5" />
+                      </div>
+                    </div>
+                  }
                   beforeContent={
                     isFirstChapter ? (
                       <>

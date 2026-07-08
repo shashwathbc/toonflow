@@ -4,6 +4,7 @@ import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'react-hot-toast'
 import PwaRegister from '@/components/pwa/PwaRegister'
+import { TooltipProvider } from '@/components/ui/Tooltip'
 
 export const metadata: Metadata = {
   title: {
@@ -55,7 +56,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
         <PwaRegister />
         <AuthProvider>
-          {children}
+          {/* delayDuration: ~200ms open delay to prevent flicker.
+              skipDelayDuration: move between adjacent tooltips (toolbars) without re-waiting. */}
+          <TooltipProvider delayDuration={200} skipDelayDuration={300}>
+            {children}
+          </TooltipProvider>
           <Toaster
             position="bottom-right"
             toastOptions={{

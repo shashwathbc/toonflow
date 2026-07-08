@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { Wand2, Sparkles, X, Check, Loader2, Copy, RotateCcw } from 'lucide-react'
+import { Tooltip } from '@/components/ui/Tooltip'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { now } from '@/lib/utils/time'
@@ -124,14 +125,16 @@ export function AIImageGenerator({
             AI Generate {imageType === 'cover' ? 'Cover' : 'Banner'}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close AI generator"
-          className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
-        >
-          <X size={13} />
-        </button>
+        <Tooltip label="Close" side="left">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close AI generator"
+            className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
+          >
+            <X size={13} aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Prompt area */}

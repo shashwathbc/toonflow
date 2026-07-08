@@ -16,6 +16,7 @@ import {
 import ConfirmDialog from '@/components/admin/ConfirmDialog'
 import { formatDate } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { UserProfile } from '@/types'
 
 const ROLES = ['user', 'creator', 'admin', 'superadmin'] as const
@@ -227,51 +228,61 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2 justify-end">
-                        <Link
-                          href={`/profile/${u.uid}`}
-                          target="_blank"
-                          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                          aria-label={`View profile of ${u.displayName}`}
-                        >
-                          <ExternalLink size={14} />
-                        </Link>
-                        <button
-                          onClick={() => handleResetPassword(u)}
-                          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                          aria-label={`Send password reset to ${u.email}`}
-                          title="Reset password"
-                        >
-                          <Mail size={14} />
-                        </button>
-                        {(u as UserProfile & { disabled?: boolean }).disabled ? (
-                          <button
-                            onClick={() => setConfirm({ type: 'enable', user: u })}
-                            className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                            aria-label={`Enable account of ${u.displayName}`}
-                            title="Enable account"
+                        <Tooltip label="View profile">
+                          <Link
+                            href={`/profile/${u.uid}`}
+                            target="_blank"
+                            className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                            aria-label={`View profile of ${u.displayName}`}
                           >
-                            <ShieldCheck size={14} />
-                          </button>
-                        ) : (
+                            <ExternalLink size={14} aria-hidden="true" />
+                          </Link>
+                        </Tooltip>
+                        <Tooltip label="Reset password">
                           <button
-                            onClick={() => setConfirm({ type: 'disable', user: u })}
-                            className="p-1.5 rounded-lg text-warning hover:bg-warning/10 transition-colors focus-visible:ring-2 focus-visible:ring-warning focus-visible:outline-none"
-                            aria-label={`Disable account of ${u.displayName}`}
-                            title="Disable account"
+                            type="button"
+                            onClick={() => handleResetPassword(u)}
+                            className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                            aria-label={`Send password reset to ${u.email}`}
+                          >
+                            <Mail size={14} aria-hidden="true" />
+                          </button>
+                        </Tooltip>
+                        {(u as UserProfile & { disabled?: boolean }).disabled ? (
+                          <Tooltip label="Enable account">
+                            <button
+                              type="button"
+                              onClick={() => setConfirm({ type: 'enable', user: u })}
+                              className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                              aria-label={`Enable account of ${u.displayName}`}
+                            >
+                              <ShieldCheck size={14} aria-hidden="true" />
+                            </button>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip label="Disable account">
+                            <button
+                              type="button"
+                              onClick={() => setConfirm({ type: 'disable', user: u })}
+                              className="p-1.5 rounded-lg text-warning hover:bg-warning/10 transition-colors focus-visible:ring-2 focus-visible:ring-warning focus-visible:outline-none"
+                              aria-label={`Disable account of ${u.displayName}`}
+                              disabled={u.role === 'superadmin'}
+                            >
+                              <ShieldOff size={14} aria-hidden="true" />
+                            </button>
+                          </Tooltip>
+                        )}
+                        <Tooltip label="Delete user">
+                          <button
+                            type="button"
+                            onClick={() => setConfirm({ type: 'delete', user: u })}
+                            className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+                            aria-label={`Delete user ${u.displayName}`}
                             disabled={u.role === 'superadmin'}
                           >
-                            <ShieldOff size={14} />
+                            <Trash2 size={14} aria-hidden="true" />
                           </button>
-                        )}
-                        <button
-                          onClick={() => setConfirm({ type: 'delete', user: u })}
-                          className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
-                          aria-label={`Delete user ${u.displayName}`}
-                          title="Delete user"
-                          disabled={u.role === 'superadmin'}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        </Tooltip>
                       </div>
                     </td>
                   </tr>

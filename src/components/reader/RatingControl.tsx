@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { setRating, getUserRating } from '@/lib/firebase/engagement'
 import { formatCount } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import toast from 'react-hot-toast'
 
 interface RatingControlProps {
@@ -71,31 +72,32 @@ export default function RatingControl({
     >
       <div className="flex items-center" onMouseLeave={() => setHovered(null)}>
         {[1, 2, 3, 4, 5].map((value) => (
-          <button
-            key={value}
-            type="button"
-            disabled={loading}
-            onClick={() => handleRate(value)}
-            onMouseEnter={() => setHovered(value)}
-            onFocus={() => setHovered(value)}
-            onBlur={() => setHovered(null)}
-            aria-label={`Rate ${value} star${value > 1 ? 's' : ''}${userRating === value ? ' (your rating — select again to remove)' : ''}`}
-            {...(userRating === value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-            className="p-0.5 rounded transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:opacity-60"
-          >
-            <Star
-              size={16}
-              aria-hidden="true"
-              className={cn(
-                'transition-colors',
-                value <= displayed
-                  ? hovered !== null || userRating !== null
-                    ? 'text-warning fill-warning'
-                    : 'text-warning/60 fill-warning/60'
-                  : 'text-text-muted/40'
-              )}
-            />
-          </button>
+          <Tooltip key={value} label={userRating === value ? 'Remove your rating' : `Rate ${value} star${value > 1 ? 's' : ''}`}>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleRate(value)}
+              onMouseEnter={() => setHovered(value)}
+              onFocus={() => setHovered(value)}
+              onBlur={() => setHovered(null)}
+              aria-label={`Rate ${value} star${value > 1 ? 's' : ''}${userRating === value ? ' (your rating — select again to remove)' : ''}`}
+              {...(userRating === value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+              className="p-0.5 rounded transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:opacity-60"
+            >
+              <Star
+                size={16}
+                aria-hidden="true"
+                className={cn(
+                  'transition-colors',
+                  value <= displayed
+                    ? hovered !== null || userRating !== null
+                      ? 'text-warning fill-warning'
+                      : 'text-warning/60 fill-warning/60'
+                    : 'text-text-muted/40'
+                )}
+              />
+            </button>
+          </Tooltip>
         ))}
       </div>
       <span className="text-xs text-text-secondary tabular-nums whitespace-nowrap">

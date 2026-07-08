@@ -16,6 +16,7 @@ import {
 import toast from 'react-hot-toast'
 import { addNovelAIMessage, getNovelAIChatHistory, clearNovelAIChat, type AIMessage } from '@/lib/firebase/firestore'
 import { now, nowTimestamp } from '@/lib/utils/time'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel, Chapter } from '@/types'
 
 const QUICK_ACTIONS = [
@@ -248,23 +249,22 @@ export function AIAssistant({
     el.style.height = `${Math.min(el.scrollHeight, 128)}px`
   }
 
-  // Linters can't evaluate JSX expressions for ARIA — pre-compute the literal string
-  const quickActionsExpanded: 'true' | 'false' = showActions ? 'true' : 'false'
-
   if (collapsed) {
     return (
       <aside
         className="w-10 border-l border-bg-border flex flex-col items-center pt-3 gap-2 bg-bg"
         aria-label="AI Assistant (collapsed)"
       >
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Expand AI Assistant"
-        >
-          <ChevronLeft size={14} aria-hidden="true" />
-        </button>
+        <Tooltip label="AI Assistant" side="left">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
+            aria-label="Expand AI Assistant"
+          >
+            <ChevronLeft size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
         <Wand2 size={14} className="text-white/30 mt-1" aria-hidden="true" />
       </aside>
     )
@@ -287,24 +287,27 @@ export function AIAssistant({
         </div>
         <div className="flex items-center gap-1">
           {messages.length > 0 && !confirmClear && (
+            <Tooltip label="Clear chat history" side="bottom">
+              <button
+                type="button"
+                onClick={() => setConfirmClear(true)}
+                className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/30 hover:text-white/70 transition-colors focus-visible:ring-1 focus-visible:ring-white"
+                aria-label="Clear chat history"
+              >
+                <RotateCcw size={11} aria-hidden="true" />
+              </button>
+            </Tooltip>
+          )}
+          <Tooltip label="Collapse panel" side="bottom">
             <button
               type="button"
-              onClick={() => setConfirmClear(true)}
-              className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/30 hover:text-white/70 transition-colors focus-visible:ring-1 focus-visible:ring-white"
-              aria-label="Clear chat history"
-              title="Clear history"
+              onClick={onToggleCollapse}
+              className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+              aria-label="Collapse AI Assistant"
             >
-              <RotateCcw size={11} aria-hidden="true" />
+              <ChevronRight size={13} aria-hidden="true" />
             </button>
-          )}
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
-            aria-label="Collapse AI Assistant"
-          >
-            <ChevronRight size={13} aria-hidden="true" />
-          </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -413,7 +416,9 @@ export function AIAssistant({
           type="button"
           onClick={() => setShowActions((v) => !v)}
           className="w-full flex items-center justify-between py-1.5 text-[11px] text-white/40 hover:text-white/70 transition-colors"
-          aria-expanded={quickActionsExpanded}
+          // spread a literal instead of an expression: Edge Tools' static ARIA
+          // scanner can't evaluate expressions and flags aria-expanded={expr}
+          {...(showActions ? { 'aria-expanded': 'true' as const } : { 'aria-expanded': 'false' as const })}
           aria-controls="quick-actions-panel"
         >
           <span className="flex items-center gap-1">
@@ -461,19 +466,21 @@ export function AIAssistant({
             className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 resize-none outline-none max-h-32 leading-5"
             aria-label="Message AI assistant"
           />
-          <button
-            type="button"
-            onClick={() => sendMessage(input)}
-            disabled={!input.trim() || sending}
-            className="w-7 h-7 rounded-lg bg-white text-bg flex items-center justify-center transition-all hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-white flex-shrink-0"
-            aria-label="Send message"
-          >
-            {sending ? (
-              <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Send size={12} aria-hidden="true" />
-            )}
-          </button>
+          <Tooltip label="Send message" side="top">
+            <button
+              type="button"
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || sending}
+              className="w-7 h-7 rounded-lg bg-white text-bg flex items-center justify-center transition-all hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-white flex-shrink-0"
+              aria-label="Send message"
+            >
+              {sending ? (
+                <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Send size={12} aria-hidden="true" />
+              )}
+            </button>
+          </Tooltip>
         </div>
         <p className="text-[10px] text-white/20 text-center mt-1.5">
           Enter ↵ to send · Shift+Enter for new line

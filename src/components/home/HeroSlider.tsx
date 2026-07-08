@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { BookOpen, Tv2, Eye, ChevronLeft, ChevronRight, Play } from 'lucide-react'
 import { getTrendingNovels, getTrendingWebtoons } from '@/lib/firebase/firestore'
 import { cachedRequest } from '@/lib/utils/requestCache'
@@ -199,22 +200,26 @@ export function HeroSlider() {
       {/* Prev / Next arrows */}
       {slides.length > 1 && (
         <>
-          <button
-            type="button"
-            onClick={prev}
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:bg-black/60 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            aria-label="Previous slide"
-          >
-            <ChevronLeft size={18} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={next}
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:bg-black/60 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            aria-label="Next slide"
-          >
-            <ChevronRight size={18} aria-hidden="true" />
-          </button>
+          <Tooltip label="Previous slide">
+            <button
+              type="button"
+              onClick={prev}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:bg-black/60 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label="Previous slide"
+            >
+              <ChevronLeft size={18} aria-hidden="true" />
+            </button>
+          </Tooltip>
+          <Tooltip label="Next slide">
+            <button
+              type="button"
+              onClick={next}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 border border-white/10 flex items-center justify-center text-white/70 hover:bg-black/60 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label="Next slide"
+            >
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </Tooltip>
         </>
       )}
 

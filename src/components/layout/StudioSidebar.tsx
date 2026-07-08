@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface SidebarItem {
   href: string
@@ -61,14 +62,16 @@ export default function StudioSidebar({ onClose, onNavigate }: StudioSidebarProp
           TOONFLOW <span className="text-accent">STUDIO</span>
         </span>
         {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 -mr-1.5 rounded-lg text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            aria-label="Close studio menu"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
+          <Tooltip label="Close menu" side="bottom">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 -mr-1.5 rounded-lg text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label="Close studio menu"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
       </div>
 

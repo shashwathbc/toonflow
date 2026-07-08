@@ -14,6 +14,7 @@ import { getChaptersByNovel, deleteChapter } from '@/lib/firebase/firestore'
 import ConfirmDialog from '@/components/admin/ConfirmDialog'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel, Chapter } from '@/types'
 
 const STATUS_OPTIONS = ['all', 'draft', 'ongoing', 'completed', 'hiatus']
@@ -188,14 +189,16 @@ export default function AdminNovelsPage() {
                       softDeleted ? 'opacity-50' : 'hover:bg-bg-elevated/30'
                     )}>
                       <td className="px-3 py-3">
-                        <button
-                          type="button"
-                          onClick={() => toggleExpand(n)}
-                          aria-label={isExpanded ? `Collapse chapters of "${n.title}"` : `Show chapters of "${n.title}"`}
-                          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                        >
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
+                        <Tooltip label={isExpanded ? 'Collapse chapters' : 'Show chapters'}>
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(n)}
+                            aria-label={isExpanded ? `Collapse chapters of "${n.title}"` : `Show chapters of "${n.title}"`}
+                            className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                          >
+                            {isExpanded ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+                          </button>
+                        </Tooltip>
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
@@ -224,41 +227,49 @@ export default function AdminNovelsPage() {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2 justify-end">
-                          <Link
-                            href={`/novel/${n.id}`}
-                            target="_blank"
-                            className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                            aria-label={`Open novel "${n.title}"`}
-                          >
-                            <ExternalLink size={14} />
-                          </Link>
+                          <Tooltip label="Open novel">
+                            <Link
+                              href={`/novel/${n.id}`}
+                              target="_blank"
+                              className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                              aria-label={`Open novel "${n.title}"`}
+                            >
+                              <ExternalLink size={14} aria-hidden="true" />
+                            </Link>
+                          </Tooltip>
                           {softDeleted ? (
-                            <button
-                              onClick={() => setConfirm({ type: 'restore', novel: n })}
-                              className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                              aria-label={`Restore "${n.title}"`}
-                              title="Restore novel"
-                            >
-                              <RotateCcw size={14} />
-                            </button>
+                            <Tooltip label="Restore novel">
+                              <button
+                                type="button"
+                                onClick={() => setConfirm({ type: 'restore', novel: n })}
+                                className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                                aria-label={`Restore "${n.title}"`}
+                              >
+                                <RotateCcw size={14} aria-hidden="true" />
+                              </button>
+                            </Tooltip>
                           ) : (
-                            <button
-                              onClick={() => setConfirm({ type: 'softdelete', novel: n })}
-                              className="p-1.5 rounded-lg text-warning hover:bg-warning/10 transition-colors focus-visible:ring-2 focus-visible:ring-warning focus-visible:outline-none"
-                              aria-label={`Hide "${n.title}" from public`}
-                              title="Soft delete (hide)"
-                            >
-                              <EyeOff size={14} />
-                            </button>
+                            <Tooltip label="Hide from public">
+                              <button
+                                type="button"
+                                onClick={() => setConfirm({ type: 'softdelete', novel: n })}
+                                className="p-1.5 rounded-lg text-warning hover:bg-warning/10 transition-colors focus-visible:ring-2 focus-visible:ring-warning focus-visible:outline-none"
+                                aria-label={`Hide "${n.title}" from public`}
+                              >
+                                <EyeOff size={14} aria-hidden="true" />
+                              </button>
+                            </Tooltip>
                           )}
-                          <button
-                            onClick={() => setConfirm({ type: 'delete', novel: n })}
-                            className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
-                            aria-label={`Permanently delete "${n.title}"`}
-                            title="Permanently delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <Tooltip label="Delete permanently">
+                            <button
+                              type="button"
+                              onClick={() => setConfirm({ type: 'delete', novel: n })}
+                              className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+                              aria-label={`Permanently delete "${n.title}"`}
+                            >
+                              <Trash2 size={14} aria-hidden="true" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>
@@ -301,23 +312,26 @@ export default function AdminNovelsPage() {
                                     </td>
                                     <td className="py-2 text-right">
                                       <div className="flex items-center gap-1.5 justify-end">
-                                        <Link
-                                          href={`/novel/${n.id}/chapter/${c.id}`}
-                                          target="_blank"
-                                          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                                          aria-label={`Open chapter ${c.chapterNumber} "${c.title}"`}
-                                        >
-                                          <ExternalLink size={13} />
-                                        </Link>
-                                        <button
-                                          type="button"
-                                          onClick={() => setConfirm({ type: 'deleteChapter', novel: n, chapter: c })}
-                                          className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
-                                          aria-label={`Delete chapter ${c.chapterNumber} "${c.title}"`}
-                                          title="Delete chapter"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
+                                        <Tooltip label="Open chapter">
+                                          <Link
+                                            href={`/novel/${n.id}/chapter/${c.id}`}
+                                            target="_blank"
+                                            className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                                            aria-label={`Open chapter ${c.chapterNumber} "${c.title}"`}
+                                          >
+                                            <ExternalLink size={13} aria-hidden="true" />
+                                          </Link>
+                                        </Tooltip>
+                                        <Tooltip label="Delete chapter">
+                                          <button
+                                            type="button"
+                                            onClick={() => setConfirm({ type: 'deleteChapter', novel: n, chapter: c })}
+                                            className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+                                            aria-label={`Delete chapter ${c.chapterNumber} "${c.title}"`}
+                                          >
+                                            <Trash2 size={13} aria-hidden="true" />
+                                          </button>
+                                        </Tooltip>
                                       </div>
                                     </td>
                                   </tr>

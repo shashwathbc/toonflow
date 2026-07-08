@@ -11,6 +11,7 @@ import { browseContent, searchContent } from '@/lib/firebase/firestore'
 import { formatCount } from '@/lib/utils/formatters'
 import { GENRES } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel, Webtoon } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -191,14 +192,16 @@ export function BrowseClient() {
           aria-label="Search content"
         />
         {searchInput && (
-          <button
-            type="button"
-            onClick={() => { setSearchInput(''); setSearchQuery('') }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white rounded"
-            aria-label="Clear search"
-          >
-            <X size={14} />
-          </button>
+          <Tooltip label="Clear search" side="left">
+            <button
+              type="button"
+              onClick={() => { setSearchInput(''); setSearchQuery('') }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white rounded"
+              aria-label="Clear search"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
       </div>
 

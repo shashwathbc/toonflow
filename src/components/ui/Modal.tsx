@@ -3,6 +3,7 @@
 import { X } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface ModalProps {
   open: boolean
@@ -36,14 +37,17 @@ export default function Modal({ open, onClose, title, description, children, cla
             <Dialog.Title className="text-base font-semibold text-text">
               {title}
             </Dialog.Title>
-            <Dialog.Close asChild>
-              <button
-                className="btn-ghost p-1.5 rounded-lg"
-                aria-label="Close dialog"
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </Dialog.Close>
+            <Tooltip label="Close" side="bottom">
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="btn-ghost p-1.5 rounded-lg"
+                  aria-label="Close dialog"
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </Dialog.Close>
+            </Tooltip>
           </div>
 
           {/* Body */}

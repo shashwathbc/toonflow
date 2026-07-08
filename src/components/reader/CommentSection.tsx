@@ -12,6 +12,7 @@ import { getComments, addComment, deleteComment } from '@/lib/firebase/firestore
 import { getReplies, addReply, toggleLike, isLiked } from '@/lib/firebase/engagement'
 import { cn } from '@/lib/utils/cn'
 import { formatCount } from '@/lib/utils/formatters'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Comment } from '@/types'
 
 function timeAgo(ts: unknown): string {
@@ -155,19 +156,21 @@ function CommentItem({
         <p className="text-sm text-text leading-relaxed whitespace-pre-wrap break-words">{comment.content}</p>
 
         <div className="flex items-center gap-3 mt-2">
-          <button
-            type="button"
-            onClick={handleLike}
-            aria-label={liked ? 'Unlike comment' : 'Like comment'}
-            {...(liked ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-            className={cn(
-              'flex items-center gap-1 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded',
-              liked ? 'text-danger' : 'text-text-muted hover:text-text'
-            )}
-          >
-            <Heart size={12} className={cn(liked && 'fill-current')} aria-hidden="true" />
-            {likeCount > 0 && <span>{formatCount(likeCount)}</span>}
-          </button>
+          <Tooltip label={liked ? 'Unlike comment' : 'Like comment'}>
+            <button
+              type="button"
+              onClick={handleLike}
+              aria-label={liked ? 'Unlike comment' : 'Like comment'}
+              {...(liked ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+              className={cn(
+                'flex items-center gap-1 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded',
+                liked ? 'text-danger' : 'text-text-muted hover:text-text'
+              )}
+            >
+              <Heart size={12} className={cn(liked && 'fill-current')} aria-hidden="true" />
+              {likeCount > 0 && <span>{formatCount(likeCount)}</span>}
+            </button>
+          </Tooltip>
 
           {depth === 0 && (
             <button
@@ -180,14 +183,16 @@ function CommentItem({
           )}
 
           {isOwn && (
-            <button
-              type="button"
-              onClick={handleDelete}
-              aria-label="Delete comment"
-              className="text-xs text-text-muted hover:text-danger transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none rounded"
-            >
-              <Trash2 size={11} aria-hidden="true" />
-            </button>
+            <Tooltip label="Delete comment">
+              <button
+                type="button"
+                onClick={handleDelete}
+                aria-label="Delete comment"
+                className="text-xs text-text-muted hover:text-danger transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none rounded"
+              >
+                <Trash2 size={11} aria-hidden="true" />
+              </button>
+            </Tooltip>
           )}
         </div>
 
@@ -203,15 +208,17 @@ function CommentItem({
               className="flex-1 px-3 py-1.5 bg-bg-elevated border border-bg-border rounded-lg text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent"
               aria-label="Write a reply"
             />
-            <button
-              type="button"
-              onClick={handleReply}
-              disabled={!replyText.trim() || sending}
-              className="p-1.5 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-              aria-label="Post reply"
-            >
-              {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            </button>
+            <Tooltip label="Post reply">
+              <button
+                type="button"
+                onClick={handleReply}
+                disabled={!replyText.trim() || sending}
+                className="p-1.5 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                aria-label="Post reply"
+              >
+                {sending ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
+              </button>
+            </Tooltip>
           </div>
         )}
 
@@ -374,15 +381,17 @@ export default function CommentSection({ targetId, targetType, creatorId }: Comm
               className="flex-1 px-3 py-2 bg-bg-elevated border border-bg-border rounded-xl text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent resize-none"
               aria-label="Write a comment"
             />
-            <button
-              type="button"
-              onClick={handlePost}
-              disabled={!text.trim() || sending}
-              className="self-end p-2 rounded-xl bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-              aria-label="Post comment"
-            >
-              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            </button>
+            <Tooltip label="Post comment">
+              <button
+                type="button"
+                onClick={handlePost}
+                disabled={!text.trim() || sending}
+                className="self-end p-2 rounded-xl bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                aria-label="Post comment"
+              >
+                {sending ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
+              </button>
+            </Tooltip>
           </div>
         </div>
       ) : (

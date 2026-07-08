@@ -38,6 +38,7 @@ import {
 import toast from 'react-hot-toast'
 import type { Novel } from '@/types'
 import { formatCount, formatRelativeTimestamp } from '@/lib/utils/formatters'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 type FilterStatus = 'all' | 'draft' | 'live' | 'ongoing' | 'completed' | 'hiatus'
 type SortOrder = 'updated' | 'views' | 'alpha' | 'chapters'
@@ -174,16 +175,18 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
       {/* Action menu */}
       <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
         <div className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            className="w-7 h-7 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white"
-            aria-label="Novel actions"
-            aria-haspopup="menu"
-            {...(menuOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
-          >
-            <MoreVertical size={14} className="text-white" aria-hidden="true" />
-          </button>
+          <Tooltip label="More options">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="w-7 h-7 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Novel actions"
+              aria-haspopup="menu"
+              {...(menuOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
+            >
+              <MoreVertical size={14} className="text-white" aria-hidden="true" />
+            </button>
+          </Tooltip>
 
           {menuOpen && (
             <>
@@ -427,14 +430,16 @@ export default function NovelDashboardPage() {
       <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-bg-border">
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Link
-              href="/create"
-              className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white rounded"
-              aria-label="Back to Creator Hub"
-            >
-              <ArrowLeft size={16} aria-hidden="true" />
-              <span className="hidden sm:inline">Creator Hub</span>
-            </Link>
+            <Tooltip label="Back to Creator Hub" side="bottom">
+              <Link
+                href="/create"
+                className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white rounded"
+                aria-label="Back to Creator Hub"
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+                <span className="hidden sm:inline">Creator Hub</span>
+              </Link>
+            </Tooltip>
             <span className="text-bg-border" aria-hidden="true">/</span>
             <h1 className="text-sm font-semibold text-white">Novel Studio</h1>
           </div>

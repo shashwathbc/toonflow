@@ -11,6 +11,7 @@ import {
   Loader2,
   Maximize2,
 } from 'lucide-react'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Webtoon, Episode } from '@/types'
 
 interface WebtoonToolbarProps {
@@ -71,13 +72,15 @@ export function WebtoonToolbar({
       {/* Left: back + webtoon title */}
       <div className="flex items-center gap-2 min-w-0">
         {!isFullscreen && (
-          <Link
-            href="/create/webtoon"
-            className="flex-shrink-0 w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
-            aria-label="Back to Webtoon Studio"
-          >
-            <ArrowLeft size={15} aria-hidden="true" />
-          </Link>
+          <Tooltip label="Back to Webtoon Studio" side="bottom">
+            <Link
+              href="/create/webtoon"
+              className="flex-shrink-0 w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Back to Webtoon Studio"
+            >
+              <ArrowLeft size={15} aria-hidden="true" />
+            </Link>
+          </Tooltip>
         )}
 
         <div className="min-w-0">
@@ -97,57 +100,69 @@ export function WebtoonToolbar({
 
       {/* Right: actions */}
       <div className="flex items-center gap-1">
-        <button
-          onClick={onSave}
-          disabled={saveState === 'saving'}
-          className="btn-ghost text-xs px-2.5 py-1.5 gap-1.5"
-          aria-label="Save episode"
-        >
-          <Save size={13} aria-hidden="true" />
-          <span className="hidden sm:inline">Save</span>
-        </button>
+        <Tooltip label="Save changes" side="bottom">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saveState === 'saving'}
+            className="btn-ghost text-xs px-2.5 py-1.5 gap-1.5"
+            aria-label="Save episode"
+          >
+            <Save size={13} aria-hidden="true" />
+            <span className="hidden sm:inline">Save</span>
+          </button>
+        </Tooltip>
 
-        <Link
-          href={webtoon ? `/webtoon/${webtoon.id}` : '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-ghost text-xs px-2.5 py-1.5 gap-1.5"
-          aria-label="Preview webtoon (opens in new tab)"
-          title="Preview"
-        >
-          <Eye size={13} aria-hidden="true" />
-          <span className="hidden lg:inline">Preview</span>
-        </Link>
+        <Tooltip label="Preview (opens in new tab)" side="bottom">
+          <Link
+            href={webtoon ? `/webtoon/${webtoon.id}` : '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-ghost text-xs px-2.5 py-1.5 gap-1.5"
+            aria-label="Preview webtoon (opens in new tab)"
+          >
+            <Eye size={13} aria-hidden="true" />
+            <span className="hidden lg:inline">Preview</span>
+          </Link>
+        </Tooltip>
 
-        <button
-          onClick={onToggleFullscreen}
-          className="btn-ghost text-xs px-2.5 py-1.5"
-          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen mode'}
-          title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-        >
-          <Maximize2 size={13} aria-hidden="true" />
-        </button>
+        <Tooltip label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} side="bottom">
+          <button
+            type="button"
+            onClick={onToggleFullscreen}
+            className="btn-ghost text-xs px-2.5 py-1.5"
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen mode'}
+          >
+            <Maximize2 size={13} aria-hidden="true" />
+          </button>
+        </Tooltip>
 
         <div className="w-px h-5 bg-bg-border mx-1" aria-hidden="true" />
 
         {isPublished ? (
-          <button
-            onClick={onUnpublish}
-            className="btn-ghost text-xs px-3 py-1.5 gap-1.5 text-warning hover:text-warning hover:bg-warning/10"
-            aria-label="Unpublish webtoon"
-          >
-            <EyeOff size={13} aria-hidden="true" />
-            <span className="hidden sm:inline">Unpublish</span>
-          </button>
+          <Tooltip label="Unpublish webtoon" side="bottom">
+            <button
+              type="button"
+              onClick={onUnpublish}
+              className="btn-ghost text-xs px-3 py-1.5 gap-1.5 text-warning hover:text-warning hover:bg-warning/10"
+              aria-label="Unpublish webtoon"
+            >
+              <EyeOff size={13} aria-hidden="true" />
+              <span className="hidden sm:inline">Unpublish</span>
+            </button>
+          </Tooltip>
         ) : (
-          <button
-            onClick={onPublish}
-            className="btn-accent text-xs px-3 py-1.5"
-            aria-label="Publish webtoon"
-          >
-            <Globe size={13} aria-hidden="true" />
-            Publish
-          </button>
+          <Tooltip label="Publish webtoon to Browse" side="bottom">
+            <button
+              type="button"
+              onClick={onPublish}
+              className="btn-accent text-xs px-3 py-1.5"
+              aria-label="Publish webtoon"
+            >
+              <Globe size={13} aria-hidden="true" />
+              Publish
+            </button>
+          </Tooltip>
         )}
       </div>
     </header>

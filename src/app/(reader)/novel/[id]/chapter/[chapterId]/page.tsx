@@ -22,6 +22,7 @@ import { TitlePage } from '@/components/reader/TitlePage'
 import { EndingPoster } from '@/components/reader/EndingPoster'
 import { cn } from '@/lib/utils/cn'
 import { sanitizeHtml } from '@/lib/utils/sanitizeHtml'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel, Chapter } from '@/types'
 
 // ── Font size options ─────────────────────────────────────────
@@ -173,24 +174,28 @@ export default function ChapterReaderPage() {
         <div className="max-w-3xl mx-auto px-4 h-12 flex items-center justify-between gap-3">
           {/* Left */}
           <div className="flex items-center gap-2 min-w-0">
-            <Link
-              href={`/novel/${id}`}
-              className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/8 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-              aria-label="Back to novel"
-            >
-              <ChevronLeft size={16} aria-hidden="true" />
-            </Link>
-            <button
-              type="button"
-              onClick={() => { setShowChapterList((v) => !v); setShowSettings(false) }}
-              className="flex items-center gap-1.5 min-w-0 group focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none rounded"
-              aria-label="Chapter list"
-            >
-              <List size={13} className="text-white/30 flex-shrink-0" aria-hidden="true" />
-              <span className="text-xs text-white/50 group-hover:text-white/80 transition-colors truncate max-w-[120px] sm:max-w-[200px] hidden sm:block">
-                {novel.title}
-              </span>
-            </button>
+            <Tooltip label="Back to novel" side="bottom">
+              <Link
+                href={`/novel/${id}`}
+                className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/8 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+                aria-label="Back to novel"
+              >
+                <ChevronLeft size={16} aria-hidden="true" />
+              </Link>
+            </Tooltip>
+            <Tooltip label="Chapter list" side="bottom">
+              <button
+                type="button"
+                onClick={() => { setShowChapterList((v) => !v); setShowSettings(false) }}
+                className="flex items-center gap-1.5 min-w-0 group focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none rounded"
+                aria-label="Chapter list"
+              >
+                <List size={13} className="text-white/30 flex-shrink-0" aria-hidden="true" />
+                <span className="text-xs text-white/50 group-hover:text-white/80 transition-colors truncate max-w-[120px] sm:max-w-[200px] hidden sm:block">
+                  {novel.title}
+                </span>
+              </button>
+            </Tooltip>
           </div>
 
           {/* Centre: chapter title */}
@@ -208,14 +213,16 @@ export default function ChapterReaderPage() {
               size="sm"
               showCount={false}
             />
-            <button
-              type="button"
-              onClick={() => { setShowSettings((v) => !v); setShowChapterList(false) }}
-              aria-label="Reading settings"
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/8 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-            >
-              <Settings2 size={14} aria-hidden="true" />
-            </button>
+            <Tooltip label="Reading settings" side="bottom">
+              <button
+                type="button"
+                onClick={() => { setShowSettings((v) => !v); setShowChapterList(false) }}
+                aria-label="Reading settings"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/8 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+              >
+                <Settings2 size={14} aria-hidden="true" />
+              </button>
+            </Tooltip>
           </div>
         </div>
 
@@ -410,13 +417,15 @@ export default function ChapterReaderPage() {
       {/* ── Floating chapter nav (mobile) ────────────────── */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50">
         {prevChapter && (
-          <Link
-            href={`/novel/${id}/chapter/${prevChapter.id}`}
-            className="w-10 h-10 rounded-full bg-black/70 border border-white/15 backdrop-blur-md flex items-center justify-center text-white/60 hover:text-white hover:border-white/30 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-            aria-label="Previous chapter"
-          >
-            <ChevronLeft size={16} aria-hidden="true" />
-          </Link>
+          <Tooltip label="Previous chapter" side="top">
+            <Link
+              href={`/novel/${id}/chapter/${prevChapter.id}`}
+              className="w-10 h-10 rounded-full bg-black/70 border border-white/15 backdrop-blur-md flex items-center justify-center text-white/60 hover:text-white hover:border-white/30 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+              aria-label="Previous chapter"
+            >
+              <ChevronLeft size={16} aria-hidden="true" />
+            </Link>
+          </Tooltip>
         )}
 
         <div className="px-4 py-2 rounded-full bg-black/70 border border-white/15 backdrop-blur-md text-[11px] text-white/50 font-medium tabular-nums">
@@ -424,13 +433,15 @@ export default function ChapterReaderPage() {
         </div>
 
         {nextChapter && (
-          <Link
-            href={`/novel/${id}/chapter/${nextChapter.id}`}
-            className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black hover:bg-white/90 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-            aria-label="Next chapter"
-          >
-            <ChevronRight size={16} aria-hidden="true" />
-          </Link>
+          <Tooltip label="Next chapter" side="top">
+            <Link
+              href={`/novel/${id}/chapter/${nextChapter.id}`}
+              className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black hover:bg-white/90 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+              aria-label="Next chapter"
+            >
+              <ChevronRight size={16} aria-hidden="true" />
+            </Link>
+          </Tooltip>
         )}
       </div>
     </div>

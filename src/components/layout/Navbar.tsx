@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Plus, Search } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import UserMenu from './UserMenu'
 
 const NAV_LINKS = [
@@ -87,13 +88,15 @@ function Navbar() {
           )}
 
           {/* Search */}
-          <Link
-            href="/browse"
-            className="btn-ghost p-2 rounded-lg"
-            aria-label="Search content"
-          >
-            <Search size={18} aria-hidden="true" />
-          </Link>
+          <Tooltip label="Search">
+            <Link
+              href="/browse"
+              className="btn-ghost p-2 rounded-lg"
+              aria-label="Search content"
+            >
+              <Search size={18} aria-hidden="true" />
+            </Link>
+          </Tooltip>
 
           {/* User menu or auth buttons */}
           <div className="hidden md:block">

@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, X } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -45,13 +46,16 @@ export default function ConfirmDialog({
             transition={{ duration: 0.15 }}
             className="relative bg-bg-elevated border border-bg-border rounded-2xl p-6 w-full max-w-md shadow-2xl"
           >
-            <button
-              onClick={onCancel}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-card transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-              aria-label="Close dialog"
-            >
-              <X size={16} />
-            </button>
+            <Tooltip label="Close" side="bottom">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-card transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                aria-label="Close dialog"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </Tooltip>
 
             <div className={cn(
               'w-10 h-10 rounded-xl flex items-center justify-center mb-4',

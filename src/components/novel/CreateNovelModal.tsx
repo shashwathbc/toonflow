@@ -21,6 +21,7 @@ import { createNovel, updateNovel } from '@/lib/firebase/firestore'
 import { uploadNovelCover, uploadNovelBanner } from '@/lib/firebase/storage'
 import { GENRES } from '@/lib/utils/constants'
 import { slugify } from '@/lib/utils/formatters'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel } from '@/types'
 import { AIImageGenerator } from './AIImageGenerator'
 
@@ -326,14 +327,16 @@ export function CreateNovelModal({
           <h2 id="create-novel-title" className="font-bold text-white text-lg">
             {isEditing ? 'Edit Novel' : 'Create New Novel'}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-white"
-            aria-label="Close"
-          >
-            <X size={16} className="text-white/60" aria-hidden="true" />
-          </button>
+          <Tooltip label="Close" side="bottom">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Close"
+            >
+              <X size={16} className="text-white/60" aria-hidden="true" />
+            </button>
+          </Tooltip>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -422,40 +425,46 @@ export function CreateNovelModal({
                   Description / Synopsis *
                 </label>
                 <div className="flex items-center gap-1" role="group" aria-label="AI synopsis tools">
-                  <button
-                    type="button"
-                    onClick={() => handleSynopsisAI('generate-synopsis')}
-                    disabled={synopsisLoading}
-                    title="Generate synopsis from title"
-                    className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border border-bg-border text-white/40 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
-                  >
-                    {synopsisLoading ? (
-                      <Loader2 size={9} className="animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Sparkles size={9} aria-hidden="true" />
-                    )}
-                    Generate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSynopsisAI('improve-synopsis')}
-                    disabled={synopsisLoading}
-                    title="Improve existing synopsis"
-                    className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border border-bg-border text-white/40 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
-                  >
-                    <Wand2 size={9} aria-hidden="true" />
-                    Improve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSynopsisAI('expand-synopsis')}
-                    disabled={synopsisLoading}
-                    title="Expand synopsis"
-                    className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border border-bg-border text-white/40 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
-                  >
-                    <Plus size={9} aria-hidden="true" />
-                    Expand
-                  </button>
+                  <Tooltip label="Generate synopsis from title" side="bottom">
+                    <button
+                      type="button"
+                      onClick={() => handleSynopsisAI('generate-synopsis')}
+                      disabled={synopsisLoading}
+                      aria-label="Generate synopsis from title"
+                      className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border border-bg-border text-white/40 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
+                    >
+                      {synopsisLoading ? (
+                        <Loader2 size={9} className="animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Sparkles size={9} aria-hidden="true" />
+                      )}
+                      Generate
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Improve existing synopsis" side="bottom">
+                    <button
+                      type="button"
+                      onClick={() => handleSynopsisAI('improve-synopsis')}
+                      disabled={synopsisLoading}
+                      aria-label="Improve existing synopsis"
+                      className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border border-bg-border text-white/40 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
+                    >
+                      <Wand2 size={9} aria-hidden="true" />
+                      Improve
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Expand synopsis" side="bottom">
+                    <button
+                      type="button"
+                      onClick={() => handleSynopsisAI('expand-synopsis')}
+                      disabled={synopsisLoading}
+                      aria-label="Expand synopsis"
+                      className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border border-bg-border text-white/40 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
+                    >
+                      <Plus size={9} aria-hidden="true" />
+                      Expand
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
               <textarea
@@ -567,14 +576,16 @@ export function CreateNovelModal({
                   >
                     <Tag size={9} aria-hidden="true" />
                     {tag}
-                    <button
-                      type="button"
-                      onClick={() => setValue('tags', tags.filter((t) => t !== tag))}
-                      className="hover:text-danger ml-0.5 focus-visible:ring-1 focus-visible:ring-white rounded"
-                      aria-label={`Remove tag ${tag}`}
-                    >
-                      <X size={10} aria-hidden="true" />
-                    </button>
+                    <Tooltip label="Remove tag">
+                      <button
+                        type="button"
+                        onClick={() => setValue('tags', tags.filter((t) => t !== tag))}
+                        className="hover:text-danger ml-0.5 focus-visible:ring-1 focus-visible:ring-white rounded"
+                        aria-label={`Remove tag ${tag}`}
+                      >
+                        <X size={10} aria-hidden="true" />
+                      </button>
+                    </Tooltip>
                   </span>
                 ))}
                 {tags.length < 10 && (

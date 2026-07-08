@@ -16,6 +16,7 @@ import {
 import { formatRelativeTimestamp } from '@/lib/utils/formatters'
 import { COIN_PACKAGES, FEATURE_FLAGS } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Transaction, Withdrawal, WithdrawalMethod } from '@/types'
 
 const TOKEN_COSTS: Record<string, number> = {
@@ -454,10 +455,12 @@ function WalletPageInner() {
       <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-bg-border">
         <div className="max-w-screen-lg mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/create" className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white rounded" aria-label="Back to Creator Hub">
-              <ArrowLeft size={16} aria-hidden="true" />
-              <span className="hidden sm:inline">Creator Hub</span>
-            </Link>
+            <Tooltip label="Back to Creator Hub" side="bottom">
+              <Link href="/create" className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white rounded" aria-label="Back to Creator Hub">
+                <ArrowLeft size={16} aria-hidden="true" />
+                <span className="hidden sm:inline">Creator Hub</span>
+              </Link>
+            </Tooltip>
             <span className="text-bg-border" aria-hidden="true">/</span>
             <h1 className="text-sm font-semibold text-white flex items-center gap-2">
               <Wallet size={16} className="text-accent" aria-hidden="true" /> Wallet

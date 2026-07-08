@@ -16,6 +16,7 @@ import {
   AlignLeft, AlignCenter, AlignRight,
   Palette,
 } from 'lucide-react'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface NovelRichEditorProps {
   content: string
@@ -27,6 +28,9 @@ interface NovelRichEditorProps {
   beforeContent?: React.ReactNode
   /** Rendered inside the canvas scroll area below the editable content */
   afterContent?: React.ReactNode
+  /** Fixed (non-scrolling) block rendered directly below the formatting
+      toolbar — used for the chapter title header */
+  titleSlot?: React.ReactNode
 }
 
 // Text color swatches for the palette
@@ -49,21 +53,22 @@ function ToolbarBtn({
   disabled?: boolean
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      {...(isActive ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-      title={label}
-      className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white disabled:opacity-30 ${
-        isActive
-          ? 'bg-white text-black'
-          : 'text-white/50 hover:bg-white/10 hover:text-white'
-      }`}
-    >
-      {children}
-    </button>
+    <Tooltip label={label} side="bottom">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        {...(isActive ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+        className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white disabled:opacity-30 ${
+          isActive
+            ? 'bg-white text-black'
+            : 'text-white/50 hover:bg-white/10 hover:text-white'
+        }`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   )
 }
 
@@ -78,6 +83,7 @@ export function NovelRichEditor({
   readOnly = false,
   beforeContent,
   afterContent,
+  titleSlot,
 }: NovelRichEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -202,27 +208,31 @@ export function NovelRichEditor({
           <div className="flex items-center gap-0.5">
             <Palette size={11} className="text-white/30 ml-0.5 mr-1" aria-hidden="true" />
             {COLORS.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                title={c.label}
-                aria-label={`Text color: ${c.label}`}
-                onClick={() => editor.chain().focus().setColor(c.value).run()}
-                className={`w-4 h-4 rounded-full border border-white/20 hover:scale-125 transition-transform focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white flex-shrink-0 ${c.cls}`}
-              />
+              <Tooltip key={c.value} label={`${c.label} text color`} side="bottom">
+                <button
+                  type="button"
+                  aria-label={`Text color: ${c.label}`}
+                  onClick={() => editor.chain().focus().setColor(c.value).run()}
+                  className={`w-4 h-4 rounded-full border border-white/20 hover:scale-125 transition-transform focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white flex-shrink-0 ${c.cls}`}
+                />
+              </Tooltip>
             ))}
-            <button
-              type="button"
-              title="Reset color"
-              aria-label="Reset text color"
-              onClick={() => editor.chain().focus().unsetColor().run()}
-              className="ml-1 text-[10px] text-white/30 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white px-1"
-            >
-              ✕
-            </button>
+            <Tooltip label="Reset text color" side="bottom">
+              <button
+                type="button"
+                aria-label="Reset text color"
+                onClick={() => editor.chain().focus().unsetColor().run()}
+                className="ml-1 text-[10px] text-white/30 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white px-1"
+              >
+                ✕
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}
+
+      {/* Chapter title header — fixed below the toolbar, above the canvas */}
+      {titleSlot && <div className="flex-shrink-0">{titleSlot}</div>}
 
       {/* Editor content — optionally framed by the locked branding pages so
           the canvas scrolls exactly like the published reader */}

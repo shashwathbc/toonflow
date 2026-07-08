@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { toggleLike, isLiked } from '@/lib/firebase/engagement'
 import { formatCount } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import toast from 'react-hot-toast'
 
 interface LikeButtonProps {
@@ -57,26 +58,28 @@ export default function LikeButton({
   const iconSize = size === 'sm' ? 13 : 16
 
   return (
-    <button
-      type="button"
-      onClick={handleToggle}
-      disabled={loading}
-      aria-label={liked ? 'Unlike' : 'Like'}
-      {...(liked ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-      className={cn(
-        'flex items-center gap-1.5 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
-        size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm',
-        liked
-          ? 'text-danger bg-danger/10 hover:bg-danger/20'
-          : 'text-text-muted bg-bg-elevated hover:text-text hover:bg-bg-elevated/80'
-      )}
-    >
-      <Heart
-        size={iconSize}
-        aria-hidden="true"
-        className={cn('transition-all', liked && 'fill-current')}
-      />
-      {showCount && <span className="tabular-nums">{formatCount(count)}</span>}
-    </button>
+    <Tooltip label={liked ? 'Unlike' : 'Like'}>
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={loading}
+        aria-label={liked ? 'Unlike' : 'Like'}
+        {...(liked ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+        className={cn(
+          'flex items-center gap-1.5 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
+          size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm',
+          liked
+            ? 'text-danger bg-danger/10 hover:bg-danger/20'
+            : 'text-text-muted bg-bg-elevated hover:text-text hover:bg-bg-elevated/80'
+        )}
+      >
+        <Heart
+          size={iconSize}
+          aria-hidden="true"
+          className={cn('transition-all', liked && 'fill-current')}
+        />
+        {showCount && <span className="tabular-nums">{formatCount(count)}</span>}
+      </button>
+    </Tooltip>
   )
 }

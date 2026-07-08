@@ -23,6 +23,7 @@ import CreatorAnalyticsSection from '@/components/dashboard/CreatorAnalyticsSect
 import { formatCount } from '@/lib/utils/formatters'
 import { COIN_PACKAGES } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel, Webtoon, Transaction, Withdrawal, WithdrawalMethod } from '@/types'
 
 // ── helpers ──────────────────────────────────────────────────
@@ -220,9 +221,11 @@ function BuyTokensModal({ open, onClose, onSuccess }: {
                 <Coins size={16} className="text-warning" aria-hidden="true" />
                 <h2 className="text-base font-bold text-text">Buy Coins</h2>
               </div>
-              <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none" aria-label="Close">
-                <X size={16} />
-              </button>
+              <Tooltip label="Close" side="bottom">
+                <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none" aria-label="Close">
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </Tooltip>
             </div>
 
             <div className="p-5 space-y-3">
@@ -358,9 +361,11 @@ function WithdrawModal({ open, onClose, availableInr, onSuccess }: {
                 <ArrowDownToLine size={16} className="text-accent" aria-hidden="true" />
                 <h2 className="text-base font-bold text-text">Withdraw Earnings</h2>
               </div>
-              <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none" aria-label="Close">
-                <X size={16} />
-              </button>
+              <Tooltip label="Close" side="bottom">
+                <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none" aria-label="Close">
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </Tooltip>
             </div>
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4">

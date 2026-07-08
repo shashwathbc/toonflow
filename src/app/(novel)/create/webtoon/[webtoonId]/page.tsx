@@ -37,6 +37,7 @@ import {
   Pencil,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Webtoon, Episode, PanelSpan } from '@/types'
 import { uploadEpisodePanel } from '@/lib/firebase/storage'
 
@@ -551,45 +552,53 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                             </span>
 
                             <div className="flex items-center gap-1.5 pointer-events-auto bg-black/70 backdrop-blur-sm rounded-full px-1.5 py-1">
-                              <button
-                                type="button"
-                                onClick={() => movePanel(idx, 'up')}
-                                disabled={idx === 0}
-                                className="p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-accent"
-                                aria-label="Move panel up"
-                              >
-                                <ArrowUp size={13} aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => movePanel(idx, 'down')}
-                                disabled={idx === (activeEpisode.panels ?? []).length - 1}
-                                className="p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-accent"
-                                aria-label="Move panel down"
-                              >
-                                <ArrowDown size={13} aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => makeThumbnail(panel.url)}
-                                className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all flex items-center gap-1 font-medium focus-visible:ring-2 focus-visible:ring-accent ${
-                                  isThumb
-                                    ? 'bg-accent/15 border-accent text-accent'
-                                    : 'border-white/10 text-white/60 hover:border-white/20 hover:text-white'
-                                }`}
-                                aria-label="Set as episode thumbnail"
-                              >
-                                {isThumb && <Check size={11} aria-hidden="true" />}
-                                Thumbnail
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removePanel(idx)}
-                                className="p-1 rounded-full hover:bg-danger/10 text-white/60 hover:text-danger focus-visible:ring-2 focus-visible:ring-accent"
-                                aria-label="Remove panel"
-                              >
-                                <Trash2 size={13} aria-hidden="true" />
-                              </button>
+                              <Tooltip label="Move panel up" side="bottom">
+                                <button
+                                  type="button"
+                                  onClick={() => movePanel(idx, 'up')}
+                                  disabled={idx === 0}
+                                  className="p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-accent"
+                                  aria-label="Move panel up"
+                                >
+                                  <ArrowUp size={13} aria-hidden="true" />
+                                </button>
+                              </Tooltip>
+                              <Tooltip label="Move panel down" side="bottom">
+                                <button
+                                  type="button"
+                                  onClick={() => movePanel(idx, 'down')}
+                                  disabled={idx === (activeEpisode.panels ?? []).length - 1}
+                                  className="p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-20 focus-visible:ring-2 focus-visible:ring-accent"
+                                  aria-label="Move panel down"
+                                >
+                                  <ArrowDown size={13} aria-hidden="true" />
+                                </button>
+                              </Tooltip>
+                              <Tooltip label="Set as episode thumbnail" side="bottom">
+                                <button
+                                  type="button"
+                                  onClick={() => makeThumbnail(panel.url)}
+                                  className={`text-[11px] px-2.5 py-0.5 rounded-full border transition-all flex items-center gap-1 font-medium focus-visible:ring-2 focus-visible:ring-accent ${
+                                    isThumb
+                                      ? 'bg-accent/15 border-accent text-accent'
+                                      : 'border-white/10 text-white/60 hover:border-white/20 hover:text-white'
+                                  }`}
+                                  aria-label="Set as episode thumbnail"
+                                >
+                                  {isThumb && <Check size={11} aria-hidden="true" />}
+                                  Thumbnail
+                                </button>
+                              </Tooltip>
+                              <Tooltip label="Remove panel" side="bottom">
+                                <button
+                                  type="button"
+                                  onClick={() => removePanel(idx)}
+                                  className="p-1 rounded-full hover:bg-danger/10 text-white/60 hover:text-danger focus-visible:ring-2 focus-visible:ring-accent"
+                                  aria-label="Remove panel"
+                                >
+                                  <Trash2 size={13} aria-hidden="true" />
+                                </button>
+                              </Tooltip>
                             </div>
                           </div>
 
@@ -606,20 +615,21 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                                 ['half', '1/2', 'Half width'],
                                 ['third', '1/3', 'One third width'],
                               ] as const).map(([value, label, name]) => (
-                                <button
-                                  key={value}
-                                  type="button"
-                                  onClick={() => setPanelSpan(idx, value)}
-                                  aria-label={name}
-                                  {...(span === value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-                                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
-                                    span === value
-                                      ? 'bg-accent/20 text-accent font-bold'
-                                      : 'text-white/50 hover:text-white hover:bg-white/10'
-                                  }`}
-                                >
-                                  {label}
-                                </button>
+                                <Tooltip key={value} label={name} side="bottom">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPanelSpan(idx, value)}
+                                    aria-label={name}
+                                    {...(span === value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+                                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent ${
+                                      span === value
+                                        ? 'bg-accent/20 text-accent font-bold'
+                                        : 'text-white/50 hover:text-white hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                </Tooltip>
                               ))}
                             </div>
                           </div>

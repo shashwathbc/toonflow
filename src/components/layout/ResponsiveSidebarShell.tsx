@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 export interface DrawerControls {
   onClose: () => void
@@ -74,19 +75,21 @@ export default function ResponsiveSidebarShell({
         className="md:hidden sticky top-0 z-40 h-14 flex items-center gap-3 px-4 bg-bg-card/95 backdrop-blur-md border-b border-bg-border"
         role="banner"
       >
-        <button
-          ref={hamburgerRef}
-          type="button"
-          onClick={() => setMenuOpen(true)}
-          className="p-2 -ml-2 rounded-lg text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-label={menuLabel}
-          // spread instead of an inline expression: Edge Tools' static
-          // ARIA scanner can't evaluate expressions and flags them
-          {...(menuOpen ? { 'aria-expanded': 'true' as const } : { 'aria-expanded': 'false' as const })}
-          aria-controls={drawerId}
-        >
-          <Menu size={20} aria-hidden="true" />
-        </button>
+        <Tooltip label={menuLabel} side="bottom">
+          <button
+            ref={hamburgerRef}
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="p-2 -ml-2 rounded-lg text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-label={menuLabel}
+            // spread instead of an inline expression: Edge Tools' static
+            // ARIA scanner can't evaluate expressions and flags them
+            {...(menuOpen ? { 'aria-expanded': 'true' as const } : { 'aria-expanded': 'false' as const })}
+            aria-controls={drawerId}
+          >
+            <Menu size={20} aria-hidden="true" />
+          </button>
+        </Tooltip>
         {brand}
       </header>
 

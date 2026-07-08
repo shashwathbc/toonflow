@@ -7,6 +7,7 @@ import {
   Flag, Settings, ChevronLeft, Star, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 const NAV = [
   { href: '/admin/super', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -38,14 +39,16 @@ export default function SuperAdminSidebar({ onClose, onNavigate }: SuperAdminSid
         <Star size={16} className="text-warning" aria-hidden="true" />
         <span className="text-sm font-bold text-text tracking-wide">SUPER ADMIN</span>
         {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto p-1.5 -mr-2 rounded-lg text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            aria-label="Close super admin menu"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
+          <Tooltip label="Close menu" side="bottom">
+            <button
+              type="button"
+              onClick={onClose}
+              className="ml-auto p-1.5 -mr-2 rounded-lg text-text-secondary hover:text-text hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label="Close super admin menu"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
       </div>
 

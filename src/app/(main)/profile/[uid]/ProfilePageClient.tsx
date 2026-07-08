@@ -22,6 +22,7 @@ import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import { safeHttpUrl } from '@/lib/utils/url'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { UserProfile, Novel, Webtoon, BookmarkItem, SocialLinks } from '@/types'
 
 type Tab = 'novels' | 'webtoons' | 'bookmarks' | 'about'
@@ -181,9 +182,11 @@ function EditProfileModal({
       <div className="bg-bg-elevated border border-bg-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-bg-border sticky top-0 bg-bg-elevated z-10">
           <h2 id="edit-profile-title" className="font-bold text-white text-base">Edit Profile</h2>
-          <button type="button" onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center focus-visible:ring-2 focus-visible:ring-white" aria-label="Close">
-            <X size={16} className="text-white/60" aria-hidden="true" />
-          </button>
+          <Tooltip label="Close" side="bottom">
+            <button type="button" onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center focus-visible:ring-2 focus-visible:ring-white" aria-label="Close">
+              <X size={16} className="text-white/60" aria-hidden="true" />
+            </button>
+          </Tooltip>
         </div>
 
         <div className="px-6 py-5 space-y-5">

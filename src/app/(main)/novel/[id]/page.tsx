@@ -16,6 +16,7 @@ import BookmarkButton from '@/components/reader/BookmarkButton'
 import RatingControl from '@/components/reader/RatingControl'
 import AuthorCard from '@/components/social/AuthorCard'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel } from '@/types'
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
@@ -344,14 +345,16 @@ export default function NovelDetailPage() {
                   className="w-40 sm:w-52 bg-bg-elevated border border-bg-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-text placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => setSortAsc((v) => !v)}
-                aria-label={sortAsc ? 'Sort descending' : 'Sort ascending'}
-                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-bg-elevated border border-bg-border text-text-secondary hover:text-text transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-              >
-                <ArrowUpDown size={12} aria-hidden="true" /> {sortAsc ? 'Asc' : 'Desc'}
-              </button>
+              <Tooltip label={sortAsc ? 'Sort descending' : 'Sort ascending'}>
+                <button
+                  type="button"
+                  onClick={() => setSortAsc((v) => !v)}
+                  aria-label={sortAsc ? 'Sort descending' : 'Sort ascending'}
+                  className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-bg-elevated border border-bg-border text-text-secondary hover:text-text transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                >
+                  <ArrowUpDown size={12} aria-hidden="true" /> {sortAsc ? 'Asc' : 'Desc'}
+                </button>
+              </Tooltip>
             </div>
           </div>
 

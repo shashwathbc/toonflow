@@ -11,6 +11,7 @@ import {
 import ConfirmDialog from '@/components/admin/ConfirmDialog'
 import { formatDate } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 const TABS = [
   { label: 'All', value: undefined },
@@ -210,36 +211,39 @@ export default function AdminRequestsPage() {
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2 justify-end">
                           {r.status === 'open' && (
-                            <button
-                              type="button"
-                              onClick={() => handleSupportStatus(r, 'in-progress')}
-                              className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                              aria-label={`Mark "${r.subject}" as in progress`}
-                              title="Mark in progress"
-                            >
-                              <Clock size={15} />
-                            </button>
+                            <Tooltip label="Mark in progress">
+                              <button
+                                type="button"
+                                onClick={() => handleSupportStatus(r, 'in-progress')}
+                                className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                                aria-label={`Mark "${r.subject}" as in progress`}
+                              >
+                                <Clock size={15} aria-hidden="true" />
+                              </button>
+                            </Tooltip>
                           )}
                           {r.status !== 'resolved' && (
+                            <Tooltip label="Mark resolved">
+                              <button
+                                type="button"
+                                onClick={() => handleSupportStatus(r, 'resolved')}
+                                className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                                aria-label={`Mark "${r.subject}" as resolved`}
+                              >
+                                <CheckCircle size={15} aria-hidden="true" />
+                              </button>
+                            </Tooltip>
+                          )}
+                          <Tooltip label="Delete request">
                             <button
                               type="button"
-                              onClick={() => handleSupportStatus(r, 'resolved')}
-                              className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                              aria-label={`Mark "${r.subject}" as resolved`}
-                              title="Mark resolved"
+                              onClick={() => setSupportConfirm(r)}
+                              className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+                              aria-label={`Delete support request "${r.subject}"`}
                             >
-                              <CheckCircle size={15} />
+                              <Trash2 size={15} aria-hidden="true" />
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setSupportConfirm(r)}
-                            className="p-1.5 rounded-lg text-danger hover:bg-danger/10 transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
-                            aria-label={`Delete support request "${r.subject}"`}
-                            title="Delete"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>
@@ -306,22 +310,26 @@ export default function AdminRequestsPage() {
                 </div>
                 {r.status === 'pending' && (
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => setConfirm({ action: 'resolved', report: r })}
-                      className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                      aria-label="Mark as resolved"
-                      title="Resolve"
-                    >
-                      <CheckCircle size={15} />
-                    </button>
-                    <button
-                      onClick={() => setConfirm({ action: 'dismissed', report: r })}
-                      className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-                      aria-label="Dismiss report"
-                      title="Dismiss"
-                    >
-                      <XCircle size={15} />
-                    </button>
+                    <Tooltip label="Mark as resolved">
+                      <button
+                        type="button"
+                        onClick={() => setConfirm({ action: 'resolved', report: r })}
+                        className="p-1.5 rounded-lg text-accent hover:bg-accent/10 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                        aria-label="Mark as resolved"
+                      >
+                        <CheckCircle size={15} aria-hidden="true" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Dismiss report">
+                      <button
+                        type="button"
+                        onClick={() => setConfirm({ action: 'dismissed', report: r })}
+                        className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg-elevated transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                        aria-label="Dismiss report"
+                      >
+                        <XCircle size={15} aria-hidden="true" />
+                      </button>
+                    </Tooltip>
                   </div>
                 )}
               </div>

@@ -18,6 +18,7 @@ import toast from 'react-hot-toast'
 import { createWebtoon, updateWebtoon } from '@/lib/firebase/firestore'
 import { uploadWebtoonCover } from '@/lib/firebase/storage'
 import { GENRES } from '@/lib/utils/constants'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Webtoon } from '@/types'
 import { AIImageGenerator } from '@/components/novel/AIImageGenerator'
 
@@ -256,13 +257,16 @@ export function CreateWebtoonModal({
           <h2 id="modal-title" className="text-lg font-bold text-white">
             {isEditing ? 'Edit Webtoon Properties' : 'Create New Webtoon'}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            aria-label="Close modal"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
+          <Tooltip label="Close" side="bottom">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Close modal"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </Tooltip>
         </div>
 
         {/* Content */}
@@ -448,14 +452,16 @@ export function CreateWebtoonModal({
                       className="flex items-center gap-1 text-[11px] bg-white/5 border border-white/10 text-white/80 pl-2 pr-1 py-0.5 rounded-md"
                     >
                       #{tag}
-                      <button
-                        type="button"
-                        onClick={() => setValue('tags', tags.filter((x) => x !== tag))}
-                        className="p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white"
-                        aria-label={`Remove tag ${tag}`}
-                      >
-                        <X size={10} aria-hidden="true" />
-                      </button>
+                      <Tooltip label="Remove tag">
+                        <button
+                          type="button"
+                          onClick={() => setValue('tags', tags.filter((x) => x !== tag))}
+                          className="p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white"
+                          aria-label={`Remove tag ${tag}`}
+                        >
+                          <X size={10} aria-hidden="true" />
+                        </button>
+                      </Tooltip>
                     </span>
                   ))}
                   {tags.length < 10 && (

@@ -12,6 +12,7 @@ import LikeButton from '@/components/reader/LikeButton'
 import CommentSection from '@/components/reader/CommentSection'
 import { EpisodeIntroPage } from '@/components/webtoon/EpisodeIntroPage'
 import { EpisodeOutroPage } from '@/components/webtoon/EpisodeOutroPage'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Webtoon, Episode } from '@/types'
 
 export default function EpisodeReaderPage() {
@@ -77,14 +78,16 @@ export default function EpisodeReaderPage() {
       {/* Header */}
       <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-bg-border">
         <div className="max-w-3xl mx-auto px-4 h-12 flex items-center justify-between gap-3">
-          <Link
-            href={`/webtoon/${id}`}
-            className="flex items-center gap-1 text-text-muted hover:text-text text-xs transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
-            aria-label="Back to webtoon"
-          >
-            <ChevronLeft size={14} aria-hidden="true" />
-            <List size={14} aria-hidden="true" />
-          </Link>
+          <Tooltip label="Back to webtoon" side="bottom">
+            <Link
+              href={`/webtoon/${id}`}
+              className="flex items-center gap-1 text-text-muted hover:text-text text-xs transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
+              aria-label="Back to webtoon"
+            >
+              <ChevronLeft size={14} aria-hidden="true" />
+              <List size={14} aria-hidden="true" />
+            </Link>
+          </Tooltip>
 
           <p className="text-xs font-medium text-text truncate text-center">
             Ep. {episode.episodeNumber} · {episode.title}

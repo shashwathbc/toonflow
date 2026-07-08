@@ -7,6 +7,7 @@ import * as Avatar from '@radix-ui/react-avatar'
 import { useAuth } from '@/hooks/useAuth'
 import { logout } from '@/lib/firebase/auth'
 import { cn } from '@/lib/utils/cn'
+import { Tooltip } from '@/components/ui/Tooltip'
 import toast from 'react-hot-toast'
 
 export default function UserMenu() {
@@ -42,12 +43,14 @@ export default function UserMenu() {
 
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-          aria-label={`Account menu for ${userProfile?.displayName ?? 'user'}`}
-        >
-          <Avatar.Root className="w-8 h-8 rounded-full overflow-hidden bg-accent/20 flex items-center justify-center">
+      <Tooltip label="Account menu">
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            aria-label={`Account menu for ${userProfile?.displayName ?? 'user'}`}
+          >
+            <Avatar.Root className="w-8 h-8 rounded-full overflow-hidden bg-accent/20 flex items-center justify-center">
             <Avatar.Image
               src={userProfile?.photoURL ?? undefined}
               alt={userProfile?.displayName ?? 'User avatar'}
@@ -59,9 +62,10 @@ export default function UserMenu() {
             >
               {initials}
             </Avatar.Fallback>
-          </Avatar.Root>
-        </button>
-      </DropdownMenu.Trigger>
+            </Avatar.Root>
+          </button>
+        </DropdownMenu.Trigger>
+      </Tooltip>
 
       <UserDropdownContent side="bottom" align="end" sideOffset={8} />
     </DropdownMenu.Root>

@@ -38,6 +38,7 @@ import {
   unpublishChapter,
 } from '@/lib/firebase/firestore'
 import { nowTimestamp } from '@/lib/utils/time'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Chapter } from '@/types'
 
 interface ChapterSidebarProps {
@@ -99,14 +100,17 @@ function SortableChapterRow({
     >
       <div className="flex items-start gap-1 p-2">
         {/* Drag handle */}
-        <button
-          {...attributes}
-          {...listeners}
-          className="flex-shrink-0 mt-0.5 p-0.5 rounded text-white/20 hover:text-white/60 cursor-grab active:cursor-grabbing touch-none focus-visible:ring-1 focus-visible:ring-white"
-          aria-label={`Reorder chapter ${chapter.chapterNumber}`}
-        >
-          <GripVertical size={14} aria-hidden="true" />
-        </button>
+        <Tooltip label="Drag to reorder" side="right">
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="flex-shrink-0 mt-0.5 p-0.5 rounded text-white/20 hover:text-white/60 cursor-grab active:cursor-grabbing touch-none focus-visible:ring-1 focus-visible:ring-white"
+            aria-label={`Reorder chapter ${chapter.chapterNumber}`}
+          >
+            <GripVertical size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
 
         {/* Chapter info */}
         <button
@@ -158,40 +162,45 @@ function SortableChapterRow({
         ) : (
           <div className="flex-shrink-0 flex items-center gap-0.5">
             {/* Publish toggle — always visible */}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onTogglePublish() }}
-              className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-white ${
-                chapter.status === 'published'
-                  ? 'text-accent hover:text-white/60 hover:bg-white/5'
-                  : 'text-white/25 hover:text-accent hover:bg-white/5'
-              }`}
-              aria-label={chapter.status === 'published' ? `Unpublish chapter ${chapter.chapterNumber}` : `Publish chapter ${chapter.chapterNumber}`}
-              title={chapter.status === 'published' ? 'Unpublish chapter' : 'Publish chapter'}
-            >
-              {chapter.status === 'published'
-                ? <Globe size={11} aria-hidden="true" />
-                : <Globe size={11} aria-hidden="true" />
-              }
-            </button>
-            {/* Copy + delete — hover only */}
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Tooltip label={chapter.status === 'published' ? 'Unpublish chapter' : 'Publish chapter'}>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onDuplicate() }}
-                className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
-                aria-label={`Duplicate chapter ${chapter.chapterNumber}`}
+                onClick={(e) => { e.stopPropagation(); onTogglePublish() }}
+                className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-white ${
+                  chapter.status === 'published'
+                    ? 'text-accent hover:text-white/60 hover:bg-white/5'
+                    : 'text-white/25 hover:text-accent hover:bg-white/5'
+                }`}
+                aria-label={chapter.status === 'published' ? `Unpublish chapter ${chapter.chapterNumber}` : `Publish chapter ${chapter.chapterNumber}`}
               >
-                <Copy size={11} aria-hidden="true" />
+                {chapter.status === 'published'
+                  ? <Globe size={11} aria-hidden="true" />
+                  : <Globe size={11} aria-hidden="true" />
+                }
               </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
-                className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
-                aria-label={`Delete chapter ${chapter.chapterNumber}`}
-              >
-                <Trash2 size={11} aria-hidden="true" />
-              </button>
+            </Tooltip>
+            {/* Copy + delete — always visible */}
+            <div className="flex items-center gap-0.5">
+              <Tooltip label="Duplicate chapter">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDuplicate() }}
+                  className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+                  aria-label={`Duplicate chapter ${chapter.chapterNumber}`}
+                >
+                  <Copy size={11} aria-hidden="true" />
+                </button>
+              </Tooltip>
+              <Tooltip label="Delete chapter">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
+                  className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
+                  aria-label={`Delete chapter ${chapter.chapterNumber}`}
+                >
+                  <Trash2 size={11} aria-hidden="true" />
+                </button>
+              </Tooltip>
             </div>
           </div>
         )}
@@ -314,29 +323,33 @@ export function ChapterSidebar({
         className="w-10 border-r border-bg-border flex flex-col items-center pt-3 gap-2 bg-bg"
         aria-label="Chapter list (collapsed)"
       >
-        <button
-          onClick={onToggleCollapse}
-          className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Expand chapter sidebar"
-        >
-          <ChevronRight size={14} aria-hidden="true" />
-        </button>
+        <Tooltip label="Expand sidebar" side="right">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
+            aria-label="Expand chapter sidebar"
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
         <div className="flex flex-col gap-1 mt-2">
           {orderedChapters.map((ch) => (
-            <button
-              key={ch.id}
-              onClick={() => onSelectChapter(ch)}
-              title={ch.title || `Chapter ${ch.chapterNumber}`}
-              className={`w-7 h-7 rounded text-[10px] font-bold transition-colors focus-visible:ring-1 focus-visible:ring-white ${
-                ch.id === activeChapterId
-                  ? 'bg-white text-bg'
-                  : 'text-white/40 hover:bg-white/10 hover:text-white'
-              }`}
-              aria-label={`Chapter ${ch.chapterNumber}`}
-              aria-current={ch.id === activeChapterId ? 'true' : undefined}
-            >
-              {ch.chapterNumber}
-            </button>
+            <Tooltip key={ch.id} label={ch.title || `Chapter ${ch.chapterNumber}`} side="right">
+              <button
+                type="button"
+                onClick={() => onSelectChapter(ch)}
+                className={`w-7 h-7 rounded text-[10px] font-bold transition-colors focus-visible:ring-1 focus-visible:ring-white ${
+                  ch.id === activeChapterId
+                    ? 'bg-white text-bg'
+                    : 'text-white/40 hover:bg-white/10 hover:text-white'
+                }`}
+                aria-label={`Chapter ${ch.chapterNumber}`}
+                aria-current={ch.id === activeChapterId ? 'true' : undefined}
+              >
+                {ch.chapterNumber}
+              </button>
+            </Tooltip>
           ))}
         </div>
       </aside>
@@ -359,13 +372,16 @@ export function ChapterSidebar({
             {chapters.length}
           </span>
         </div>
-        <button
-          onClick={onToggleCollapse}
-          className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
-          aria-label="Collapse chapter sidebar"
-        >
-          <ChevronLeft size={13} aria-hidden="true" />
-        </button>
+        <Tooltip label="Collapse sidebar" side="left">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+            aria-label="Collapse chapter sidebar"
+          >
+            <ChevronLeft size={13} aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Chapter list */}

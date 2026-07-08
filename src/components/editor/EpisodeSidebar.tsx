@@ -39,6 +39,7 @@ import {
   unpublishEpisode,
 } from '@/lib/firebase/firestore'
 import { nowTimestamp } from '@/lib/utils/time'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { Episode } from '@/types'
 
 interface EpisodeSidebarProps {
@@ -106,14 +107,17 @@ function SortableEpisodeRow({
     >
       <div className="flex items-start gap-1 p-2">
         {/* Drag handle */}
-        <button
-          {...attributes}
-          {...listeners}
-          className="flex-shrink-0 mt-0.5 p-0.5 rounded text-white/20 hover:text-white/60 cursor-grab active:cursor-grabbing touch-none focus-visible:ring-1 focus-visible:ring-white"
-          aria-label={`Reorder episode ${episode.episodeNumber}`}
-        >
-          <GripVertical size={14} aria-hidden="true" />
-        </button>
+        <Tooltip label="Drag to reorder" side="right">
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="flex-shrink-0 mt-0.5 p-0.5 rounded text-white/20 hover:text-white/60 cursor-grab active:cursor-grabbing touch-none focus-visible:ring-1 focus-visible:ring-white"
+            aria-label={`Reorder episode ${episode.episodeNumber}`}
+          >
+            <GripVertical size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
 
         {/* Episode info */}
         <button
@@ -162,35 +166,40 @@ function SortableEpisodeRow({
           </div>
         ) : (
           <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onTogglePublish() }}
-              className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-white ${
-                episode.status === 'published'
-                  ? 'text-accent hover:text-warning hover:bg-warning/10'
-                  : 'text-white/40 hover:text-accent hover:bg-accent/10'
-              }`}
-              aria-label={episode.status === 'published' ? `Unpublish episode ${episode.episodeNumber}` : `Publish episode ${episode.episodeNumber}`}
-              title={episode.status === 'published' ? 'Unpublish' : 'Publish'}
-            >
-              {episode.status === 'published' ? <EyeOff size={11} aria-hidden="true" /> : <Globe size={11} aria-hidden="true" />}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDuplicate() }}
-              className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
-              aria-label={`Duplicate episode ${episode.episodeNumber}`}
-            >
-              <Copy size={11} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
-              className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
-              aria-label={`Delete episode ${episode.episodeNumber}`}
-            >
-              <Trash2 size={11} aria-hidden="true" />
-            </button>
+            <Tooltip label={episode.status === 'published' ? 'Unpublish episode' : 'Publish episode'}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onTogglePublish() }}
+                className={`p-1 rounded transition-colors focus-visible:ring-1 focus-visible:ring-white ${
+                  episode.status === 'published'
+                    ? 'text-accent hover:text-warning hover:bg-warning/10'
+                    : 'text-white/40 hover:text-accent hover:bg-accent/10'
+                }`}
+                aria-label={episode.status === 'published' ? `Unpublish episode ${episode.episodeNumber}` : `Publish episode ${episode.episodeNumber}`}
+              >
+                {episode.status === 'published' ? <EyeOff size={11} aria-hidden="true" /> : <Globe size={11} aria-hidden="true" />}
+              </button>
+            </Tooltip>
+            <Tooltip label="Duplicate episode">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDuplicate() }}
+                className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+                aria-label={`Duplicate episode ${episode.episodeNumber}`}
+              >
+                <Copy size={11} aria-hidden="true" />
+              </button>
+            </Tooltip>
+            <Tooltip label="Delete episode">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
+                className="p-1 rounded hover:bg-danger/10 text-white/40 hover:text-danger transition-colors focus-visible:ring-1 focus-visible:ring-white"
+                aria-label={`Delete episode ${episode.episodeNumber}`}
+              >
+                <Trash2 size={11} aria-hidden="true" />
+              </button>
+            </Tooltip>
           </div>
         )}
       </div>
@@ -312,29 +321,33 @@ export function EpisodeSidebar({
         className="w-10 border-r border-bg-border flex flex-col items-center pt-3 gap-2 bg-bg"
         aria-label="Episode list (collapsed)"
       >
-        <button
-          onClick={onToggleCollapse}
-          className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Expand episode sidebar"
-        >
-          <ChevronRight size={14} aria-hidden="true" />
-        </button>
+        <Tooltip label="Expand sidebar" side="right">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white"
+            aria-label="Expand episode sidebar"
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
         <div className="flex flex-col gap-1 mt-2">
           {orderedEpisodes.map((ep) => (
-            <button
-              key={ep.id}
-              onClick={() => onSelectEpisode(ep)}
-              title={ep.title || `Episode ${ep.episodeNumber}`}
-              className={`w-7 h-7 rounded text-[10px] font-bold transition-colors focus-visible:ring-1 focus-visible:ring-white ${
-                ep.id === activeEpisodeId
-                  ? 'bg-white text-bg'
-                  : 'text-white/40 hover:bg-white/10 hover:text-white'
-              }`}
-              aria-label={`Episode ${ep.episodeNumber}`}
-              aria-current={ep.id === activeEpisodeId ? 'true' : undefined}
-            >
-              {ep.episodeNumber}
-            </button>
+            <Tooltip key={ep.id} label={ep.title || `Episode ${ep.episodeNumber}`} side="right">
+              <button
+                type="button"
+                onClick={() => onSelectEpisode(ep)}
+                className={`w-7 h-7 rounded text-[10px] font-bold transition-colors focus-visible:ring-1 focus-visible:ring-white ${
+                  ep.id === activeEpisodeId
+                    ? 'bg-white text-bg'
+                    : 'text-white/40 hover:bg-white/10 hover:text-white'
+                }`}
+                aria-label={`Episode ${ep.episodeNumber}`}
+                aria-current={ep.id === activeEpisodeId ? 'true' : undefined}
+              >
+                {ep.episodeNumber}
+              </button>
+            </Tooltip>
           ))}
         </div>
       </aside>
@@ -357,13 +370,16 @@ export function EpisodeSidebar({
             {episodes.length}
           </span>
         </div>
-        <button
-          onClick={onToggleCollapse}
-          className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
-          aria-label="Collapse episode sidebar"
-        >
-          <ChevronLeft size={13} aria-hidden="true" />
-        </button>
+        <Tooltip label="Collapse sidebar" side="left">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+            aria-label="Collapse episode sidebar"
+          >
+            <ChevronLeft size={13} aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Episode list */}
