@@ -133,8 +133,6 @@ export default function ChapterReaderPage() {
   const currentIndex = chapters.findIndex((c) => c.id === chapterId)
   const prevChapter  = currentIndex > 0 ? chapters[currentIndex - 1] : null
   const nextChapter  = currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null
-  const isFirstChapter = currentIndex === 0
-  const isLastChapter  = currentIndex === chapters.length - 1 && chapters.length > 0
 
   // ── Loading ──────────────────────────────────────────────────
   if (loading) return (
@@ -295,17 +293,13 @@ export default function ChapterReaderPage() {
         )}
       </header>
 
-      {/* ── First page: scanlation-style credits poster (chapter 1 only) ── */}
-      {isFirstChapter && (
-        <CreditsPoster novel={novel} chapterNumber={chapter.chapterNumber ?? 1} />
-      )}
-      {isFirstChapter && (
-        <TitlePage
-          novel={novel}
-          chapterTitle={chapter.title}
-          chapterNumber={chapter.chapterNumber ?? 1}
-        />
-      )}
+      {/* ── Opening branded pages — shown before every chapter ── */}
+      <CreditsPoster novel={novel} chapterNumber={chapter.chapterNumber ?? 1} />
+      <TitlePage
+        novel={novel}
+        chapterTitle={chapter.title}
+        chapterNumber={chapter.chapterNumber ?? 1}
+      />
 
       {/* ── Chapter content ───────────────────────────────── */}
       <main
@@ -411,8 +405,8 @@ export default function ChapterReaderPage() {
         </div>
       </main>
 
-      {/* ── Cinematic ending (last chapter only) ─────────── */}
-      {isLastChapter && <EndingPoster novel={novel} />}
+      {/* ── Cinematic ending — shown after every chapter ─── */}
+      <EndingPoster novel={novel} />
 
       {/* ── Floating chapter nav (mobile) ────────────────── */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50">

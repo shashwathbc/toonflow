@@ -313,15 +313,10 @@ export default function NovelEditorPage({ params }: PageProps) {
     toast.success(scope === 'current' ? 'Chapter PDF downloaded' : 'PDF downloaded')
   }, [novel, chapters, activeChapter, chapterTitle, editorContent])
 
-  // The reader wraps the story in mandatory branding pages: CreditsPoster +
-  // TitlePage before chapter 1, EndingPoster after the final chapter. The
-  // canvas previews them in the same positions, locked (they are structural —
-  // pure functions of novel data — so nothing in the editor can remove them).
-  const isFirstChapter =
-    !!activeChapter && chapters.length > 0 && chapters[0].id === activeChapter.id
-  const isLastChapter =
-    !!activeChapter && chapters.length > 0 && chapters[chapters.length - 1].id === activeChapter.id
-
+  // The reader wraps every chapter in the same branded pages: CreditsPoster +
+  // TitlePage before the chapter, EndingPoster after it. The canvas previews
+  // them in the same positions, locked (they are structural — pure functions of
+  // novel data — so nothing in the editor can remove them).
   const isLoading = authLoading || novelLoading || chaptersLoading
 
   if (isLoading) {
@@ -414,57 +409,53 @@ export default function NovelEditorPage({ params }: PageProps) {
                     </div>
                   }
                   beforeContent={
-                    isFirstChapter ? (
-                      <>
-                        <div className="group/brand relative">
-                          {/* inert: preview only — links inside must not steal focus/clicks */}
-                          <div inert className="select-none">
-                            <CreditsPoster novel={novel} chapterNumber={activeChapter.chapterNumber ?? 1} />
-                            <TitlePage
-                              novel={novel}
-                              chapterTitle={chapterTitle || activeChapter.title}
-                              chapterNumber={activeChapter.chapterNumber ?? 1}
-                            />
-                          </div>
-                          <div className="absolute inset-x-0 top-0 flex items-start p-2 opacity-0 group-hover/brand:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
-                            <span className="flex items-center gap-1 text-[10px] bg-black/70 backdrop-blur-sm text-warning font-semibold px-2 py-0.5 rounded-full mt-0.5">
-                              <Lock size={9} aria-hidden="true" />
-                              Intro pages · Locked
-                            </span>
-                          </div>
+                    <>
+                      <div className="group/brand relative">
+                        {/* inert: preview only — links inside must not steal focus/clicks */}
+                        <div inert className="select-none">
+                          <CreditsPoster novel={novel} chapterNumber={activeChapter.chapterNumber ?? 1} />
+                          <TitlePage
+                            novel={novel}
+                            chapterTitle={chapterTitle || activeChapter.title}
+                            chapterNumber={activeChapter.chapterNumber ?? 1}
+                          />
                         </div>
-                        <div className="flex items-center justify-center gap-2.5 py-2.5 border-y border-dashed border-white/10 bg-white/[0.02]">
-                          <Lock size={10} className="text-warning" aria-hidden="true" />
-                          <span className="text-[9px] tracking-[0.3em] uppercase text-white/30">
-                            Branding pages above are locked · your story starts below
+                        <div className="absolute inset-x-0 top-0 flex items-start p-2 opacity-0 group-hover/brand:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
+                          <span className="flex items-center gap-1 text-[10px] bg-black/70 backdrop-blur-sm text-warning font-semibold px-2 py-0.5 rounded-full mt-0.5">
+                            <Lock size={9} aria-hidden="true" />
+                            Intro pages · Locked
                           </span>
                         </div>
-                      </>
-                    ) : undefined
+                      </div>
+                      <div className="flex items-center justify-center gap-2.5 py-2.5 border-y border-dashed border-white/10 bg-white/[0.02]">
+                        <Lock size={10} className="text-warning" aria-hidden="true" />
+                        <span className="text-[9px] tracking-[0.3em] uppercase text-white/30">
+                          Branding pages above are locked · your story starts below
+                        </span>
+                      </div>
+                    </>
                   }
                   afterContent={
-                    isLastChapter ? (
-                      <>
-                        <div className="flex items-center justify-center gap-2.5 py-2.5 border-y border-dashed border-white/10 bg-white/[0.02]">
-                          <Lock size={10} className="text-warning" aria-hidden="true" />
-                          <span className="text-[9px] tracking-[0.3em] uppercase text-white/30">
-                            Ending page · locked · shown after your final chapter
+                    <>
+                      <div className="flex items-center justify-center gap-2.5 py-2.5 border-y border-dashed border-white/10 bg-white/[0.02]">
+                        <Lock size={10} className="text-warning" aria-hidden="true" />
+                        <span className="text-[9px] tracking-[0.3em] uppercase text-white/30">
+                          Ending page · locked · shown after every chapter
+                        </span>
+                      </div>
+                      <div className="group/brand relative">
+                        {/* inert: preview only — the poster's CTA links must not navigate mid-edit */}
+                        <div inert className="select-none">
+                          <EndingPoster novel={novel} />
+                        </div>
+                        <div className="absolute inset-x-0 top-0 flex items-start p-2 opacity-0 group-hover/brand:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
+                          <span className="flex items-center gap-1 text-[10px] bg-black/70 backdrop-blur-sm text-warning font-semibold px-2 py-0.5 rounded-full mt-0.5">
+                            <Lock size={9} aria-hidden="true" />
+                            Ending page · Locked
                           </span>
                         </div>
-                        <div className="group/brand relative">
-                          {/* inert: preview only — the poster's CTA links must not navigate mid-edit */}
-                          <div inert className="select-none">
-                            <EndingPoster novel={novel} />
-                          </div>
-                          <div className="absolute inset-x-0 top-0 flex items-start p-2 opacity-0 group-hover/brand:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
-                            <span className="flex items-center gap-1 text-[10px] bg-black/70 backdrop-blur-sm text-warning font-semibold px-2 py-0.5 rounded-full mt-0.5">
-                              <Lock size={9} aria-hidden="true" />
-                              Ending page · Locked
-                            </span>
-                          </div>
-                        </div>
-                      </>
-                    ) : undefined
+                      </div>
+                    </>
                   }
                 />
               </div>

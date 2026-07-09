@@ -1029,3 +1029,12 @@ Follow-up to the webtoon intro/outro feature: the Novel editor canvas at /create
 - `src/app/(main)/HomeFeed.tsx` (`ContentCard`) and `src/app/(main)/originals/OriginalsClient.tsx` (`OriginalCard`): added a top-right badge on every cover showing whether the item is a **Novel** or **Webtoon**, with a matching icon (`BookOpen` for novels, `Tv2` for webtoons). Both components already receive the `type: 'novel' | 'webtoon'` prop; the badge just surfaces it.
 - Style mirrors the existing top-left badge (`bg-black/60`, `border-white/10`, `text-[10px]`, rounded-full) so it reads as a peer to the status ("Original"/status) chip. Icons are `aria-hidden`; the visible text ("Novel"/"Webtoon") carries the meaning, and each card's `aria-label` already includes the type.
 - No new imports needed — `BookOpen` and `Tv2` were already imported in both files.
+
+## Episode sidebar — publish/duplicate/delete icons always visible (2026-07-09)
+- `EpisodeSidebar.tsx`: removed `opacity-0 group-hover:opacity-100 transition-opacity` from the action group wrapping the Publish/Unpublish, Duplicate, and Delete icon buttons, so they stay visible at all times instead of only on row hover (mirrors the earlier ChapterSidebar fix).
+
+## Novel branding pages now wrap every chapter (2026-07-09)
+- Previously the novel intro (CreditsPoster + TitlePage) rendered only before chapter 1 and the ending (EndingPoster) only after the last chapter — book-style. Per user request, novels now match webtoons: the intro page shows at the top of **every** chapter and the ending page at the bottom of **every** chapter, in both the reader and the editor.
+- `src/app/(reader)/novel/[id]/chapter/[chapterId]/page.tsx`: removed the `isFirstChapter`/`isLastChapter` derived flags and their gating so `CreditsPoster` + `TitlePage` always render before the chapter and `EndingPoster` always renders after it. (`currentIndex` kept — still drives prev/next chapter links.)
+- `src/app/(novel)/create/novel/[novelId]/page.tsx`: removed the `isFirstChapter`/`isLastChapter` flags; the editor canvas now always previews the intro (`beforeContent`) and ending (`afterContent`) locked branding pages regardless of which chapter is active. Updated the ending note copy from "shown after your final chapter" → "shown after every chapter" and refreshed the explanatory comment.
+- Typecheck + eslint clean on both files.

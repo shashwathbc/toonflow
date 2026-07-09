@@ -165,7 +165,7 @@ function SortableEpisodeRow({
             </button>
           </div>
         ) : (
-          <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex-shrink-0 flex items-center gap-0.5">
             <Tooltip label={episode.status === 'published' ? 'Unpublish episode' : 'Publish episode'}>
               <button
                 type="button"
