@@ -56,6 +56,14 @@ function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | '
             Original
           </span>
         </div>
+        <div className="absolute top-2 right-2">
+          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-black/60 text-white border border-white/10">
+            {type === 'novel'
+              ? <BookOpen size={9} aria-hidden="true" />
+              : <Tv2 size={9} aria-hidden="true" />}
+            {type === 'novel' ? 'Novel' : 'Webtoon'}
+          </span>
+        </div>
       </div>
       <div className="p-3">
         <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">{item.title}</h3>

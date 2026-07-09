@@ -1024,3 +1024,8 @@ Follow-up to the webtoon intro/outro feature: the Novel editor canvas at /create
 
 ## Chapter sidebar — duplicate & delete icons always visible (2026-07-08)
 - `ChapterSidebar.tsx`: removed `opacity-0 group-hover:opacity-100 transition-opacity` from the Copy/Delete action group so the duplicate and delete icons stay visible at all times (like the publish toggle), not only on row hover.
+
+## Home grid + Originals — Novel/Webtoon type badge on cards (2026-07-09)
+- `src/app/(main)/HomeFeed.tsx` (`ContentCard`) and `src/app/(main)/originals/OriginalsClient.tsx` (`OriginalCard`): added a top-right badge on every cover showing whether the item is a **Novel** or **Webtoon**, with a matching icon (`BookOpen` for novels, `Tv2` for webtoons). Both components already receive the `type: 'novel' | 'webtoon'` prop; the badge just surfaces it.
+- Style mirrors the existing top-left badge (`bg-black/60`, `border-white/10`, `text-[10px]`, rounded-full) so it reads as a peer to the status ("Original"/status) chip. Icons are `aria-hidden`; the visible text ("Novel"/"Webtoon") carries the meaning, and each card's `aria-label` already includes the type.
+- No new imports needed — `BookOpen` and `Tv2` were already imported in both files.
