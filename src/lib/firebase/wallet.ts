@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './db'
 import { CREATOR_EARNINGS_PER_VIEW, viewsToCreatorInr } from '@/lib/revenue/config'
+import { compareTimestampsDesc } from '@/lib/utils/timestamps'
 import type { Transaction, Withdrawal, WithdrawalMethod } from '@/types'
 
 // Creator earnings per view — derived from the central revenue config
@@ -20,11 +21,7 @@ export async function getUserTransactions(uid: string, limitCount = 20): Promise
   )
   const snaps = await getDocs(q)
   const results = snaps.docs.map((d) => ({ id: d.id, ...d.data() }) as Transaction)
-  results.sort((a, b) => {
-    const ts = (v: unknown) =>
-      v && typeof v === 'object' && 'seconds' in (v as object) ? (v as { seconds: number }).seconds : 0
-    return ts(b.createdAt) - ts(a.createdAt)
-  })
+  results.sort((a, b) => compareTimestampsDesc(a.createdAt, b.createdAt))
   return results
 }
 
@@ -36,11 +33,7 @@ export async function getUserWithdrawals(uid: string): Promise<Withdrawal[]> {
   )
   const snaps = await getDocs(q)
   const results = snaps.docs.map((d) => ({ id: d.id, ...d.data() }) as Withdrawal)
-  results.sort((a, b) => {
-    const ts = (v: unknown) =>
-      v && typeof v === 'object' && 'seconds' in (v as object) ? (v as { seconds: number }).seconds : 0
-    return ts(b.createdAt) - ts(a.createdAt)
-  })
+  results.sort((a, b) => compareTimestampsDesc(a.createdAt, b.createdAt))
   return results
 }
 

@@ -1,3 +1,8 @@
+// CLIENT-side admin dashboard service. Despite the name, this uses the Firebase
+// *web* SDK (not the Admin SDK) and runs in the browser, so every operation here
+// is gated by Firestore security rules (isAdmin()), NOT by server verification.
+// For privileged, rule-bypassing server-only writes, use the Admin SDK wrapper
+// in '@/lib/firebase/serverApp' instead.
 import {
   collection, doc, getDoc, getDocs, updateDoc, deleteDoc,
   query, where, orderBy, limit, getCountFromServer,
@@ -7,6 +12,7 @@ import {
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { auth } from './config'
 import { db } from './db'
+import { compareTimestampsDesc } from '@/lib/utils/timestamps'
 import type { UserProfile, Novel, Webtoon, FirestoreTimestamp } from '@/types'
 
 function fromDoc<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
@@ -127,11 +133,9 @@ export async function getAllUsers(limitCount = 50): Promise<UserProfile[]> {
   // field, which hides users created by older signup flows. Sort client-side.
   const q = query(collection(db, 'users'), limit(limitCount))
   const snaps = await getDocs(q)
-  const toSeconds = (ts: unknown): number =>
-    ts && typeof ts === 'object' && 'seconds' in ts ? (ts as { seconds: number }).seconds : 0
   return snaps.docs
     .map((d) => ({ ...(d.data() as UserProfile), uid: d.id }))
-    .sort((a, b) => toSeconds(b.createdAt) - toSeconds(a.createdAt))
+    .sort((a, b) => compareTimestampsDesc(a.createdAt, b.createdAt))
 }
 
 export async function getUserCount(): Promise<number> {
@@ -268,10 +272,7 @@ export async function getAdminReports(status?: AdminReport['status']): Promise<A
   const snaps = await getDocs(q)
   return snaps.docs
     .map((d) => fromDoc<AdminReport>(d))
-    .sort((a: AdminReport, b: AdminReport) => {
-      const getTs = (v: unknown) => (v && typeof v === 'object' && 'seconds' in (v as object)) ? (v as { seconds: number }).seconds : 0
-      return getTs(b.createdAt) - getTs(a.createdAt)
-    })
+    .sort((a, b) => compareTimestampsDesc(a.createdAt, b.createdAt))
 }
 
 export async function updateReportStatus(
@@ -330,10 +331,7 @@ export async function getRecentNovels(limitCount = 10): Promise<Novel[]> {
   const snaps = await getDocs(q)
   return snaps.docs
     .map((d) => fromDoc<Novel>(d))
-    .sort((a, b) => {
-      const getTs = (v: unknown) => (v && typeof v === 'object' && 'seconds' in (v as object)) ? (v as { seconds: number }).seconds : 0
-      return getTs(b.createdAt) - getTs(a.createdAt)
-    })
+    .sort((a, b) => compareTimestampsDesc(a.createdAt, b.createdAt))
     .slice(0, limitCount)
 }
 

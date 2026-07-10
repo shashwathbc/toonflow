@@ -3,7 +3,6 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
-  GithubAuthProvider,
   signOut,
   sendPasswordResetEmail,
   updateProfile,
@@ -15,16 +14,8 @@ import { createUserDocument } from './firestore'
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-const githubProvider = new GithubAuthProvider()
-
 export async function signInWithGoogle(): Promise<UserCredential> {
   const result = await signInWithPopup(auth, googleProvider)
-  await createUserDocument(result.user)
-  return result
-}
-
-export async function signInWithGithub(): Promise<UserCredential> {
-  const result = await signInWithPopup(auth, githubProvider)
   await createUserDocument(result.user)
   return result
 }

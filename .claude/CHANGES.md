@@ -1038,3 +1038,23 @@ Follow-up to the webtoon intro/outro feature: the Novel editor canvas at /create
 - `src/app/(reader)/novel/[id]/chapter/[chapterId]/page.tsx`: removed the `isFirstChapter`/`isLastChapter` derived flags and their gating so `CreditsPoster` + `TitlePage` always render before the chapter and `EndingPoster` always renders after it. (`currentIndex` kept — still drives prev/next chapter links.)
 - `src/app/(novel)/create/novel/[novelId]/page.tsx`: removed the `isFirstChapter`/`isLastChapter` flags; the editor canvas now always previews the intro (`beforeContent`) and ending (`afterContent`) locked branding pages regardless of which chapter is active. Updated the ending note copy from "shown after your final chapter" → "shown after every chapter" and refreshed the explanatory comment.
 - Typecheck + eslint clean on both files.
+
+## Technical documentation / tech-stack audit generated (2026-07-09)
+- Added `docs/TECH_STACK_AUDIT.md` — a comprehensive, evidence-backed audit of the full stack (21 sections: overview, frontend, backend, DB, auth, cloud services, APIs, storage, security, performance, build, dev tools, testing, env vars, dependencies, architecture, code quality, deployment, AI, full stack summary, ranked improvement suggestions).
+- Documentation only; no source code touched. Findings surfaced: unused deps (`@radix-ui/react-scroll-area|select|tabs`, `@opentelemetry/api`), dead code (`signInWithGithub`), duplicate `getUserTransactions`, the ~1120-line `firestore.ts` god-module, zero automated tests, and no CI/CD.
+
+## Audit remediation — cleanup, tests, tooling, CI (2026-07-10)
+Acted on the actionable findings from `docs/TECH_STACK_AUDIT.md`:
+- **Removed unused dependencies**: `@radix-ui/react-scroll-area`, `@radix-ui/react-select`, `@radix-ui/react-tabs`, `@opentelemetry/api` (none imported anywhere). `npm install` reconciled the lockfile (removed 5 packages).
+- **Removed dead code**: `signInWithGithub` + `GithubAuthProvider` from `src/lib/firebase/auth.ts` (never wired to any UI — only Google + email are used).
+- **De-duplicated `getUserTransactions`**: removed the `firestore.ts` copy (needed a userId+createdAt composite index); `wallet.ts` is now the single source. Repointed `app/(studio)/wallet/page.tsx` to import it from `wallet.ts` (withdrawal fns still come from `firestore.ts`).
+- **Shared timestamp util**: new `src/lib/utils/timestamps.ts` (`tsToSeconds`, `compareTimestampsDesc/Asc`). Replaced ~6 inline copies across `firestore.ts`, `wallet.ts`, `engagement.ts`, `admin.ts` (behavior preserved: desc where it was desc, asc for replies). Left `CommentSection.timeAgo` (different display fallback semantics).
+- **Extracted AI prompts**: `SYSTEM_PROMPT` + `WRITE_CHAPTER_PROMPT` moved from `api/ai/novel-assist/route.ts` into `src/lib/ai/prompts.ts` (imported back, verbatim).
+- **Removed unused Firebase Analytics config**: dropped `measurementId` from `lib/firebase/config.ts` and `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` from `.env.example` (getAnalytics is never called). Fixed the Tailwind `fontFamily.mono` to a real system stack (JetBrains Mono was referenced but never loaded).
+- **Clarified naming footgun**: added a header comment to `lib/firebase/admin.ts` explaining it is the CLIENT web-SDK admin service (rules-gated), vs `serverApp.ts` = Admin SDK.
+- **Two latent bugs fixed** (surfaced by the new tests): `slugify()` left stray leading/trailing hyphens on padded input; `readingTime(0)` returned "0 min read" — now clamped to a 1-min minimum (matches the editor).
+- **Tooling**: added Prettier (`.prettierrc.json`, `.prettierignore`) + `.editorconfig` (config matched to existing style; the repo was NOT bulk-reformatted). Added scripts: `typecheck`, `test`, `test:watch`, `format`, `format:check`.
+- **Testing (was zero)**: added Vitest (`vitest.config.ts` with `@` alias) + 26 unit tests across `revenue/config`, `utils/timestamps`, `utils/formatters`, `api/guard` — all pure logic, no Firebase/Next/network.
+- **CI (was none)**: `.github/workflows/ci.yml` runs lint + typecheck + test on push/PR (build deferred — needs env secrets).
+- Verification: `npm test` → 26/26 pass; `npm run typecheck` clean; `npm run lint` clean.
+- **Deferred (bigger/riskier, noted in the audit)**: splitting the `firestore.ts` god-module, Redis-backed rate limiting, CSP nonce upgrade, precomputed analytics, Sentry, SWR/React Query migration, Husky pre-commit hooks.

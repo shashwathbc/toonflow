@@ -29,7 +29,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        // System monospace stack (no web font is loaded for mono).
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       backgroundImage: {
         'shimmer-gradient': 'linear-gradient(90deg, #1A1A1A 25%, #212121 50%, #1A1A1A 75%)',

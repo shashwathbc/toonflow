@@ -4,6 +4,7 @@ import {
   increment, serverTimestamp, addDoc, runTransaction,
 } from 'firebase/firestore'
 import { db } from './db'
+import { compareTimestampsAsc } from '@/lib/utils/timestamps'
 import type { Comment } from '@/types'
 
 // ── View Tracking ────────────────────────────────────────────
@@ -153,10 +154,7 @@ export async function getReplies(parentCommentId: string): Promise<Comment[]> {
   const snaps = await getDocs(q)
   return snaps.docs
     .map((d) => ({ id: d.id, ...d.data() }) as Comment)
-    .sort((a, b) => {
-      const ts = (v: unknown) => (v && typeof v === 'object' && 'seconds' in (v as object)) ? (v as { seconds: number }).seconds : 0
-      return ts(a.createdAt) - ts(b.createdAt)
-    })
+    .sort((a, b) => compareTimestampsAsc(a.createdAt, b.createdAt))
 }
 
 export async function addReply(

@@ -10,9 +10,8 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
-import {
-  getUserTransactions, getCreatorWithdrawals, createWithdrawalRequest,
-} from '@/lib/firebase/firestore'
+import { getCreatorWithdrawals, createWithdrawalRequest } from '@/lib/firebase/firestore'
+import { getUserTransactions } from '@/lib/firebase/wallet'
 import { formatRelativeTimestamp } from '@/lib/utils/formatters'
 import { COIN_PACKAGES, FEATURE_FLAGS } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'

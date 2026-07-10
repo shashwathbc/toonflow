@@ -40,23 +40,12 @@ import type {
   FirestoreTimestamp,
 } from '@/types'
 import { SUPER_ADMIN_EMAIL, TRENDING_LIMIT, BROWSE_LIMIT } from '@/lib/utils/constants'
+// compareTimestamps here sorts NEWEST first — preserve that by aliasing the
+// shared descending comparator.
+import { compareTimestampsDesc as compareTimestamps } from '@/lib/utils/timestamps'
 
 function fromDoc<T>(snap: QueryDocumentSnapshot<DocumentData>): T {
   return { id: snap.id, ...snap.data() } as T
-}
-
-function compareTimestamps(a: unknown, b: unknown): number {
-  const getSeconds = (ts: unknown) => {
-    if (!ts) return 0
-    if (typeof ts === 'object') {
-      if (ts !== null && 'seconds' in ts) return (ts as { seconds: number }).seconds
-      if (ts instanceof Date) return Math.floor(ts.getTime() / 1000)
-    }
-    if (typeof ts === 'number') return Math.floor(ts / 1000)
-    if (typeof ts === 'string') return Math.floor(new Date(ts).getTime() / 1000)
-    return 0
-  }
-  return getSeconds(b) - getSeconds(a)
 }
 
 // ── Users ──────────────────────────────────────────────────
@@ -953,16 +942,9 @@ export async function createTransaction(
   return ref.id
 }
 
-export async function getUserTransactions(uid: string, limitCount = 50): Promise<Transaction[]> {
-  const q = query(
-    collection(db, 'transactions'),
-    where('userId', '==', uid),
-    orderBy('createdAt', 'desc'),
-    limit(limitCount)
-  )
-  const snaps = await getDocs(q)
-  return snaps.docs.map((d) => fromDoc<Transaction>(d))
-}
+// getUserTransactions lives in '@/lib/firebase/wallet' (single source of truth):
+// that variant sorts client-side to tolerate legacy docs missing `createdAt`
+// and avoids a userId+createdAt composite index.
 
 // Token balance mutations are server-only (Admin SDK): AI spend lives in
 // src/lib/tokens.ts and purchases are credited by the Razorpay webhook.

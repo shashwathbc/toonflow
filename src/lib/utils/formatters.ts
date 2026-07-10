@@ -50,10 +50,11 @@ export function formatCurrency(amountInPaise: number, currency: 'INR' | 'USD' = 
 export function slugify(text: string): string {
   return text
     .toLowerCase()
+    .trim()
     .replace(/[^\w\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
-    .trim()
+    .replace(/^-+|-+$/g, '') // drop stray leading/trailing hyphens
 }
 
 export function truncate(text: string, maxLength: number): string {
@@ -66,6 +67,6 @@ export function wordCount(text: string): number {
 }
 
 export function readingTime(wordCountNum: number): string {
-  const minutes = Math.ceil(wordCountNum / 200)
+  const minutes = Math.max(1, Math.ceil(wordCountNum / 200))
   return `${minutes} min read`
 }
