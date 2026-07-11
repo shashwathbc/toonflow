@@ -1,5 +1,8 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-07-11 — Enable forceConsistentCasingInFileNames
+- **tsconfig.json**: added `"forceConsistentCasingInFileNames": true` to `compilerOptions` to enforce consistent file-reference casing and clear the Edge Tools lint warning (prevents cross-OS casing issues between case-sensitive and case-insensitive filesystems).
+
 ## 2026-07-07 — Subscriptions, creator analytics dashboard, revenue calculator & transparency pages
 Shipped a follower/subscription system, a rebuilt dashboard earnings/analytics module, and a public creator-earnings page. All business rates live in one config so a rate change is a one-line edit.
 
