@@ -12,6 +12,7 @@ export const EMAIL_COOKIE_NAME = 'toonflow-user-email'
 export const FEATURE_FLAGS = {
   webtoonStudio: true, // /create/webtoon/** — Webtoon Studio (unlocked)
   wallet: false, // /wallet/** — token purchases & payouts (locked in place)
+  buyCoins: false, // dashboard "+ Buy" coins — temporarily locked
 } as const
 
 export const APP_NAME = 'Toonflow Studio Paint'

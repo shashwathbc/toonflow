@@ -1061,3 +1061,68 @@ Acted on the actionable findings from `docs/TECH_STACK_AUDIT.md`:
 - **CI (was none)**: `.github/workflows/ci.yml` runs lint + typecheck + test on push/PR (build deferred — needs env secrets).
 - Verification: `npm test` → 26/26 pass; `npm run typecheck` clean; `npm run lint` clean.
 - **Deferred (bigger/riskier, noted in the audit)**: splitting the `firestore.ts` god-module, Redis-backed rate limiting, CSP nonce upgrade, precomputed analytics, Sentry, SWR/React Query migration, Husky pre-commit hooks.
+
+## Earnings Milestones section on /dashboard (2026-07-16)
+Added a premium "Start Your Creator Journey" milestones section to the creator dashboard.
+- **New component**: `src/components/dashboard/EarningsMilestones.tsx` (`'use client'`, reusable). Exports `default EarningsMilestones({ stats })` + `MilestoneStats` interface. Sub-components: `LiveStatCard`, `MilestoneCard`, `CircularProgress`, `RequirementRow`. Purely presentational — driven by props, no extra fetch.
+- **Design**: glassmorphism cards (`bg-bg-card/60 backdrop-blur-xl` + gradient wash + corner glow) matching the dark theme; gold/purple/green accent themes (Tailwind `amber`/`purple`/`emerald` palette — existing tokens `bg-*`/`text-*` for base). Framer Motion for entrance (stagger `whileInView`), hover lift, and animated circular ring + progress bar. Respects `useReducedMotion` (ring/bar render at final value instantly).
+- **5 milestone tiers** (Getting Started ₹1K → Rising ₹10K → Professional ₹1L → Elite ₹10L → Legendary ₹1Cr+), each with: large target amount, SVG circular progress (% of requirements met), checklist with metric icons + current/target caption, Lock/Unlock status pill, completion progress bar (`role="progressbar"`), and reward badge (Monetization Unlocked / Creator Partner / Verified Creator / Elite Partner / Legend Status). CTAs on tiers 1 (`/create`) and 5 (`/earnings`).
+- **"Your Progress" strip**: 4 live stat cards — 👥 Subscribers, 👁 Views, 💰 Earnings, 📚 Published Chapters. Plus the ₹1,000 eligibility info note.
+- **Wiring** (`app/(studio)/dashboard/page.tsx`): rendered between wallet cards and `CreatorAnalyticsSection`. `milestoneStats` derived entirely from already-loaded data (userProfile.followerCount, computed totalViews/totalEarningsInr, novels.chapterCount + webtoons.episodeCount, weighted rating, isOriginal, likes/views engagement). Progress requirements compute real met/unmet from live values.
+- **React Compiler**: `Date.now()` (recent-activity check) moved to module-scope helper `hasRecentActivity()` to satisfy `react-hooks/purity`.
+- **A11y**: focus-visible rings on CTAs, decorative icons `aria-hidden`, `role="progressbar"` with aria-value*, sr-only completion labels, no color-only status (Lock/Unlock text + icons).
+- Verification: `npm run typecheck` clean; `eslint` clean on both files; `/dashboard` compiles + serves HTTP 200 under Turbopack dev (no compile errors / error overlay).
+
+## Earnings Milestones — reconcile minimum with real config (2026-07-16)
+- The info note previously hardcoded "start earning once you reach ₹1,000", which contradicted the Withdraw modal (real minimum is `REVENUE_CONFIG.minWithdrawalInr` = ₹200).
+- `EarningsMilestones` now takes a `minWithdrawalInr` prop; dashboard passes `MIN_WITHDRAWAL`. The note is rewritten to be accurate: you earn from every validated view, can withdraw at the ₹200 minimum, and ₹1,000 is framed as the first (Getting Started) milestone rather than the earning gate. ₹1,000 now references `milestones[0].targetLabel` so it stays in sync.
+- Verification: typecheck + eslint clean; /dashboard still serves HTTP 200 under Turbopack.
+
+## Earnings Milestones — money precision matches wallet cards (2026-07-16)
+- The "Your Progress → 💰 Earnings" tile used a 0-decimal INR formatter, so small balances (e.g. ₹0.02) rounded to "₹0" while the wallet "Total Revenue" card showed ₹0.02.
+- Changed the section's `inr()` helper to `maximumFractionDigits: 2` (mirrors the dashboard's `fmtInr`). Earnings now shows ₹0.02 precisely; the info-note minimum shows ₹200.00 (matches the Withdraw modal).
+- Verification: typecheck + eslint clean; /dashboard serves HTTP 200.
+
+## Creator Monetization & Earnings section on /dashboard (2026-07-16)
+Replaced the "Start Your Creator Journey" milestones section with a comprehensive, education-focused monetization section (per user request — old `EarningsMilestones.tsx` kept in repo for easy restore).
+- **New component**: `src/components/dashboard/CreatorMonetization.tsx` (`'use client'`, reusable). Exports `default CreatorMonetization({ stats })` + `MonetizationStats` interface. Shared primitives: `Reveal` (scroll fade-up, reduced-motion aware), `Glass` (glassmorphism surface + tinted gradient wash + corner glow), `ProgressRing` (animated SVG ring), `Bar` (animated progressbar), `SectionHeading`.
+- **8 sections**: (1) Creator Monetization intro + info banner; (2) Unlock Monetization card — 6 requirements each with live progress bar + current/target caption (Subscribers, Views, 10 Chapters, Profile, Identity Verification, Community Standing), overall ring, Lock/Unlock state, 4-item reward list; (3) How You Earn — 4 revenue-stream cards (Ads/Premium/Tips/Toonflow Premium); (4) Revenue Sharing — 70/30 split card with stacked gradient bar; (5) Estimated Monthly Earnings — responsive table (illustrative) + disclaimer box; (6) Creator Journey — animated vertical timeline, 5 tiers, current tier highlighted ("You are here") from live subs/views; (7) Current Earnings Dashboard — 10 live stat cards; (8) Transparency — "How Earnings Are Calculated" card.
+- **Design**: premium dark glassmorphism, purple + gold lead palette (Tailwind `purple`/`amber`/`emerald`/`sky`/`rose`/`fuchsia`), Framer Motion entrance/hover/progress/timeline animations, circular + linear progress, all reduced-motion aware.
+- **Live data** (`app/(studio)/dashboard/page.tsx`): `monetizationStats` derived from already-loaded data — subscribers (`userProfile.followerCount`), views, publishedChapters, profileComplete, pending payout, lifetime earnings, plus per-stream revenue (tips / ad / subscription) via new module-scope `aggregateCreatorRevenue(transactions)` helper (today/month windows + lifetime sums; `new Date()` kept out of render for react-hooks/purity). `identityVerified` honestly defaults to false ("Pending") since there is no KYC field yet; `goodStanding` defaults true. Revenue split pulls from `REVENUE_CONFIG` (70/30).
+- Removed the `EarningsMilestones` import/render + its stats derivation (rating/originals/engagement/recent-activity) from the page; `EarningsMilestones.tsx` file retained.
+- **A11y**: section `aria-labelledby`, `role="progressbar"` with aria-value* on every bar, decorative icons `aria-hidden`, gradient split bar has `role="img"` + label, table uses `scope="col"` headers, sr-only progress labels.
+- Verification: typecheck + eslint clean; rendered the real component via a temporary `/montest` route with mock stats — all 8 section titles, live "756 / 1,000" progress, "You are here" tier, and ₹0.02 earnings rendered with zero errors; temp route deleted. `/dashboard` serves HTTP 200 under Turbopack.
+
+## Creator Monetization — remove purple, teal + gold lead (2026-07-16)
+- Per user request ("don't use purple"), removed the entire violet family from `CreatorMonetization.tsx`. Swapped the `purple` tone → `teal` and `fuchsia` → `cyan` in the TONES map + all usages, and updated the hardcoded gradients (revenue-share creator card, split bar, estimated-earnings gradient text) from purple → teal. New lead pairing is gold + teal.
+- Verification: no purple/fuchsia/violet/indigo refs remain; typecheck + eslint clean; re-rendered via temp /montest route — 0 purple classes, teal/cyan present, no errors; temp route deleted.
+
+## /earnings calculator — realistic blended estimate, single source w/ dashboard (2026-07-16)
+The Revenue Calculator estimated only the single view/subscription stream (₹7 per 1,000 views), so 1M views showed ₹7,000 — ~100× below the dashboard's "Estimated Monthly Earnings" table (1M → ₹30k–1.2L). User chose to make the calculator match the dashboard estimates (without touching real per-view payout config).
+- **New shared module** `src/lib/revenue/estimates.ts`: `EARNING_ESTIMATE_TIERS` (the 5 anchor rows, single source of truth), `ESTIMATE_STREAM_MIX` (ads 40 / subs 30 / premium 20 / tips 10), and `estimateMonthlyEarnings(views)` — pure log–log interpolation between anchors giving a smooth low–high band that passes exactly through every tier. Clearly documented as illustrative, NOT payout rates.
+- **Reworked** `RevenueCalculator.tsx` → "Earnings Estimator": keeps the monthly-views presets + custom input; replaced the single-stream breakdown/model toggle with a blended low–high monthly range from `estimateMonthlyEarnings`, plus an illustrative per-stream mix breakdown (ads/subscriptions/premium/tips) of the mid-range with animated bars. Notes the guaranteed ₹7/1K view floor still applies. Disclaimers retained.
+- **Refactored** dashboard `CreatorMonetization` Estimated Monthly Earnings table to render from `EARNING_ESTIMATE_TIERS` (was hardcoded strings) — table + calculator now provably share one source and can't drift. Output strings unchanged (verified identical).
+- Verified: anchors match the table exactly (10K→₹500–3,000 … 100M→₹20,00,000–80,00,000); interpolation smooth/monotonic (e.g. 500K→₹17,493–69,974); default 1M→₹30,000–1,20,000 matches the dashboard. typecheck + eslint clean; /earnings and /dashboard both serve HTTP 200 with no errors.
+
+## Coin Balance copy — mention premium chapters (2026-07-16)
+- Coin Balance wallet card sub-text: "Used for AI generation" → "AI generation · unlock premium chapters".
+- Buy Coins modal blurb updated to match: "Coins power AI webtoon generation (1 coin ≈ 1 AI panel) and unlock premium chapters."
+
+## Dashboard — remove RPM/creator-share copy (2026-07-16)
+- Removed the header subtitle "₹7.00 per 1K views · 70% creator share" under the creator's name.
+- Removed the Total Revenue card's sub-text "N lifetime views · ₹7.00/1K".
+- Dropped the now-unused `CREATOR_RPM` import.
+
+## Dashboard — lock Buy (temporary) + gate Withdraw on earning eligibility (2026-07-16)
+- Added `FEATURE_FLAGS.buyCoins = false` (temporary lock for the dashboard "+ Buy" coins action).
+- New module-scope `LockedPill` (Tooltip + Lock icon) rendered in place of Buy/Withdraw actions when unavailable.
+- **Buy**: when `!FEATURE_FLAGS.buyCoins`, the Coin Balance "+ Buy" becomes a "Locked" pill; clicking toasts "Coin purchases are temporarily unavailable." Flip the flag to true to re-enable.
+- **Withdraw**: gated by a computed `earningEligible` = subscribers ≥ 1,000 && views ≥ 10,000 && publishedChapters ≥ 10 && profileComplete (the concrete, data-backed monetization requirements — identity verification isn't gated on since there's no KYC flow yet). Locks the Available-to-Withdraw action, the Withdrawal-History "Request" button, and the empty-state "Withdraw now" link; sub-text shows "Unlock by meeting earning requirements". Unlocks automatically once the requirements are met. `openBuy`/`openWithdraw` handlers also guard the modals defensively (won't open when locked; show an explanatory toast).
+- Verified: typecheck + eslint clean; /dashboard serves HTTP 200.
+
+## Earnings estimate — gate on subscribers AND views (2026-07-16)
+Per user: each tier's subscribers must also grow to unlock higher earnings, otherwise the plan is meaningless (views alone shouldn't unlock high estimates).
+- `estimateMonthlyEarnings` in `estimates.ts` now takes (subscribers, views). Earnings are gated by the LIMITING factor: `subscribersToViews(subscribers)` maps a sub count to the views its tier supports (log–log along the anchor pairs), then `effectiveViews = min(views, that)` drives the existing view interpolation. So you only reach a tier's range once BOTH subscribers and views support it.
+- `RevenueCalculator` gained a "Subscribers" preset row + custom input (default 25,000, paired with the 1M-views default); calls `estimateMonthlyEarnings(subs, views)`; result label + helper copy explain earnings scale with the lower of the two.
+- Dashboard "Estimated Monthly Earnings" table unchanged (its rows are the paired anchors; each row's estimate still equals its range).
+- Verified: paired anchors reproduce the table exactly; 100M views + 1K subs stays capped at ₹500–3,000 (subscriber-gated); 1M subs + 10K views capped at ₹500–3,000 (view-gated). typecheck + eslint clean; /earnings serves HTTP 200 with the new input, no errors.

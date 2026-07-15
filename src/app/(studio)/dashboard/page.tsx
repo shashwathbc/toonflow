@@ -7,7 +7,7 @@ import {
   BookOpen, ImageIcon, Eye, Heart, Plus, Loader2,
   Coins, IndianRupee, ArrowDownToLine, X, CheckCircle,
   Clock, AlertCircle, TrendingUp, Wallet, CreditCard,
-  Building2, Smartphone,
+  Building2, Smartphone, Lock,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -18,10 +18,11 @@ import {
   createWithdrawal,
   viewsToInr,
 } from '@/lib/firebase/wallet'
-import { REVENUE_CONFIG, CREATOR_RPM } from '@/lib/revenue/config'
+import { REVENUE_CONFIG } from '@/lib/revenue/config'
 import CreatorAnalyticsSection from '@/components/dashboard/CreatorAnalyticsSection'
+import CreatorMonetization, { type MonetizationStats } from '@/components/dashboard/CreatorMonetization'
 import { formatCount } from '@/lib/utils/formatters'
-import { COIN_PACKAGES } from '@/lib/utils/constants'
+import { COIN_PACKAGES, FEATURE_FLAGS } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel, Webtoon, Transaction, Withdrawal, WithdrawalMethod } from '@/types'
@@ -30,6 +31,27 @@ import type { Novel, Webtoon, Transaction, Withdrawal, WithdrawalMethod } from '
 
 function fmtInr(n: number) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n)
+}
+
+// Module scope so the impure `new Date()` read doesn't run during render (react-hooks/purity).
+// Aggregates the creator's own income transactions (tips, ad + subscription revenue)
+// into today / this-month totals and per-stream lifetime sums.
+function aggregateCreatorRevenue(txs: Transaction[]) {
+  const now = new Date()
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000
+  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000
+  let today = 0, month = 0, tips = 0, ads = 0, premium = 0
+  for (const tx of txs) {
+    if (tx.amount <= 0) continue
+    const sec = tx.createdAt?.seconds ?? 0
+    if (tx.type === 'tip') tips += tx.amount
+    else if (tx.type === 'ad_revenue') ads += tx.amount
+    else if (tx.type === 'subscription_revenue') premium += tx.amount
+    else continue // not creator income (e.g. coin_purchase, ai_usage, unlocks, withdrawal)
+    if (sec >= startMonth) month += tx.amount
+    if (sec >= startToday) today += tx.amount
+  }
+  return { today, month, tips, ads, premium }
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -75,6 +97,22 @@ function WalletCard({ label, value, sub, icon, color, action }: {
         {sub && <p className="text-[11px] text-text-muted mt-1">{sub}</p>}
       </div>
     </div>
+  )
+}
+
+// Locked action shown in place of Buy / Withdraw when the feature is unavailable.
+function LockedPill({ hint, ariaLabel, onClick }: { hint: string; ariaLabel: string; onClick: () => void }) {
+  return (
+    <Tooltip label={hint} side="bottom">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={ariaLabel}
+        className="flex items-center gap-1 text-xs font-semibold text-text-muted hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
+      >
+        <Lock size={12} aria-hidden="true" /> Locked
+      </button>
+    </Tooltip>
   )
 }
 
@@ -229,7 +267,7 @@ function BuyTokensModal({ open, onClose, onSuccess }: {
             </div>
 
             <div className="p-5 space-y-3">
-              <p className="text-xs text-text-muted mb-4">Coins power AI webtoon generation. 1 coin ≈ 1 AI panel.</p>
+              <p className="text-xs text-text-muted mb-4">Coins power AI webtoon generation (1 coin ≈ 1 AI panel) and unlock premium chapters.</p>
 
               {COIN_PACKAGES.map((pkg) => (
                 <button
@@ -536,6 +574,50 @@ export default function DashboardPage() {
     .reduce((s, w) => s + w.amount, 0)
   const availableInr = Math.max(0, totalEarningsInr - totalWithdrawn - pendingWithdrawals)
 
+  // ── Creator-monetization stats (all derived from already-loaded data) ──────
+  const publishedContent = allContent.filter(({ item }) => item.status !== 'draft')
+  const publishedChapters = publishedContent.reduce(
+    (s, { item, type }) => s + (type === 'novel' ? (item as Novel).chapterCount ?? 0 : (item as Webtoon).episodeCount ?? 0),
+    0,
+  )
+  const revenue = aggregateCreatorRevenue(transactions)
+  const monetizationStats: MonetizationStats = {
+    subscribers: userProfile?.followerCount ?? 0,
+    views: totalViews,
+    publishedChapters,
+    profileComplete: Boolean(userProfile?.displayName && userProfile?.bio && userProfile?.photoURL),
+    identityVerified: false, // no KYC field yet — honestly surfaced as "Pending"
+    goodStanding: true, // no violations are tracked against this account
+    todayRevenueInr: revenue.today,
+    monthRevenueInr: revenue.month,
+    pendingPayoutInr: pendingWithdrawals,
+    lifetimeEarningsInr: totalEarningsInr,
+    premiumSalesInr: revenue.premium,
+    tipsInr: revenue.tips,
+    adRevenueInr: revenue.ads,
+    creatorSharePct: REVENUE_CONFIG.creatorSharePct,
+    platformSharePct: REVENUE_CONFIG.platformSharePct,
+  }
+
+  // Withdrawals stay locked until the creator becomes eligible for earnings —
+  // the concrete, data-backed monetization requirements (identity verification
+  // has no KYC flow yet, so it isn't gated on here). Unlocks automatically once met.
+  const earningEligible =
+    monetizationStats.subscribers >= 1_000 &&
+    monetizationStats.views >= 10_000 &&
+    monetizationStats.publishedChapters >= 10 &&
+    monetizationStats.profileComplete
+  const buyEnabled = FEATURE_FLAGS.buyCoins
+
+  const openBuy = () => {
+    if (buyEnabled) setShowBuy(true)
+    else toast('Coin purchases are temporarily unavailable.')
+  }
+  const openWithdraw = () => {
+    if (earningEligible) setShowWithdraw(true)
+    else toast('Withdrawals unlock once you meet the earning requirements.')
+  }
+
   if (authLoading || loading) return (
     <div className="flex items-center justify-center h-96">
       <Loader2 size={20} className="animate-spin text-text-muted" />
@@ -559,9 +641,6 @@ export default function DashboardPage() {
             <h1 className="text-lg font-bold text-text">
               {userProfile?.displayName ?? 'Creator'}&apos;s Dashboard
             </h1>
-            <p className="text-xs text-text-muted">
-              {fmtInr(CREATOR_RPM)} per 1K views · {REVENUE_CONFIG.creatorSharePct}% creator share
-            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -581,40 +660,51 @@ export default function DashboardPage() {
           <WalletCard
             label="Coin Balance"
             value={`${(coinBalance).toLocaleString()} coins`}
-            sub="Used for AI generation"
+            sub="AI generation · unlock premium chapters"
             icon={<Coins size={16} />}
             color="bg-warning/10 text-warning"
             action={
-              <button
-                type="button"
-                onClick={() => setShowBuy(true)}
-                className="text-xs font-semibold text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
-              >
-                + Buy
-              </button>
+              buyEnabled ? (
+                <button
+                  type="button"
+                  onClick={openBuy}
+                  className="text-xs font-semibold text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
+                >
+                  + Buy
+                </button>
+              ) : (
+                <LockedPill hint="Coin purchases are temporarily unavailable" ariaLabel="Buy coins — temporarily locked" onClick={openBuy} />
+              )
             }
           />
           <WalletCard
             label="Total Revenue"
             value={fmtInr(totalEarningsInr)}
-            sub={`${formatCount(totalViews)} lifetime views · ${fmtInr(CREATOR_RPM)}/1K`}
             icon={<TrendingUp size={16} />}
             color="bg-accent/10 text-accent"
           />
           <WalletCard
             label="Available to Withdraw"
             value={fmtInr(availableInr)}
-            sub={pendingWithdrawals > 0 ? `₹${pendingWithdrawals.toFixed(2)} pending` : `Min ₹${MIN_WITHDRAWAL} to withdraw`}
+            sub={
+              !earningEligible
+                ? 'Unlock by meeting earning requirements'
+                : pendingWithdrawals > 0 ? `₹${pendingWithdrawals.toFixed(2)} pending` : `Min ₹${MIN_WITHDRAWAL} to withdraw`
+            }
             icon={<Wallet size={16} />}
             color="bg-green-500/10 text-green-400"
             action={
-              <button
-                type="button"
-                onClick={() => setShowWithdraw(true)}
-                className="text-xs font-semibold text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
-              >
-                Withdraw
-              </button>
+              earningEligible ? (
+                <button
+                  type="button"
+                  onClick={openWithdraw}
+                  className="text-xs font-semibold text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
+                >
+                  Withdraw
+                </button>
+              ) : (
+                <LockedPill hint="Unlocks when you're eligible for earnings" ariaLabel="Withdraw — locked until eligible for earnings" onClick={openWithdraw} />
+              )
             }
           />
           <WalletCard
@@ -628,6 +718,9 @@ export default function DashboardPage() {
           />
         </div>
       </section>
+
+      {/* Creator monetization — how earning works, unlock progress, journey & transparency */}
+      <CreatorMonetization stats={monetizationStats} />
 
       {/* Creator analytics — views, revenue, subscribers, top content */}
       <CreatorAnalyticsSection />
@@ -738,20 +831,26 @@ export default function DashboardPage() {
             <h2 id="wd-heading" className="text-sm font-semibold text-text flex items-center gap-2">
               <ArrowDownToLine size={14} aria-hidden="true" /> Withdrawal History
             </h2>
-            <button
-              type="button"
-              onClick={() => setShowWithdraw(true)}
-              className="text-xs text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
-            >
-              Request
-            </button>
+            {earningEligible ? (
+              <button
+                type="button"
+                onClick={openWithdraw}
+                className="text-xs text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
+              >
+                Request
+              </button>
+            ) : (
+              <span className="flex items-center gap-1 text-xs text-text-muted">
+                <Lock size={12} aria-hidden="true" /> Locked
+              </span>
+            )}
           </div>
           {withdrawals.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 text-text-muted gap-1">
               <IndianRupee size={20} />
               <p className="text-xs">No withdrawals yet</p>
-              {availableInr >= MIN_WITHDRAWAL && (
-                <button type="button" onClick={() => setShowWithdraw(true)} className="text-xs text-accent hover:underline mt-1">
+              {earningEligible && availableInr >= MIN_WITHDRAWAL && (
+                <button type="button" onClick={openWithdraw} className="text-xs text-accent hover:underline mt-1">
                   Withdraw now →
                 </button>
               )}
