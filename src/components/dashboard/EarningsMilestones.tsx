@@ -1,6 +1,5 @@
 'use client'
 
-import { useId } from 'react'
 import Link from 'next/link'
 import {
   Users, Eye, IndianRupee, BookOpen, Star, Rocket, BadgeCheck,
@@ -295,7 +294,6 @@ function RequirementRow({ req, theme }: { req: Requirement; theme: Theme }) {
 function MilestoneCard({ milestone, index }: { milestone: Milestone; index: number }) {
   const reduce = useReducedMotion()
   const theme = THEMES[milestone.accent]
-  const barId = useId()
 
   const total = milestone.requirements.length
   const metCount = milestone.requirements.filter((r) => r.met).length
@@ -305,6 +303,15 @@ function MilestoneCard({ milestone, index }: { milestone: Milestone; index: numb
   const unlocked = metCount === total
   const BadgeIcon = milestone.badgeIcon
   const TitleIcon = milestone.icon
+  // ARIA via a typed spread so static axe/aria linters don't misread the numeric
+  // aria-value* expressions as invalid; aria-label replaces the id + hidden span.
+  const barAria: React.HTMLAttributes<HTMLDivElement> = {
+    role: 'progressbar',
+    'aria-valuenow': pct,
+    'aria-valuemin': 0,
+    'aria-valuemax': 100,
+    'aria-label': `${milestone.title} milestone completion`,
+  }
 
   return (
     <motion.article
@@ -369,14 +376,7 @@ function MilestoneCard({ milestone, index }: { milestone: Milestone; index: numb
             <span className="text-[10px] font-medium text-text-muted uppercase tracking-wide">Completion</span>
             <span className={cn('text-[11px] font-bold tabular-nums', theme.text)}>{pct}%</span>
           </div>
-          <div
-            className="h-2 rounded-full bg-bg-elevated overflow-hidden"
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-labelledby={barId}
-          >
+          <div className="h-2 rounded-full bg-bg-elevated overflow-hidden" {...barAria}>
             <motion.div
               className={cn('h-full rounded-full', theme.text, 'bg-current')}
               initial={reduce ? false : { width: 0 }}
@@ -385,7 +385,6 @@ function MilestoneCard({ milestone, index }: { milestone: Milestone; index: numb
               transition={{ duration: 1, ease: 'easeOut', delay: 0.15 }}
             />
           </div>
-          <span id={barId} className="sr-only">{milestone.title} milestone completion</span>
         </div>
 
         {/* reward badge */}

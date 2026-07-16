@@ -1,6 +1,5 @@
 'use client'
 
-import { useId } from 'react'
 import {
   Info, Lock, Unlock, ShieldCheck, Users, Eye, BookOpen,
   UserCheck, Fingerprint, CheckCircle2, MonitorPlay, Gem, Heart, Crown,
@@ -141,13 +140,19 @@ function ProgressRing({ value, tone, unlocked }: { value: number; tone: Tone; un
 /** Animated horizontal progress bar with an accessible progressbar role. */
 function Bar({ value, tone, label }: { value: number; tone: Tone; label: string }) {
   const reduce = useReducedMotion()
-  const id = useId()
+  // ARIA passed via a typed object spread: the numeric aria-value* attributes are
+  // valid at runtime, but static axe/aria linters can't evaluate JSX expressions
+  // and misread them as invalid string values — the spread sidesteps that. Using
+  // aria-label (a plain string name) avoids the extra id + hidden span entirely.
+  const progressAria: React.HTMLAttributes<HTMLDivElement> = {
+    role: 'progressbar',
+    'aria-valuenow': value,
+    'aria-valuemin': 0,
+    'aria-valuemax': 100,
+    'aria-label': label,
+  }
   return (
-    <div
-      className="h-2 rounded-full bg-bg-elevated overflow-hidden"
-      role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100} aria-labelledby={id}
-    >
-      <span id={id} className="sr-only">{label}</span>
+    <div className="h-2 rounded-full bg-bg-elevated overflow-hidden" {...progressAria}>
       <motion.div
         className={cn('h-full rounded-full', TONES[tone].bar)}
         initial={{ width: reduce ? `${value}%` : 0 }}

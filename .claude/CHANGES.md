@@ -1126,3 +1126,9 @@ Per user: each tier's subscribers must also grow to unlock higher earnings, othe
 - `RevenueCalculator` gained a "Subscribers" preset row + custom input (default 25,000, paired with the 1M-views default); calls `estimateMonthlyEarnings(subs, views)`; result label + helper copy explain earnings scale with the lower of the two.
 - Dashboard "Estimated Monthly Earnings" table unchanged (its rows are the paired anchors; each row's estimate still equals its range).
 - Verified: paired anchors reproduce the table exactly; 100M views + 1K subs stays capped at ₹500–3,000 (subscriber-gated); 1M subs + 10K views capped at ₹500–3,000 (view-gated). typecheck + eslint clean; /earnings serves HTTP 200 with the new input, no errors.
+
+## Fix axe/aria false positives on progress bars (2026-07-16)
+Microsoft Edge Tools' axe linter can't evaluate JSX expressions, so it misread `aria-valuenow={pct}` (numeric, dynamic) as an invalid string value and errored on CreatorMonetization.tsx + EarningsMilestones.tsx.
+- Both progress bars now pass their ARIA via a typed `React.HTMLAttributes<HTMLDivElement>` object spread, so the static linter no longer sees literal `aria-value*` expression attributes.
+- Replaced the `aria-labelledby` + hidden `<span id={useId()}>` labelling with a direct `aria-label` (also killed a follow-on axe "duplicate id" false positive on `id={expression}`). Removed the now-unused `useId` imports.
+- Runtime ARIA verified via temp render: `role="progressbar" aria-valuenow="76" aria-valuemin="0" aria-valuemax="100" aria-label="1,000 Subscribers: 756 / 1,000"` — numeric values intact, accessible name now inline per bar. typecheck + eslint clean; /dashboard HTTP 200.
