@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -164,9 +164,20 @@ export function CreateWebtoonModal({
   const [aiPanel, setAiPanel] = useState<'cover' | null>(null)
   const [synopsisLoading, setSynopsisLoading] = useState(false)
 
+  // Revoke the previous preview URL on replace and on unmount, or each re-pick
+  // pins another full image blob in memory. Mirrors CreateNovelModal.
+  const coverObjectURL = useRef<string | null>(null)
+
+  useEffect(() => () => {
+    if (coverObjectURL.current) URL.revokeObjectURL(coverObjectURL.current)
+  }, [])
+
   function handleCoverFile(file: File) {
+    if (coverObjectURL.current) URL.revokeObjectURL(coverObjectURL.current)
+    const url = URL.createObjectURL(file)
+    coverObjectURL.current = url
     setPendingCover(file)
-    setCoverURL(URL.createObjectURL(file))
+    setCoverURL(url)
   }
 
   async function handleSynopsisAI(action: 'generate-synopsis' | 'improve-synopsis' | 'expand-synopsis') {

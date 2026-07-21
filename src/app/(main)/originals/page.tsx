@@ -3,8 +3,11 @@ import { Tv2 } from 'lucide-react'
 import { OriginalsClient } from './OriginalsClient'
 
 export const metadata: Metadata = {
-  title: 'Originals — Exclusive Toonflow Content',
-  description: 'Exclusive webtoons and novels created by top creators — only on Toonflow Studio Paint.',
+  // Brand omitted on purpose — the root template appends it.
+  title: 'Originals',
+  // Differs from the on-page intro copy below; an identical meta description
+  // and first body line reads as duplication to search engines.
+  description: 'Exclusive webtoons and novels you can only read on Toonflow Studio Paint.',
 }
 
 export default function OriginalsPage() {

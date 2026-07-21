@@ -1,28 +1,32 @@
 {
   "name": "Toonflow Studio Paint",
   "short_name": "Toonflow",
-  "description": "The professional platform for reading, discovering, and creating webtoons and manga.",
+  "id": "/",
+  "lang": "en-US",
+  "dir": "ltr",
+  "description": "The professional platform for reading, discovering, and creating webtoons, manga, and novels.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0F0F0F",
   "theme_color": "#0F0F0F",
   "orientation": "portrait-primary",
-  "categories": ["entertainment", "books", "lifestyle"],
+  "categories": ["entertainment", "books"],
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "/icons/icon-192.v2.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "/icons/icon-512.v2.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-maskable-512x512.png",
+      "src": "/icons/icon-maskable-512.v2.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -33,13 +37,13 @@
       "name": "Browse Content",
       "short_name": "Browse",
       "url": "/browse",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/icon-192.v2.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "My Studio",
       "short_name": "Studio",
       "url": "/create",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/icon-192.v2.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

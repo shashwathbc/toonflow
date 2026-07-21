@@ -5,32 +5,46 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'react-hot-toast'
 import PwaRegister from '@/components/pwa/PwaRegister'
 import { TooltipProvider } from '@/components/ui/Tooltip'
+import { APP_NAME, APP_URL, SOCIAL_HANDLE } from '@/lib/utils/constants'
+
+const APP_DESCRIPTION =
+  'The professional platform for reading, discovering, and creating webtoons, manga, and novels.'
 
 export const metadata: Metadata = {
   title: {
-    default: 'Toonflow Studio Paint',
-    template: '%s | Toonflow Studio Paint',
+    default: APP_NAME,
+    template: `%s | ${APP_NAME}`,
   },
-  description: 'The professional platform for reading, discovering, and creating webtoons and manga.',
-  keywords: ['webtoon', 'manga', 'manhwa', 'comics', 'creator', 'studio', 'originals'],
-  authors: [{ name: 'Toonflow Studio Paint' }],
-  creator: 'Toonflow Studio Paint',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://toonflowstudiopaint.com'),
+  description: APP_DESCRIPTION,
+  keywords: ['webtoon', 'manga', 'manhwa', 'novels', 'comics', 'creator', 'studio', 'originals'],
+  authors: [{ name: APP_NAME }],
+  creator: APP_NAME,
+  // APP_URL already resolves NEXT_PUBLIC_APP_URL with the same fallback —
+  // importing it keeps one source of truth instead of two copies of the literal.
+  metadataBase: new URL(APP_URL),
+  alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    siteName: 'Toonflow Studio Paint',
-    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Toonflow Studio Paint' }],
+    siteName: APP_NAME,
+    title: APP_NAME,
+    description: APP_DESCRIPTION,
+    url: APP_URL,
   },
   twitter: {
     card: 'summary_large_image',
-    images: ['/og-image.png'],
+    site: SOCIAL_HANDLE,
+    creator: SOCIAL_HANDLE,
+    title: APP_NAME,
+    description: APP_DESCRIPTION,
   },
   manifest: '/manifest.json',
-  icons: {
-    icon: '/favicon.ico',
-    apple: '/icons/icon-192x192.png',
-  },
+  // NOTE: no `icons` key on purpose. Icons come from the App Router file
+  // conventions — src/app/icon.png, apple-icon.png, opengraph-image.png,
+  // twitter-image.png (plus favicon.ico). Next content-hashes those URLs, so
+  // they cache-bust themselves on every change. Declaring `icons` here as well
+  // would emit a second, competing set of <link rel="icon"> tags pointing at
+  // unhashed paths. Regenerate them all with `npm run icons`.
 }
 
 export const viewport: Viewport = {

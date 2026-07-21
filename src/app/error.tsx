@@ -25,6 +25,7 @@ export default function RootError({
           An unexpected error occurred. Please try again.
         </p>
         <button
+          type="button"
           onClick={reset}
           className="btn-accent gap-2 mx-auto"
         >

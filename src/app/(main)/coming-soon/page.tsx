@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { Sparkles, Wallet, Palette, ArrowLeft } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'Coming Soon — Toonflow Studio Paint',
+  // Brand omitted on purpose — the root template appends it.
+  title: 'Coming Soon',
   description: 'This feature is launching soon on Toonflow Studio Paint.',
 }
 
@@ -18,7 +19,7 @@ const FEATURE_COPY = {
     icon: Wallet,
     title: 'Wallet is coming soon',
     message:
-      'Token purchases, creator earnings and payouts are almost ready. For now, enjoy reading — everything on Toonflow is free during launch.',
+      'Token purchases, creator earnings, and payouts are almost ready. For now, enjoy reading — everything on Toonflow is free during launch.',
   },
   default: {
     icon: Sparkles,

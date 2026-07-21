@@ -1132,3 +1132,60 @@ Microsoft Edge Tools' axe linter can't evaluate JSX expressions, so it misread `
 - Both progress bars now pass their ARIA via a typed `React.HTMLAttributes<HTMLDivElement>` object spread, so the static linter no longer sees literal `aria-value*` expression attributes.
 - Replaced the `aria-labelledby` + hidden `<span id={useId()}>` labelling with a direct `aria-label` (also killed a follow-on axe "duplicate id" false positive on `id={expression}`). Removed the now-unused `useId` imports.
 - Runtime ARIA verified via temp render: `role="progressbar" aria-valuenow="76" aria-valuemin="0" aria-valuemax="100" aria-label="1,000 Subscribers: 756 / 1,000"` — numeric values intact, accessible name now inline per bar. typecheck + eslint clean; /dashboard HTTP 200.
+
+## Homepage brand + hero pass: logo asset, contrast, typography, carousel (2026-07-20)
+Per user screenshot of the live home page: use `logomain.png`, fix colour ratio, slider, font/weight.
+
+**Logo** — new `src/components/ui/Logo.tsx` renders `src/assets/logomain.png` via a static `next/image` import (Next emits intrinsic width/height, so the mark reserves its box → no CLS; build emits `.next/static/media/logomain.<hash>.png`). Props: `showText`, `variant` ('full' | 'studio'), `size`, `priority`. The mark is `alt=""`/`aria-hidden` when the wordmark text renders beside it (the text already names the brand) and takes a real alt when it stands alone. Replaced the hand-typed wordmark in Navbar (priority, text hidden < sm), Footer, StudioSidebar and StudioLayoutShell. `priority` is opt-in — the footer/sidebar marks are below the fold and no longer preload.
+- Wordmark now reads `TOONFLOW` in `text-text` + `STUDIO PAINT` in `text-text-secondary`. Previously the second half used `text-accent`, and since `accent` is `#FFFFFF` that was white-on-white — zero visual hierarchy.
+
+**Colour ratio (WCAG 1.4.3 / 1.4.11)** — measured, not eyeballed:
+- `text.muted` `#717171` → `#8B8B8B`. The old value failed AA on *every* surface it's painted on: 3.93:1 on `bg`, 3.57:1 on `bg-card`, 3.30:1 on `bg-elevated` (AA needs 4.5:1). New value clears all three at 5.63 / 5.11 / 4.73.
+- Added `bg.border-strong` `#616161` (3.10:1 on bg) and pointed `.input-base` at it. `#3F3F3F` is only 1.65:1 on `bg-card`; an input's border is the sole cue for where the control is, so 1.4.11 applies. Decorative card/divider borders keep the subtle `#3F3F3F`.
+- Hero body/stat text moved off `white/50`–`white/60` (5.34:1 over pure bg, worse over bright artwork) onto `white/75`–`white/85`, and the scrim deepened from `via-bg/75 → to-bg/20` to `via-bg/90 → to-bg/30`.
+
+**Typography** — added an optical display scale to globals.css (`.display-2xl/xl/lg/md`): tracking tightens (−0.035em → −0.018em) and weight climbs (700 → 800) as size grows, because Inter is drawn for text sizes and reads loose when scaled up. All carry `text-wrap: balance`, which is what fixes the ragged 3-line headline in the screenshot. Plus `.text-body` (`text-wrap: pretty`, orphan control only), `.tnum` (tabular figures so view counts don't jitter) and `.eyebrow` (uppercase gets *positive* tracking — the inverse of display type).
+
+**Hero carousel** — rebuilt `HeroSlider.tsx`:
+- *Real crossfade.* All slides now stay mounted and animate `opacity`. The old version swapped `src` on a single `<Image>`, so its `transition-opacity duration-700` had nothing to animate — every advance was a hard cut with a decode flash. `priority` on slide 0 only; the rest are lazy so LCP isn't diluted.
+- *WCAG 2.2.2* — added a pause/play toggle. Hover/focus suspension and the explicit toggle are separate state, so moving the mouse away doesn't resume a carousel the user deliberately paused.
+- *WCAG 2.3.3* — `usePrefersReducedMotion` (via `useSyncExternalStore`, so an OS-level change applies without reload; SSR snapshot is `false` to match first client render). Autoplay is disabled entirely under reduced motion and the pause button is hidden. Added a global `@media (prefers-reduced-motion: reduce)` block using near-zero durations rather than `none`, so `transitionend`/`animationend` listeners still fire.
+- *ARIA* — dots were `role="tab"` with no `tabpanel` anywhere, describing a widget that didn't exist; they're now plain buttons with `aria-current`. Container is `role="region"` + `aria-roledescription="carousel"`, slide is `role="group"` + `aria-roledescription="slide"` labelled "N of M: <title>". `aria-live` is now `off` while rotating (it was `polite` permanently — a full re-announce every 6s) and flips to `polite` when stopped so manual navigation is still announced.
+- *Keyboard* — ArrowLeft/ArrowRight, scoped to `onKeyDown` on the region so focus elsewhere on the page keeps normal arrow behaviour.
+- *Touch targets (2.5.8)* — arrows 36px → 44px; dots keep their slim visual bar inside a 44px-tall transparent hit area; CTAs `min-h-[44px]`.
+- Title clamped to 2 lines (was 3, which swallowed the hero and pushed the CTA off the fold on short viewports); active dot fills left-to-right over the slide duration via `hero-dot-progress` so the advance is telegraphed.
+- Responsive heights `440 / 520 / 580px` (was a flat `500/580`, too tall on small phones).
+
+Verified: `tsc --noEmit` clean, `eslint` clean, `vitest` 26/26 pass, `next build` compiles successfully, logo confirmed emitted to `.next/static/media/`.
+
+## Favicon, information accuracy & memory optimization (2026-07-21)
+Three-part pass from a live screenshot: duplicated tab title, generic favicon, 126MB dev memory.
+Plus a mid-session request to give every stat icon a hover name + aria-label.
+
+### Icons (Part A)
+Discovered the three PWA icons were **JPEGs renamed .png** (byte-identical, all 1024×1024, manifest declared them image/png at 192/512) and `og-image.png` was byte-identical to the Ravana **seed cover** (a 1024×1024 JPEG declared 1200×630). Every social share rendered the demo art.
+- New `scripts/generate-icons.mjs` (+ `npm run icons`, + `sharp` promoted from transitive to a real devDependency) regenerates everything from `src/assets/logomain.png` (668×598, non-square → contain-fit + centre on a `#0F0F0F` square; maskable inset to 80% for the safe zone).
+- **Two mechanisms, by design.** Browser icons → App Router conventions (`src/app/icon.png`, `apple-icon.png`, `opengraph-image.png`, `twitter-image.png`): Next content-hashes them, which self-busts caches AND sidesteps the SW (its `/icons/` pattern needs a trailing slash, root paths never match). PWA icons stay in `public/icons/` but **filename-versioned** (`icon-192.v2.png`) since they sit under a 1-year immutable header + the SW cache-forever branch.
+- Removed `metadata.icons` from layout (conventions replace it, and keeping both emits competing `<link>` tags). Deleted `og-image.png` + its next.config rule.
+- Bumped SW `CACHE_VERSION` v1→v2 (the only eviction mechanism) and pulled `/manifest.json`, `/favicon.ico`, `/og-image.png` out of `STATIC_PATTERNS` (unhashed paths must not be trapped cache-forever). Added a next.config warning that `/icons/*` is versioned and must never be overwritten in place. Old JPEG icons kept one deploy so in-flight SW clients don't 404.
+- Manifest: real PNG types/sizes, added id/lang/dir/scope, updated all 5 icon refs incl. the 2 shortcut entries.
+- **Verified in a running prod server**: `/icon.png` etc. now serve `image/png` (were JPEG), manifest icons correct, hashed convention tags emitted, no stale refs.
+
+### Icon labels (mid-session request)
+New `src/components/ui/Stat.tsx` (icon + value + `title` hover name + `sr-only` "Views: 1.2K"). Used `title`, not the Radix Tooltip, because these sit **inside card `<Link>`s** — a tooltip trigger is a focusable button and nesting one in an anchor is invalid HTML. Rolled across HomeFeed, Browse, Originals, Profile mini-cards; detail pages + HeroSlider + Novel/WebtoonCard got `title` on their existing stat spans. Card `aria-label`s now fold in the stats (the label overrides inner content, so they'd otherwise be unreadable).
+
+### Information accuracy (Part B)
+- **The reported bug**: 6 page titles embedded the brand, which `title.template` appended again → "Home — Toonflow Studio Paint | Toonflow Studio Paint". Stripped the brand from all 6; home uses `title.absolute` = "Toonflow Studio Paint — Webtoons, Manga & Novels". Added metadata to `not-found.tsx` (noindex).
+- Metadata: `metadataBase` now imports `APP_URL` (was a 2nd copy of the literal); added og/twitter title+description+url, `twitter.site` (`@toonflowstudiopaint`); "novels" keyword; `/earnings` added to sitemap; login description period; originals meta de-duped from its body copy.
+- Branding: `(auth)/layout.tsx` "Toonflow Studio" (only place dropping "Paint", contradicted its own aria-label) → shared `<Logo>`; footer tagline aligned to the root "professional platform … webtoons, manga, and novels"; support email + legal `LAST_UPDATED` extracted to constants (were literals in 7 and 3 files); off-brand `#2DCA72` in the support email → neutral. Deleted unused `REVENUE_SPLIT` (duplicated revenue/config.ts).
+- Copy: softened "millions of readers"/"thousands of creators" (contradicted the app's own empty states); fixed "commission on … commissions", a comma splice, en-GB "licence"→"license" ×3, serial commas; standardized 4 error boundaries to one heading + "Try again" (and gave their buttons `type="button"`).
+- Legal placeholders (per decision): added entity/address constants + a **governing-law/jurisdiction clause** to Terms (was absent; platform bills INR + 18% GST via Razorpay) and a data-controller line to Privacy, all marked `[… — TO BE COMPLETED]`.
+
+### Memory (Part C — phases 0+1 per decision)
+Phase 0: memoized the `AuthContext` provider value (was a fresh object literal each render, re-rendering every `useAuth()` consumer app-wide); fixed 3 confirmed timer leaks (reader header timer, novel autosave — which fired a **Firestore write** + setState post-unmount, browse debounce); **lazy-loaded SupportModal** out of the shared `(main)` bundle.
+Phase 1: revoked leaked object URLs at 3 upload sites (each pinned a full image blob); new `useTransientState` hook replacing **10** untracked `setSaveState('idle')` timers; mounted guards on 3 async-setState effects; **fixed a real stale-response race** in Browse (out-of-order Firestore responses overwriting fresh results) with a monotonic request id; memoized per-render sort/slice in HomeFeed and a per-scroll-frame `findIndex` in the reader.
+
+**Measured (prod build, not dev):** framer-motion removed from the homepage — **/ dropped 1661.5 KB → 1512.4 KB (−149 KB, −9%, 23→20 chunks)**, framer-motion absent from /, /browse, /originals (was loading eagerly to render a closed modal). The 126MB figure was a dev-mode reading (unminified React + HMR + source maps); not representative of prod.
+Caveat stated to user: already-installed PWAs snapshot icons at install and won't update without reinstall.
+
+Gates: `tsc` clean · `eslint` clean · `vitest` 26/26 · `next build` OK. Prod server smoke-tested: /, /browse, /originals, /terms, /privacy, /ai-policy, /login, /earnings, /coming-soon → 200; bad path → 404; all icons serve image/png; legal placeholders + shared date render on all 3 legal pages.

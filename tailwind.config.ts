@@ -10,12 +10,21 @@ const config: Config = {
           DEFAULT: '#0F0F0F',
           card: '#1A1A1A',
           elevated: '#212121',
+          // Decorative dividers/card edges — carries no meaning on its own.
           border: '#3F3F3F',
+          // Boundaries that DO convey a control (inputs, selects, checkboxes).
+          // WCAG 1.4.11 wants 3:1 against the adjacent surface; #3F3F3F only
+          // manages 1.65:1 on bg-card, so controls use this instead.
+          'border-strong': '#616161',
         },
         text: {
           DEFAULT: '#FFFFFF',
           secondary: '#AAAAAA',
-          muted: '#717171',
+          // Was #717171 — that failed WCAG AA on every surface we paint it on
+          // (3.93:1 on bg, 3.57:1 on card, 3.30:1 on elevated; AA needs 4.5:1).
+          // #8B8B8B clears it everywhere (5.63 / 5.11 / 4.73) and still reads
+          // as the quietest step in the ramp.
+          muted: '#8B8B8B',
         },
         accent: {
           DEFAULT: '#FFFFFF',

@@ -3,7 +3,10 @@ import { APP_URL } from '@/lib/utils/constants'
 
 export const revalidate = 3600 // rebuild the sitemap at most hourly
 
-const STATIC_ROUTES = ['', '/browse', '/originals', '/ai-policy', '/privacy', '/terms']
+// Public, crawlable routes. /earnings is a public marketing page linked from the
+// footer — it was missing here, so it was never submitted for indexing.
+// (/login and /signup are excluded deliberately: robots.ts disallows them.)
+const STATIC_ROUTES = ['', '/browse', '/originals', '/earnings', '/ai-policy', '/privacy', '/terms']
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()

@@ -8,9 +8,12 @@
   --bg-card: #1A1A1A;
   --bg-elevated: #212121;
   --border: #3F3F3F;
+  --border-strong: #616161;
   --text: #FFFFFF;
   --text-secondary: #AAAAAA;
-  --text-muted: #717171;
+  /* #8B8B8B, not #717171 — the old value failed WCAG AA on every surface
+     (3.93:1 on bg, 3.30:1 on elevated). See tailwind.config.ts. */
+  --text-muted: #8B8B8B;
   --accent: #FFFFFF;
   --accent-hover: #EBEBEB;
   --accent-muted: rgba(255, 255, 255, 0.08);
@@ -144,16 +147,68 @@ body {
            focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
   }
 
+  /* border-strong (not border): an input's edge is the only thing telling a
+     sighted user where the control is, so WCAG 1.4.11 applies — 3:1 minimum. */
   .input-base {
-    @apply bg-bg-elevated border border-bg-border text-white placeholder:text-text-muted
+    @apply bg-bg-elevated border border-bg-border-strong text-white placeholder:text-text-muted
            rounded-lg px-3 py-2 text-sm
-           focus:outline-none focus:border-white/40 focus:ring-1 focus:ring-white/40
+           focus:outline-none focus:border-white/60 focus:ring-1 focus:ring-white/60
            transition-colors duration-150 w-full
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .section-heading {
     @apply text-xl font-bold text-white tracking-tight;
+  }
+
+  /* ── Display type scale ──────────────────────────────────
+     Optical sizing done by hand: Inter is drawn for text sizes, so at display
+     sizes the default tracking reads loose and the counters look airy. Each
+     step up in size steps down in letter-spacing and line-height. Weight also
+     climbs (700 → 800) because large text can carry the extra mass without
+     turning into a blob.
+
+     `text-wrap: balance` is what stops a long title breaking into the ragged
+     3-line stack we had on the hero — the browser evens the line lengths
+     instead of filling greedily. Capped at ~6 lines by spec, which is fine for
+     headings; body copy uses `pretty` (orphan control only, much cheaper). */
+  .display-2xl {
+    @apply text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.02] tracking-[-0.035em];
+    text-wrap: balance;
+  }
+
+  .display-xl {
+    @apply text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-[1.06] tracking-[-0.03em];
+    text-wrap: balance;
+  }
+
+  .display-lg {
+    @apply text-2xl sm:text-3xl font-bold leading-[1.12] tracking-[-0.022em];
+    text-wrap: balance;
+  }
+
+  .display-md {
+    @apply text-xl sm:text-2xl font-bold leading-[1.2] tracking-[-0.018em];
+    text-wrap: balance;
+  }
+
+  /* Body copy: no balancing (expensive + unnecessary), just orphan control. */
+  .text-body {
+    @apply text-[15px] leading-[1.65] text-text-secondary;
+    text-wrap: pretty;
+  }
+
+  /* Stats/counters — tabular figures so digits don't jitter as values tick up
+     and columns of numbers stay aligned. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'cv11' 1, 'ss01' 1;
+  }
+
+  /* Small uppercase label (badges, eyebrows). Uppercase needs POSITIVE tracking
+     — the opposite of display type — or the caps crowd each other. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em];
   }
 
   .shimmer {
@@ -167,6 +222,41 @@ body {
 
   .interactive-border {
     @apply border border-bg-border hover:border-white/30 transition-colors duration-150;
+  }
+}
+
+/* ── Hero slider ───────────────────────────────────────────
+   The active dot fills left-to-right over the slide duration, so the carousel
+   telegraphs when it's about to advance instead of moving without warning.
+   Duration is injected as --slide-duration; the animation is dropped entirely
+   under prefers-reduced-motion (see below), where autoplay is also disabled. */
+@keyframes hero-dot-progress {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.hero-dot-progress {
+  transform-origin: left center;
+  animation: hero-dot-progress var(--slide-duration, 6000ms) linear forwards;
+}
+
+/* ── Reduced motion (WCAG 2.3.3) ───────────────────────────
+   Honour the OS setting globally: near-zero durations rather than `none`, so
+   transitionend/animationend listeners still fire and state machines that wait
+   on them don't stall. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .reader-paragraph {
+    opacity: 1;
+    transform: none;
   }
 }
 

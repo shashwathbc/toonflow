@@ -69,7 +69,7 @@ export default function NovelCard({ novel }: NovelCardProps) {
             {novel.genres[0] ?? 'Novel'}
           </span>
           {novel.rating > 0 && (
-            <div className="flex items-center gap-1" aria-label={`Rating: ${novel.rating} out of 5`}>
+            <div className="flex items-center gap-1" title="Average rating" aria-label={`Rating: ${novel.rating} out of 5`}>
               <span className="text-accent" aria-hidden="true">◎</span>
               <Star size={10} className="text-warning fill-warning" aria-hidden="true" />
               <span className="text-xs text-text-secondary">{novel.rating.toFixed(1)}</span>

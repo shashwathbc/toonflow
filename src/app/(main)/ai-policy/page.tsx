@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { SUPPORT_EMAIL, LEGAL_LAST_UPDATED } from '@/lib/utils/constants'
 
 export const metadata: Metadata = {
-  title: 'AI Policy — Toonflow Studio Paint',
+  // Brand omitted on purpose — the root template appends it.
+  title: 'AI Policy',
   description: 'How AI-assisted creation works on Toonflow Studio Paint, and the rules around it.',
 }
 
-const LAST_UPDATED = 'July 3, 2026'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -22,7 +23,7 @@ export default function AIPolicyPage() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-14 space-y-10">
       <header className="space-y-2">
         <h1 className="text-3xl font-black text-text tracking-tight">AI Policy</h1>
-        <p className="text-sm text-text-muted">Last updated: {LAST_UPDATED}</p>
+        <p className="text-sm text-text-muted">Last updated: {LEGAL_LAST_UPDATED}</p>
         <p className="text-sm text-text-secondary leading-relaxed">
           Toonflow believes AI should amplify creators, not replace them. Our studio tools include
           AI-assisted writing, synopsis generation, cover art, and webtoon panel generation. This
@@ -40,7 +41,7 @@ export default function AIPolicyPage() {
 
       <Section title="2. Ownership of AI-assisted work">
         <p>Work you create on Toonflow with AI assistance is treated like any other content you
-        publish: it belongs to you, subject to the licence you grant us to host and display it (see
+        publish: it belongs to you, subject to the license you grant us to host and display it (see
         the <Link href="/terms" className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">Terms of Service</Link>).
         Be aware that purely AI-generated material may have limited copyright protection in some
         jurisdictions — the more of your own authorship you add, the stronger your rights.</p>
@@ -75,8 +76,8 @@ export default function AIPolicyPage() {
 
       <Section title="7. Questions">
         <p>If you are unsure whether a use of AI is allowed, ask first:{' '}
-        <a href="mailto:toonflowstudiopaint@gmail.com" className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">
-          toonflowstudiopaint@gmail.com
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">
+          {SUPPORT_EMAIL}
         </a>.</p>
       </Section>
     </div>

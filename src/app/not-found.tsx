@@ -1,5 +1,13 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Home, Search } from 'lucide-react'
+
+export const metadata: Metadata = {
+  title: 'Page Not Found',
+  description: 'The page you are looking for does not exist or has been moved.',
+  // A 404 must never be indexed, even though Next also sends a 404 status.
+  robots: { index: false, follow: true },
+}
 
 export default function NotFound() {
   return (

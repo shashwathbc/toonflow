@@ -5,7 +5,7 @@ import Skeleton from '@/components/ui/Skeleton'
 
 export const metadata: Metadata = {
   title: 'Sign In',
-  description: 'Sign in to Toonflow Studio Paint',
+  description: 'Sign in to Toonflow Studio Paint.',
 }
 
 export default function LoginPage() {

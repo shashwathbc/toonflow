@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { SUPPORT_EMAIL, LEGAL_LAST_UPDATED, LEGAL_ENTITY_NAME, LEGAL_ADDRESS } from '@/lib/utils/constants'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — Toonflow Studio Paint',
+  // Brand omitted on purpose — the root template appends it.
+  title: 'Privacy Policy',
   description: 'How Toonflow Studio Paint collects, uses, and protects your data.',
 }
 
-const LAST_UPDATED = 'July 3, 2026'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -22,7 +23,7 @@ export default function PrivacyPage() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-14 space-y-10">
       <header className="space-y-2">
         <h1 className="text-3xl font-black text-text tracking-tight">Privacy Policy</h1>
-        <p className="text-sm text-text-muted">Last updated: {LAST_UPDATED}</p>
+        <p className="text-sm text-text-muted">Last updated: {LEGAL_LAST_UPDATED}</p>
         <p className="text-sm text-text-secondary leading-relaxed">
           Toonflow Studio Paint (&quot;Toonflow&quot;, &quot;we&quot;, &quot;us&quot;) is a platform for reading and
           creating webtoons and novels. This policy explains what we collect, why we collect it,
@@ -71,8 +72,8 @@ export default function PrivacyPage() {
         <p>Your content stays on Toonflow as long as your account is active. You can delete individual
         works and chapters at any time from the studio. To delete your account and associated profile
         data entirely, email us at{' '}
-        <a href="mailto:toonflowstudiopaint@gmail.com" className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">
-          toonflowstudiopaint@gmail.com
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">
+          {SUPPORT_EMAIL}
         </a>{' '}
         and we will process the request within 30 days. Hashed analytics records are retained in
         aggregate and cannot be linked back to you after account deletion.</p>
@@ -96,9 +97,14 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="9. Contact">
+        {/* TODO(legal): data-controller identity is required under GDPR/DPDP.
+            Placeholders live in src/lib/utils/constants.ts. */}
+        <p>The data controller for Toonflow Studio Paint is{' '}
+        <strong className="text-text">{LEGAL_ENTITY_NAME}</strong>,{' '}
+        <strong className="text-text">{LEGAL_ADDRESS}</strong>.</p>
         <p>Questions about privacy? Email{' '}
-        <a href="mailto:toonflowstudiopaint@gmail.com" className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">
-          toonflowstudiopaint@gmail.com
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">
+          {SUPPORT_EMAIL}
         </a>{' '}
         or use the &quot;Ask a Question&quot; link in the footer. See also our{' '}
         <Link href="/terms" className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">Terms of Service</Link>{' '}

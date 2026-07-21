@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import nodemailer from 'nodemailer'
 import { adminAuth, adminDb } from '@/lib/firebase/serverApp'
-import { AUTH_COOKIE_NAME, APP_NAME } from '@/lib/utils/constants'
+import { AUTH_COOKIE_NAME, APP_NAME, SUPPORT_EMAIL } from '@/lib/utils/constants'
 import { bodyTooLarge, escapeHtml } from '@/lib/api/guard'
 import { checkRateLimit } from '@/lib/views/rateLimit'
 import { getClientIp } from '@/lib/views/botDetection'
@@ -14,7 +14,6 @@ export const runtime = 'nodejs'
 
 const MAX_BODY_BYTES = 16 * 1024
 
-const SUPPORT_EMAIL = 'toonflowstudiopaint@gmail.com'
 const TYPES = ['question', 'issue'] as const
 type SupportType = (typeof TYPES)[number]
 
@@ -63,9 +62,12 @@ ${SUPPORT_EMAIL}
 
 —
 This is an automated confirmation. Please don't reply to this email; we'll reach out to you directly.`,
+    // Email clients strip <style> blocks, so brand colours have to be inline.
+    // #6B6B6B is the light-mode counterpart of the app's text-secondary step —
+    // the previous #2DCA72 was the `success` token, not a brand colour.
     html:
 `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a">
-  <h2 style="margin:0 0 16px;font-size:18px">TOONFLOW <span style="color:#2DCA72">STUDIO PAINT</span></h2>
+  <h2 style="margin:0 0 16px;font-size:18px;color:#0F0F0F">TOONFLOW <span style="color:#6B6B6B">STUDIO PAINT</span></h2>
   <p>Hi ${safeName},</p>
   <p>Thanks for connecting with us! We've received your <strong>${topic}</strong> and our team will review it shortly.</p>
   <p>We'll get back to you at this email address as soon as possible — usually within <strong>24–48 hours</strong>.</p>

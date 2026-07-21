@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from 'react'
 import { Settings, Loader2, Save, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
+import { useTransientState } from '@/hooks/useTransientState'
 import {
   getPlatformSettings, updatePlatformSettings, createAuditLog,
   type PlatformSettings,
@@ -44,7 +45,8 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<PlatformSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  // Auto-reverts to false after the TTL; the timer is cleared on unmount.
+  const [saved, setSaved] = useTransientState(false)
 
   useEffect(() => {
     getPlatformSettings()
@@ -66,9 +68,8 @@ export default function AdminSettingsPage() {
         resourceId: 'platform',
         details: 'Updated platform settings',
       })
-      setSaved(true)
+      setSaved(true, 2000)
       toast.success('Settings saved')
-      setTimeout(() => setSaved(false), 2000)
     } catch (e: unknown) {
       toast.error((e as Error).message)
     } finally {

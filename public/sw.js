@@ -8,7 +8,11 @@
  *
  * Bump CACHE_VERSION to invalidate all runtime caches on deploy.
  */
-const CACHE_VERSION = 'v1'
+// v2 (2026-07-20): purges the previous icon cache. The old /icons/* files were
+// JPEGs mis-named .png; bumping this is the ONLY eviction mechanism this SW has
+// (see the activate handler below), so it is required whenever a cached asset
+// changes at a path that isn't content-hashed.
+const CACHE_VERSION = 'v2'
 const STATIC_CACHE = `tf-static-${CACHE_VERSION}`
 const PAGE_CACHE = `tf-pages-${CACHE_VERSION}`
 const KNOWN_CACHES = [STATIC_CACHE, PAGE_CACHE]
@@ -30,13 +34,23 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+// Cache-first, cache-forever. Only safe for URLs that are content-hashed or
+// filename-versioned — anything else becomes permanently un-updatable in the
+// field, because there is no revalidation and no expiry here.
+//
+// Deliberately NOT listed:
+//   /manifest.json — the one file that must be able to change; caching it
+//                    forever would pin the icon list even after icons update.
+//   /favicon.ico   — unhashed path; HTTP caching handles it fine at 26KB.
+//   /og-image.png  — path retired; the App Router opengraph-image convention
+//                    replaces it and is content-hashed.
+// App Router icon conventions (/icon.png, /apple-icon.png, /opengraph-image.png)
+// intentionally match nothing here — Next content-hashes their URLs, so they
+// self-bust and must not be trapped in a cache-forever branch.
 const STATIC_PATTERNS = [
   /^\/_next\/static\//,
-  /^\/icons\//,
+  /^\/icons\//, // safe: filenames are versioned (icon-192.v2.png)
   /^\/images\//,
-  /^\/og-image\.png$/,
-  /^\/favicon\.ico$/,
-  /^\/manifest\.json$/,
 ]
 
 function isStaticAsset(url) {

@@ -107,12 +107,17 @@ export default function WebtoonDetailPage() {
             </div>
           )}
 
+          {/* `title` names each icon on hover. The visible text already carries
+              the unit ("1.2K views"), so no extra screen-reader text is needed. */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
-            <span className="flex items-center gap-1"><Eye size={13} aria-hidden="true" /> {formatCount(webtoon.viewCount ?? 0)} views</span>
-            <span className="flex items-center gap-1"><Heart size={13} aria-hidden="true" /> {formatCount(webtoon.likeCount ?? 0)} likes</span>
-            <span className="flex items-center gap-1"><ImageIcon size={13} aria-hidden="true" /> {webtoon.episodeCount ?? episodes.length} episodes</span>
+            <span className="flex items-center gap-1" title="Views"><Eye size={13} aria-hidden="true" /> {formatCount(webtoon.viewCount ?? 0)} views</span>
+            <span className="flex items-center gap-1" title="Likes"><Heart size={13} aria-hidden="true" /> {formatCount(webtoon.likeCount ?? 0)} likes</span>
+            <span className="flex items-center gap-1" title="Episodes"><ImageIcon size={13} aria-hidden="true" /> {webtoon.episodeCount ?? episodes.length} episodes</span>
             {(webtoon.rating ?? 0) > 0 && (
-              <span className="flex items-center gap-1"><Star size={13} className="text-warning" aria-hidden="true" /> {(webtoon.rating ?? 0).toFixed(1)}</span>
+              <span className="flex items-center gap-1" title="Average rating">
+                <Star size={13} className="text-warning" aria-hidden="true" /> {(webtoon.rating ?? 0).toFixed(1)}
+                <span className="sr-only"> out of 5</span>
+              </span>
             )}
           </div>
 

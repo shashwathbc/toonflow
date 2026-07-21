@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { browseContent, searchContent } from '@/lib/firebase/firestore'
 import { formatCount } from '@/lib/utils/formatters'
+import { Stat } from '@/components/ui/Stat'
 import { GENRES } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -34,11 +35,23 @@ const STATUS_OPTIONS = [
 function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }) {
   const chapterCount = 'chapterCount' in item ? item.chapterCount : (item as Webtoon).episodeCount
   const href = `/${type}/${item.id}`
+  const unitLabel = type === 'novel' ? 'Chapters' : 'Episodes'
+
+  // Folded into the link label because aria-label overrides inner content.
+  const cardLabel = [
+    `${item.title} — ${type}`,
+    `${chapterCount} ${unitLabel.toLowerCase()}`,
+    `${formatCount(item.viewCount)} views`,
+    item.rating > 0 ? `rated ${item.rating.toFixed(1)} out of 5` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
   return (
     <Link
       href={href}
       className="group block rounded-xl overflow-hidden bg-bg-card border border-bg-border hover:border-white/20 transition-all duration-200"
-      aria-label={`${item.title} — ${type}`}
+      aria-label={cardLabel}
     >
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
         {item.coverURL ? (
@@ -65,11 +78,11 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
         {item.genres?.length > 0 && (
           <p className="text-[11px] text-white/50 mb-1.5 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
         )}
-        <div className="flex items-center gap-2.5 text-[11px] text-white/40">
-          <span className="flex items-center gap-1"><Layers size={10} aria-hidden="true" />{chapterCount}</span>
-          <span className="flex items-center gap-1"><Eye size={10} aria-hidden="true" />{formatCount(item.viewCount)}</span>
+        <div className="flex items-center gap-2.5 text-[11px] text-white/60">
+          <Stat icon={Layers} value={chapterCount} label={unitLabel} />
+          <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
           {item.rating > 0 && (
-            <span className="flex items-center gap-1"><Star size={10} aria-hidden="true" />{item.rating.toFixed(1)}</span>
+            <Stat icon={Star} value={item.rating.toFixed(1)} label="Rating" />
           )}
         </div>
       </div>
@@ -110,9 +123,23 @@ export function BrowseClient() {
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
   const loading = loadedKey !== filterKey
 
+  // Monotonic request id. Firestore queries resolve out of order — a broad
+  // filter can easily outlive a narrower one issued after it — so without this
+  // a slow earlier response overwrites a fast later one and the grid shows
+  // results that don't match the active filters. Only the newest request is
+  // allowed to commit. This also doubles as the unmount guard: the ref is
+  // bumped on cleanup, so no in-flight response can setState after unmount.
+  const requestId = useRef(0)
+
+  useEffect(() => () => { requestId.current += 1 }, [])
+
   const load = useCallback(() => {
+    const id = ++requestId.current
+    const isCurrent = () => id === requestId.current
+
     const request = searchQuery.trim()
       ? searchContent(searchQuery.trim(), 48).then(({ novels, webtoons }) => {
+          if (!isCurrent()) return
           setItems([
             ...(contentType !== 'webtoon' ? novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })) : []),
             ...(contentType !== 'novel' ? webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })) : []),
@@ -125,6 +152,7 @@ export function BrowseClient() {
           sortBy,
           limitCount: 48,
         }).then(({ novels, webtoons }) => {
+          if (!isCurrent()) return
           setItems([
             ...novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })),
             ...webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })),
@@ -133,13 +161,23 @@ export function BrowseClient() {
 
     request
       .catch((err) => {
+        if (!isCurrent()) return
         console.error('[Browse] load error:', err)
         toast.error('Failed to load content')
       })
-      .finally(() => setLoadedKey(filterKey))
+      .finally(() => {
+        if (isCurrent()) setLoadedKey(filterKey)
+      })
   }, [contentType, genre, status, sortBy, searchQuery, filterKey])
 
   useEffect(() => { load() }, [load])
+
+  // The search debounce is cleared on the next keystroke, but nothing cleared it
+  // on unmount — navigating away mid-debounce left a pending timer holding the
+  // component's state setters. (The admin list pages already do this.)
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+  }, [])
 
   function handleSearchInput(val: string) {
     setSearchInput(val)

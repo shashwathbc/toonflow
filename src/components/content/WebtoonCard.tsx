@@ -66,7 +66,7 @@ export default function WebtoonCard({ webtoon }: WebtoonCardProps) {
             {webtoon.genres[0] ?? 'Webtoon'}
           </span>
           {webtoon.rating > 0 && (
-            <div className="flex items-center gap-1" aria-label={`Rating: ${webtoon.rating} out of 5`}>
+            <div className="flex items-center gap-1" title="Average rating" aria-label={`Rating: ${webtoon.rating} out of 5`}>
               <span className="text-accent" aria-hidden="true">◎</span>
               <Star size={10} className="text-warning fill-warning" aria-hidden="true" />
               <span className="text-xs text-text-secondary">{webtoon.rating.toFixed(1)}</span>

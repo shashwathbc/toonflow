@@ -18,6 +18,27 @@ export const FEATURE_FLAGS = {
 export const APP_NAME = 'Toonflow Studio Paint'
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://toonflowstudiopaint.com'
 
+/** Public support inbox. Shown on Terms, Privacy, AI Policy, the Footer and the
+ *  support modal, and used as the From/Reply-To on the auto-reply email. */
+export const SUPPORT_EMAIL = 'toonflowstudiopaint@gmail.com'
+
+/** X/Twitter handle — drives the twitter:site and twitter:creator card tags. */
+export const SOCIAL_HANDLE = '@toonflowstudiopaint'
+
+/** Effective date shown on all three legal pages. Declared once so Terms,
+ *  Privacy and AI Policy can never drift apart. Update when any of them change. */
+export const LEGAL_LAST_UPDATED = 'July 3, 2026'
+
+/**
+ * Company details required on the legal pages.
+ * TODO(legal): replace these placeholders before public launch — they render
+ * verbatim on /terms and /privacy. The platform bills in INR and charges GST
+ * via Razorpay, so the governing-law clause in particular is not optional.
+ */
+export const LEGAL_ENTITY_NAME = '[LEGAL ENTITY NAME — TO BE COMPLETED]'
+export const LEGAL_ADDRESS = '[REGISTERED ADDRESS — TO BE COMPLETED]'
+export const LEGAL_JURISDICTION = '[CITY, STATE — TO BE COMPLETED]'
+
 export const PAGINATION_LIMIT = 20
 export const BROWSE_LIMIT = 24
 export const TRENDING_LIMIT = 12
@@ -58,7 +79,7 @@ export const COIN_PACKAGES = [
   { id: 'mega', coins: 3000, priceInr: 1999, priceUsd: 23.9, bonus: 800, isPopular: false },
 ] as const
 
-export const REVENUE_SPLIT = {
-  CREATOR: 0.7,
-  PLATFORM: 0.3,
-} as const
+// NOTE: the creator/platform revenue split lives in src/lib/revenue/config.ts
+// (REVENUE_CONFIG.creatorSharePct / platformSharePct), which is the single
+// source of truth for every rate on the platform. A duplicate REVENUE_SPLIT
+// constant used to sit here, unreferenced — removed so the two can't drift.

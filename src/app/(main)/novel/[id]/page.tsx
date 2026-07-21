@@ -177,7 +177,7 @@ export default function NovelDetailPage() {
                     {(novel.rating ?? 0).toFixed(1)}
                   </span>
                 )}
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1" title="Views">
                   <Eye size={13} aria-hidden="true" /> {formatCount(novel.viewCount ?? 0)} views
                 </span>
               </div>

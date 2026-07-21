@@ -5,6 +5,7 @@ import StudioSidebar from './StudioSidebar'
 import ResponsiveSidebarShell from './ResponsiveSidebarShell'
 import Footer from './Footer'
 import MobileNav from './MobileNav'
+import { Logo } from '@/components/ui/Logo'
 
 export default function StudioLayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -15,9 +16,7 @@ export default function StudioLayoutShell({ children }: { children: React.ReactN
   return (
     <ResponsiveSidebarShell
       brand={
-        <span className="text-sm font-bold text-text">
-          TOONFLOW <span className="text-accent">STUDIO</span>
-        </span>
+        <Logo size="sm" variant="studio" />
       }
       menuLabel="Open studio menu"
       drawerId="studio-drawer"

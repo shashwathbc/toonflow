@@ -2,7 +2,10 @@
 
 import { memo, useState } from 'react'
 import Link from 'next/link'
-import { SupportModal, type SupportType } from '@/components/support/SupportModal'
+import dynamic from 'next/dynamic'
+import type { SupportType } from '@/components/support/SupportModal'
+import { Logo } from '@/components/ui/Logo'
+import { SUPPORT_EMAIL } from '@/lib/utils/constants'
 
 // Brand icons — lucide-react no longer ships brand logos, so these are inline
 function InstagramIcon({ size = 18 }: { size?: number }) {
@@ -32,6 +35,15 @@ const PLATFORM_LINKS = [
   { href: '/earnings', label: 'Creator Earnings' },
 ]
 
+// Code-split: Footer renders on every (main) page, and SupportModal statically
+// imports framer-motion — so a static import here put the whole animation
+// library in the shared chunk for every public page, to render a closed modal.
+// `type SupportType` above is a type-only import and erases at compile time.
+const SupportModal = dynamic(
+  () => import('@/components/support/SupportModal').then((m) => ({ default: m.SupportModal })),
+  { ssr: false }
+)
+
 const SUPPORT_ACTIONS: { type: SupportType; label: string }[] = [
   { type: 'question', label: 'Ask a Question' },
   { type: 'issue', label: 'Report an Issue' },
@@ -58,6 +70,8 @@ const LEGAL_LINKS = [
 
 function Footer() {
   const [supportOpen, setSupportOpen] = useState<SupportType | null>(null)
+  // Latches true on first open and never resets — see the render note below.
+  const [supportMounted, setSupportMounted] = useState(false)
 
   return (
     <footer
@@ -74,12 +88,10 @@ function Footer() {
             className="inline-block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
             aria-label="Toonflow Studio Paint — home"
           >
-            <span className="text-sm font-bold text-text tracking-widest uppercase">
-              TOONFLOW<span className="text-accent"> STUDIO PAINT</span>
-            </span>
+            <Logo size="sm" />
           </Link>
           <p className="text-sm text-text-secondary leading-relaxed max-w-xs">
-            A premium platform for reading, discovering, and creating webtoons and manga.
+            The professional platform for reading, discovering, and creating webtoons, manga, and novels.
           </p>
           <div className="flex items-center gap-3">
             {SOCIAL_LINKS.map(({ href, label, Icon }) => (
@@ -126,7 +138,7 @@ function Footer() {
               <li key={type}>
                 <button
                   type="button"
-                  onClick={() => setSupportOpen(type)}
+                  onClick={() => { setSupportMounted(true); setSupportOpen(type) }}
                   className="text-sm text-text-secondary hover:text-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
                 >
                   {label}
@@ -145,10 +157,10 @@ function Footer() {
             Media &amp; Business
           </p>
           <a
-            href="mailto:toonflowstudiopaint@gmail.com"
+            href={`mailto:${SUPPORT_EMAIL}`}
             className="flex items-center gap-2 text-sm text-text-secondary hover:text-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
           >
-            toonflowstudiopaint@gmail.com
+            {SUPPORT_EMAIL}
           </a>
           <div className="mt-4 border border-bg-border rounded-lg px-3 py-2 text-xs text-text-muted flex items-center gap-2">
             <span aria-hidden="true">🛡</span>
@@ -191,11 +203,17 @@ function Footer() {
         </div>
       </div>
 
-      <SupportModal
-        open={supportOpen !== null}
-        initialType={supportOpen ?? 'question'}
-        onClose={() => setSupportOpen(null)}
-      />
+      {/* Not rendered until the first open, so its chunk (and framer-motion) is
+          never requested for visitors who never open it. Once mounted it STAYS
+          mounted — SupportModal owns the <AnimatePresence>, so unmounting it on
+          close would cut off the exit animation. */}
+      {supportMounted && (
+        <SupportModal
+          open={supportOpen !== null}
+          initialType={supportOpen ?? 'question'}
+          onClose={() => setSupportOpen(null)}
+        />
+      )}
     </footer>
   )
 }

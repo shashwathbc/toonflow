@@ -23,10 +23,10 @@ const STREAMS: {
   { icon: Eye, title: 'Views', description: `Every validated read earns you money — ${fmtInr(CREATOR_RPM)} per 1,000 views, paid from the subscription revenue pool.`, status: 'live' },
   { icon: Crown, title: 'Subscriptions', description: `Reader subscriptions (₹${REVENUE_CONFIG.subscriptionPriceInr}/month) fund the revenue pool — ${REVENUE_CONFIG.creatorSharePct}% of it goes to creators, split by watch share.`, status: 'live' },
   { icon: Megaphone, title: 'Ads', description: `Ad revenue on your stories splits ${REVENUE_CONFIG.adCreatorSharePct}/${REVENUE_CONFIG.adPlatformSharePct} in your favor once ads roll out.`, status: 'soon' },
-  { icon: Lock, title: 'Premium chapters', description: 'Lock chapters behind coins — readers unlock, you earn the majority of every unlock.', status: 'soon' },
+  { icon: Lock, title: 'Premium chapters', description: 'Lock chapters behind coins: readers pay to unlock, and you keep the majority of every purchase.', status: 'soon' },
   { icon: Gift, title: 'Tips', description: 'Readers will be able to tip creators directly on any story or chapter.', status: 'soon' },
   { icon: Shirt, title: 'Merchandise', description: 'Sell merch for your characters and worlds through the marketplace.', status: 'future' },
-  { icon: ScrollText, title: 'Licensing', description: 'License your IP for adaptations, translations and spin-offs.', status: 'future' },
+  { icon: ScrollText, title: 'Licensing', description: 'License your IP for adaptations, translations, and spin-offs.', status: 'future' },
   { icon: Clapperboard, title: 'Animation rights', description: 'Top stories get animation deals — you keep the rights and the majority share.', status: 'future' },
   { icon: BookOpen, title: 'Publishing rights', description: 'Print publishing partnerships for breakout novels and webtoons.', status: 'future' },
 ]

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { Logo } from '@/components/ui/Logo'
 import {
   BookOpen,
   ImageIcon,
@@ -58,9 +59,7 @@ export default function StudioSidebar({ onClose, onNavigate }: StudioSidebarProp
     >
       {/* Logo */}
       <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-bg-border">
-        <span className="text-sm font-bold text-text">
-          TOONFLOW <span className="text-accent">STUDIO</span>
-        </span>
+        <Logo size="sm" variant="studio" />
         {onClose && (
           <Tooltip label="Close menu" side="bottom">
             <button

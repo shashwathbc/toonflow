@@ -27,7 +27,7 @@ export default function CreateHubPage() {
             Choose Your Studio
           </h1>
           <p className="text-text-secondary mt-3 text-base lg:text-lg">
-            Create novels or webtoons and share them with millions of readers.
+            Create novels or webtoons and publish them to readers everywhere.
           </p>
         </div>
 

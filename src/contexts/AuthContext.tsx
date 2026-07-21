@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   useCallback,
+  useMemo,
   type ReactNode,
 } from 'react'
 import { onIdTokenChanged, type User as FirebaseUser } from 'firebase/auth'
@@ -139,11 +140,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe
   }, [])
 
-  return (
-    <AuthContext.Provider value={{ ...state, refreshProfile }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  // Memoized because AuthProvider wraps every route in the app. A fresh object
+  // literal here changes the context value's identity on EVERY provider render
+  // — including the hourly onIdTokenChanged refresh above, which only swaps the
+  // cookie and changes no state a consumer reads — forcing every useAuth()
+  // consumer in the tree to re-render for nothing.
+  const value = useMemo(() => ({ ...state, refreshProfile }), [state, refreshProfile])
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth(): AuthContextValue {

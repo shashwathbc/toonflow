@@ -67,7 +67,7 @@ export default function SignupForm() {
     <div className="card p-6 space-y-5">
       <div className="text-center space-y-1">
         <h1 className="text-xl font-bold text-text">Create account</h1>
-        <p className="text-sm text-text-secondary">Join thousands of creators and readers</p>
+        <p className="text-sm text-text-secondary">Join a growing community of creators and readers</p>
       </div>
 
       {/* Google */}

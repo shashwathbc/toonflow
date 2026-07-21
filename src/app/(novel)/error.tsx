@@ -23,16 +23,16 @@ export default function StudioError({
         <div className="w-14 h-14 rounded-2xl bg-danger/10 flex items-center justify-center mx-auto">
           <AlertTriangle size={24} className="text-danger" aria-hidden="true" />
         </div>
-        <h1 className="text-lg font-bold text-text">Studio failed to load</h1>
+        <h1 className="text-lg font-bold text-text">Something went wrong</h1>
         <p className="text-sm text-text-secondary">
-          Something went wrong with the editor. Your work is safe.
+          The editor failed to load. Your saved work is safe.
         </p>
         <div className="flex items-center gap-3 justify-center">
-          <button onClick={reset} className="btn-accent text-sm gap-2">
+          <button type="button" onClick={reset} className="btn-accent text-sm gap-2">
             <RefreshCw size={14} aria-hidden="true" />
-            Retry
+            Try again
           </button>
-          <button onClick={() => router.push('/create')} className="btn-ghost text-sm gap-2">
+          <button type="button" onClick={() => router.push('/create')} className="btn-ghost text-sm gap-2">
             <ArrowLeft size={14} aria-hidden="true" />
             Back to Hub
           </button>

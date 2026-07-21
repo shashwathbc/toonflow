@@ -19,9 +19,9 @@ export default function AdminError({
       <div className="w-14 h-14 rounded-2xl bg-danger/10 flex items-center justify-center">
         <AlertTriangle size={24} className="text-danger" aria-hidden="true" />
       </div>
-      <h1 className="text-lg font-bold text-text">Admin panel error</h1>
+      <h1 className="text-lg font-bold text-text">Something went wrong</h1>
       <p className="text-sm text-text-secondary">Failed to load this admin page.</p>
-      <button onClick={reset} className="btn-accent text-sm gap-2">
+      <button type="button" onClick={reset} className="btn-accent text-sm gap-2">
         <RefreshCw size={14} aria-hidden="true" />
         Try again
       </button>

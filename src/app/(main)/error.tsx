@@ -20,14 +20,14 @@ export default function MainError({
       <div className="w-14 h-14 rounded-2xl bg-danger/10 flex items-center justify-center">
         <AlertTriangle size={24} className="text-danger" aria-hidden="true" />
       </div>
-      <h1 className="text-xl font-bold text-text">Page failed to load</h1>
+      <h1 className="text-xl font-bold text-text">Something went wrong</h1>
       <p className="text-sm text-text-secondary max-w-xs">
-        Something went wrong while loading this page.
+        We couldn&apos;t load this page. This is usually temporary.
       </p>
       <div className="flex items-center gap-3">
-        <button onClick={reset} className="btn-accent text-sm gap-2">
+        <button type="button" onClick={reset} className="btn-accent text-sm gap-2">
           <RefreshCw size={14} aria-hidden="true" />
-          Retry
+          Try again
         </button>
         <Link href="/" className="btn-ghost text-sm gap-2">
           <Home size={14} aria-hidden="true" />

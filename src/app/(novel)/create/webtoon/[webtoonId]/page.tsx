@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import { useEpisodes } from '@/hooks/useEpisodes'
+import { useTransientState } from '@/hooks/useTransientState'
 import {
   getWebtoonById,
   updateEpisode,
@@ -58,7 +59,9 @@ export default function WebtoonEditorPage({ params }: PageProps) {
   const webtoonLoading = fetchedId !== webtoonId
   const [activeEpisode, setActiveEpisode] = useState<Episode | null>(null)
   const [episodeTitle, setEpisodeTitle] = useState('')
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  // useTransientState owns the revert timer and clears it on unmount — these
+  // eight save sites previously each fired an untracked setTimeout.
+  const [saveState, setSaveState] = useTransientState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [aiCollapsed, setAiCollapsed] = useState(true)
   const [fullscreen, setFullscreen] = useState(false)
@@ -128,8 +131,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     setSaveState('saving')
     try {
       await updateEpisode(webtoonId, activeEpisode.id, { title: episodeTitle })
-      setSaveState('saved')
-      setTimeout(() => setSaveState('idle'), 2000)
+      setSaveState('saved', 2000)
     } catch {
       setSaveState('error')
     }
@@ -196,9 +198,8 @@ export default function WebtoonEditorPage({ params }: PageProps) {
       await updateEpisode(webtoonId, activeEpisode.id, { panels: updatedPanels })
       // Update local state panels reference
       setActiveEpisode((prev) => prev ? { ...prev, panels: updatedPanels } : prev)
-      setSaveState('saved')
+      setSaveState('saved', 2000)
       toast.success('Panels uploaded successfully')
-      setTimeout(() => setSaveState('idle'), 2000)
     } catch (err) {
       console.error(err)
       setSaveState('error')
@@ -217,8 +218,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     try {
       await updateEpisode(webtoonId, activeEpisode.id, { panels: filteredPanels })
       setActiveEpisode((prev) => prev ? { ...prev, panels: filteredPanels } : prev)
-      setSaveState('saved')
-      setTimeout(() => setSaveState('idle'), 2000)
+      setSaveState('saved', 2000)
     } catch {
       setSaveState('error')
     }
@@ -243,8 +243,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     try {
       await updateEpisode(webtoonId, activeEpisode.id, { panels: ordered })
       setActiveEpisode((prev) => prev ? { ...prev, panels: ordered } : prev)
-      setSaveState('saved')
-      setTimeout(() => setSaveState('idle'), 2000)
+      setSaveState('saved', 2000)
     } catch {
       setSaveState('error')
     }
@@ -259,8 +258,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     try {
       await updateEpisode(webtoonId, activeEpisode.id, { panels })
       setActiveEpisode((prev) => (prev ? { ...prev, panels } : prev))
-      setSaveState('saved')
-      setTimeout(() => setSaveState('idle'), 2000)
+      setSaveState('saved', 2000)
     } catch {
       setSaveState('error')
     }
@@ -275,9 +273,8 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     try {
       await updateEpisode(webtoonId, activeEpisode.id, patch)
       setActiveEpisode((prev) => (prev ? { ...prev, ...patch } : prev))
-      setSaveState('saved')
+      setSaveState('saved', 2000)
       toast.success(brandingEdit === 'intro' ? 'Intro page updated' : 'Outro page updated')
-      setTimeout(() => setSaveState('idle'), 2000)
     } catch (err) {
       setSaveState('error')
       toast.error('Failed to save page text')
@@ -291,9 +288,8 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     try {
       await updateEpisode(webtoonId, activeEpisode.id, { thumbnailURL: url })
       setActiveEpisode((prev) => prev ? { ...prev, thumbnailURL: url } : prev)
-      setSaveState('saved')
+      setSaveState('saved', 2000)
       toast.success('Thumbnail updated')
-      setTimeout(() => setSaveState('idle'), 2000)
     } catch {
       setSaveState('error')
     }
@@ -354,9 +350,8 @@ export default function WebtoonEditorPage({ params }: PageProps) {
       })
       await updateEpisode(webtoonId, activeEpisode.id, { panels: updatedPanels })
       setActiveEpisode((prev) => prev ? { ...prev, panels: updatedPanels } : prev)
-      setSaveState('saved')
+      setSaveState('saved', 2000)
       toast.success('AI panel uploaded successfully!')
-      setTimeout(() => setSaveState('idle'), 2000)
     } catch {
       setSaveState('error')
     }

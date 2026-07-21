@@ -7,6 +7,7 @@ import { Plus, Search } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { Logo } from '@/components/ui/Logo'
 import UserMenu from './UserMenu'
 
 const NAV_LINKS = [
@@ -31,13 +32,10 @@ function Navbar() {
         {/* Logo */}
         <Link
           href="/"
-          className="flex items-center gap-1 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
+          className="flex items-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
           aria-label="Toonflow Studio Paint — home"
         >
-          <span className="text-base font-bold text-text tracking-tight hidden sm:block">
-            TOONFLOW<span className="text-accent"> STUDIO PAINT</span>
-          </span>
-          <span className="text-base font-bold text-accent sm:hidden">TF</span>
+          <Logo size="md" priority textClassName="hidden sm:inline" />
         </Link>
 
         {/* Desktop nav links */}

@@ -5,6 +5,7 @@ import { X, Loader2, CheckCircle, LifeBuoy } from 'lucide-react'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
+import { SUPPORT_EMAIL } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
 
 export type SupportType = 'question' | 'issue'
@@ -209,7 +210,7 @@ function SupportDialog({ initialType, onClose }: { initialType: SupportType; onC
 
                 <div className="flex items-center justify-between gap-3 pt-1">
                   <p className="text-[11px] text-text-muted">
-                    We&apos;ll reply from toonflowstudiopaint@gmail.com
+                    We&apos;ll reply from {SUPPORT_EMAIL}
                   </p>
                   <button
                     type="submit"

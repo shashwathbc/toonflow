@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { BookOpen, Eye, Heart, Layers, Star, Tv2, TrendingUp, Clock, StarIcon } from 'lucide-react'
 import { browseContent } from '@/lib/firebase/firestore'
 import { formatCount } from '@/lib/utils/formatters'
+import { Stat } from '@/components/ui/Stat'
 import { cn } from '@/lib/utils/cn'
 import type { Novel, Webtoon } from '@/types'
 
@@ -31,11 +32,24 @@ function SkeletonCard() {
 
 function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }) {
   const chapterCount = 'chapterCount' in item ? item.chapterCount : (item as Webtoon).episodeCount
+  const unitLabel = type === 'novel' ? 'Chapters' : 'Episodes'
+
+  // Folded into the link label because aria-label overrides inner content.
+  const cardLabel = [
+    `${item.title} — Toonflow Original ${type}`,
+    `${chapterCount} ${unitLabel.toLowerCase()}`,
+    `${formatCount(item.viewCount)} views`,
+    `${formatCount(item.likeCount)} likes`,
+    item.rating > 0 ? `rated ${item.rating.toFixed(1)} out of 5` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
   return (
     <Link
       href={`/${type}/${item.id}`}
       className="group block rounded-xl overflow-hidden bg-bg-card border border-bg-border hover:border-accent/30 transition-all duration-200"
-      aria-label={`${item.title} — Toonflow Original`}
+      aria-label={cardLabel}
     >
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
         {item.coverURL ? (
@@ -71,11 +85,11 @@ function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | '
         {item.genres?.length > 0 && (
           <p className="text-[11px] text-white/40 mb-2 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
         )}
-        <div className="flex items-center gap-2.5 text-[11px] text-white/40">
-          <span className="flex items-center gap-1"><Layers size={10} aria-hidden="true" />{chapterCount}</span>
-          <span className="flex items-center gap-1"><Eye size={10} aria-hidden="true" />{formatCount(item.viewCount)}</span>
-          <span className="flex items-center gap-1"><Heart size={10} aria-hidden="true" />{formatCount(item.likeCount)}</span>
-          {item.rating > 0 && <span className="flex items-center gap-1"><Star size={10} aria-hidden="true" />{item.rating.toFixed(1)}</span>}
+        <div className="flex items-center gap-2.5 text-[11px] text-white/60">
+          <Stat icon={Layers} value={chapterCount} label={unitLabel} />
+          <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
+          <Stat icon={Heart} value={formatCount(item.likeCount)} label="Likes" />
+          {item.rating > 0 && <Stat icon={Star} value={item.rating.toFixed(1)} label="Rating" />}
         </div>
       </div>
     </Link>

@@ -74,8 +74,13 @@ export default function ChapterReaderPage() {
 
   // ── Load data ───────────────────────────────────────────────
   useEffect(() => {
+    // Guards against both unmount and a fast chapter-to-chapter navigation
+    // landing an older response over a newer one.
+    let cancelled = false
+
     Promise.all([getNovelById(id), getChaptersByNovel(id)])
       .then(([n, chs]) => {
+        if (cancelled) return
         setNovel(n)
         const published = chs
           .filter((c) => c.status === 'published')
@@ -83,8 +88,10 @@ export default function ChapterReaderPage() {
         setChapters(published)
         setChapter(published.find((c) => c.id === chapterId) ?? null)
       })
-      .catch(console.error)
-      .finally(() => setLoading(false))
+      .catch((e) => { if (!cancelled) console.error(e) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+
+    return () => { cancelled = true }
   }, [id, chapterId])
 
   // ── Track view (server-validated) + reading history ────────
@@ -126,13 +133,26 @@ export default function ChapterReaderPage() {
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      // The listener is removed above, but the last scroll already scheduled a
+      // 2.5s "re-show header" timer. Without this it survives unmount and fires
+      // setHeaderVisible on a dead component, keeping the whole reader closure
+      // (chapters + content) reachable until it does.
+      if (headerTimer.current) clearTimeout(headerTimer.current)
+    }
   }, [handleScroll])
 
   // ── Derived ──────────────────────────────────────────────────
-  const currentIndex = chapters.findIndex((c) => c.id === chapterId)
-  const prevChapter  = currentIndex > 0 ? chapters[currentIndex - 1] : null
-  const nextChapter  = currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null
+  // Memoized because this component re-renders on EVERY scroll event (setProgress
+  // above), and without it the findIndex + both lookups re-ran each frame.
+  const { prevChapter, nextChapter } = useMemo(() => {
+    const idx = chapters.findIndex((c) => c.id === chapterId)
+    return {
+      prevChapter: idx > 0 ? chapters[idx - 1] : null,
+      nextChapter: idx >= 0 && idx < chapters.length - 1 ? chapters[idx + 1] : null,
+    }
+  }, [chapters, chapterId])
 
   // ── Loading ──────────────────────────────────────────────────
   if (loading) return (

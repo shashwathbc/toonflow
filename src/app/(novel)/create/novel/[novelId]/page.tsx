@@ -5,6 +5,7 @@ import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { useChapters } from '@/hooks/useChapters'
+import { useTransientState } from '@/hooks/useTransientState'
 import {
   getNovelById,
   updateChapterContent,
@@ -54,7 +55,7 @@ export default function NovelEditorPage({ params }: PageProps) {
   const [chapterTitle, setChapterTitle] = useState('')
   const [editorContent, setEditorContent] = useState('')
   const [wordCount, setWordCount] = useState(0)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveState, setSaveState] = useTransientState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [aiCollapsed, setAiCollapsed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
@@ -63,6 +64,16 @@ export default function NovelEditorPage({ params }: PageProps) {
 
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedContent = useRef('')
+
+  // The autosave debounce is otherwise only cleared by the NEXT keystroke, so
+  // navigating away within AUTOSAVE_DELAY_MS left a pending timer that fired a
+  // Firestore write and a setState against an unmounted component — and pinned
+  // the novel, the active chapter and the full chapter HTML in its closure until
+  // it did. Dropping the pending save loses at most one debounce window, which
+  // is already what happened (the post-unmount setState was discarded anyway).
+  useEffect(() => () => {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+  }, [])
 
   // Load novel
   useEffect(() => {
@@ -160,9 +171,8 @@ export default function NovelEditorPage({ params }: PageProps) {
       }
       await updateChapterContent(novelId, chapterId, html, wc)
       lastSavedContent.current = html
-      setSaveState('saved')
+      setSaveState('saved', 2500)
       if (!isAuto) toast.success('Saved')
-      setTimeout(() => setSaveState('idle'), 2500)
     } catch {
       setSaveState('error')
       if (!isAuto) toast.error('Failed to save')

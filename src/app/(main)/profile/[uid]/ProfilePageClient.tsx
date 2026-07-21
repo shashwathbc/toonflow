@@ -18,6 +18,7 @@ import {
 } from '@/lib/firebase/firestore'
 import SubscribeButton from '@/components/social/SubscribeButton'
 import AnimatedNumber, { type NumberFormatter } from '@/components/ui/AnimatedNumber'
+import { Stat } from '@/components/ui/Stat'
 import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import { safeHttpUrl } from '@/lib/utils/url'
@@ -45,9 +46,9 @@ function ContentCard({ title, coverURL, href, chapterCount, viewCount, status }:
       </div>
       <div className="p-2.5">
         <h3 className="text-xs font-semibold text-white line-clamp-2 mb-1.5">{title}</h3>
-        <div className="flex items-center gap-2.5 text-[10px] text-white/40">
-          <span className="flex items-center gap-1"><Layers size={9} aria-hidden="true" />{chapterCount}</span>
-          <span className="flex items-center gap-1"><Eye size={9} aria-hidden="true" />{formatCount(viewCount)}</span>
+        <div className="flex items-center gap-2.5 text-[10px] text-white/60">
+          <Stat icon={Layers} value={chapterCount} label="Chapters" size={9} />
+          <Stat icon={Eye} value={formatCount(viewCount)} label="Views" size={9} />
         </div>
       </div>
     </Link>
@@ -103,13 +104,32 @@ function EditProfileModal({
   const avatarRef = useRef<HTMLInputElement>(null)
   const bannerRef = useRef<HTMLInputElement>(null)
 
+  // Object URLs pin the entire decoded image in memory until revoked. Without
+  // this, re-picking a file orphaned the previous URL (never revoked), so each
+  // attempt leaked another full-size blob for the lifetime of the document.
+  // Same pattern as CreateNovelModal: revoke the PREVIOUS url on replace (never
+  // the current one, which the <img> may still be decoding) and all on unmount.
+  const avatarObjectURL = useRef<string | null>(null)
+  const bannerObjectURL = useRef<string | null>(null)
+
+  useEffect(() => () => {
+    if (avatarObjectURL.current) URL.revokeObjectURL(avatarObjectURL.current)
+    if (bannerObjectURL.current) URL.revokeObjectURL(bannerObjectURL.current)
+  }, [])
+
   function handleAvatarFile(file: File) {
+    if (avatarObjectURL.current) URL.revokeObjectURL(avatarObjectURL.current)
+    const url = URL.createObjectURL(file)
+    avatarObjectURL.current = url
     setAvatarFile(file)
-    setAvatarPreview(URL.createObjectURL(file))
+    setAvatarPreview(url)
   }
   function handleBannerFile(file: File) {
+    if (bannerObjectURL.current) URL.revokeObjectURL(bannerObjectURL.current)
+    const url = URL.createObjectURL(file)
+    bannerObjectURL.current = url
     setBannerFile(file)
-    setBannerPreview(URL.createObjectURL(file))
+    setBannerPreview(url)
   }
 
   async function handleSave() {

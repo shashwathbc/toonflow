@@ -73,9 +73,13 @@ const nextConfig = {
   async headers() {
     return [
       { source: '/(.*)', headers: securityHeaders },
+      // WARNING: these paths are cached for a year with no revalidation, so a
+      // file here can NEVER be changed in place — every prior visitor would keep
+      // the old bytes until 2027. Ship a new *filename* instead (the icons are
+      // versioned: icon-192.v2.png), and bump CACHE_VERSION in public/sw.js,
+      // which caches the same paths cache-first. `npm run icons` regenerates them.
       { source: '/icons/:path*', headers: immutableCache },
       { source: '/images/:path*', headers: immutableCache },
-      { source: '/og-image.png', headers: immutableCache },
     ]
   },
 }

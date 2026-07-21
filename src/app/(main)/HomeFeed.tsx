@@ -1,23 +1,36 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { BookOpen, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'lucide-react'
 import { getTrendingNovels, getTrendingWebtoons, getNewReleases } from '@/lib/firebase/firestore'
 import { cachedRequest } from '@/lib/utils/requestCache'
 import { formatCount } from '@/lib/utils/formatters'
+import { Stat } from '@/components/ui/Stat'
 import type { Novel, Webtoon } from '@/types'
 
 function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }) {
   const chapterCount = 'chapterCount' in item ? item.chapterCount : (item as Webtoon).episodeCount
   const href = `/${type}/${item.id}`
+  const unitLabel = type === 'novel' ? 'Chapters' : 'Episodes'
+
+  // The link's aria-label overrides its inner content for the accessible name,
+  // so the stats have to be folded in here or they're never announced at all.
+  const cardLabel = [
+    `${item.title} — ${type}`,
+    `${chapterCount} ${unitLabel.toLowerCase()}`,
+    `${formatCount(item.viewCount)} views`,
+    item.rating > 0 ? `rated ${item.rating.toFixed(1)} out of 5` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <Link
       href={href}
       className="group block rounded-xl overflow-hidden bg-bg-card border border-bg-border hover:border-white/20 transition-all duration-200"
-      aria-label={`${item.title} — ${type}`}
+      aria-label={cardLabel}
     >
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
         {item.coverURL ? (
@@ -54,20 +67,11 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
         {item.genres?.length > 0 && (
           <p className="text-[11px] text-white/50 mb-1.5 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
         )}
-        <div className="flex items-center gap-3 text-[11px] text-white/40">
-          <span className="flex items-center gap-1">
-            <Layers size={10} aria-hidden="true" />
-            {chapterCount}
-          </span>
-          <span className="flex items-center gap-1">
-            <Eye size={10} aria-hidden="true" />
-            {formatCount(item.viewCount)}
-          </span>
+        <div className="flex items-center gap-3 text-[11px] text-white/60">
+          <Stat icon={Layers} value={chapterCount} label={unitLabel} />
+          <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
           {item.rating > 0 && (
-            <span className="flex items-center gap-1">
-              <Star size={10} aria-hidden="true" />
-              {item.rating.toFixed(1)}
-            </span>
+            <Stat icon={Star} value={item.rating.toFixed(1)} label="Rating" />
           )}
         </div>
       </div>
@@ -112,6 +116,10 @@ export function HomeFeed() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Firestore calls aren't abortable, so the guard gates the setState rather
+    // than the request — same idiom as hooks/useFirestore.ts.
+    let cancelled = false
+
     // Shared 60s cache: HeroSlider reuses the same two trending requests,
     // and back-navigation to the home page renders instantly from cache.
     Promise.all([
@@ -120,24 +128,29 @@ export function HomeFeed() {
       cachedRequest('new-releases-6', 60_000, () => getNewReleases(6)),
     ])
       .then(([n, w, releases]) => {
+        if (cancelled) return
         setNovels(n)
         setWebtoons(w)
         setNewNovels(releases.novels)
         setNewWebtoons(releases.webtoons)
       })
-      .catch(console.error)
-      .finally(() => setLoading(false))
+      .catch((e) => { if (!cancelled) console.error(e) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+
+    return () => { cancelled = true }
   }, [])
 
-  const allTrending = [
+  // Memoized: these spread + sort + slice both arrays on every render, and this
+  // component re-renders on each of the four setState calls above.
+  const allTrending = useMemo(() => [
     ...novels.map((n) => ({ item: n, type: 'novel' as const })),
     ...webtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
-  ].sort((a, b) => b.item.viewCount - a.item.viewCount).slice(0, 12)
+  ].sort((a, b) => b.item.viewCount - a.item.viewCount).slice(0, 12), [novels, webtoons])
 
-  const newReleases = [
+  const newReleases = useMemo(() => [
     ...newNovels.map((n) => ({ item: n, type: 'novel' as const })),
     ...newWebtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
-  ].slice(0, 6)
+  ].slice(0, 6), [newNovels, newWebtoons])
 
   if (loading) {
     return (
