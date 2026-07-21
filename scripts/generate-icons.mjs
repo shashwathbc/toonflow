@@ -26,7 +26,8 @@
  * would need ~0.70. Raise the inset if the mark ever looks cropped on Android.
  */
 import sharp from 'sharp'
-import { mkdir, stat } from 'node:fs/promises'
+import pngToIco from 'png-to-ico'
+import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -81,6 +82,34 @@ async function socialImage(outPath) {
   return outPath
 }
 
+/**
+ * favicon.ico — the icon browsers actually paint in the tab, in preference to
+ * the <link rel="icon"> PNG. sharp can't write a multi-resolution ICO, so we
+ * render the brand mark to square PNG buffers at the classic favicon sizes and
+ * let png-to-ico pack them. A tighter inset (0.94) than the app icons because
+ * at 16px every pixel of the mark counts.
+ */
+async function faviconIco(outPath) {
+  // 16/32/48 only. png-to-ico stores frames as uncompressed BMP, so a 256px
+  // frame balloons the file to ~270KB for a size the tab never renders — the
+  // high-DPI/shell cases are served by the PNG icon convention instead.
+  const sizes = [16, 32, 48]
+  const buffers = await Promise.all(
+    sizes.map(async (size) => {
+      const markSize = Math.round(size * 0.94)
+      const mark = await sharp(SRC)
+        .resize(markSize, markSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .toBuffer()
+      return sharp({ create: { width: size, height: size, channels: 4, background: BG } })
+        .composite([{ input: mark, gravity: 'center' }])
+        .png()
+        .toBuffer()
+    })
+  )
+  await writeFile(outPath, await pngToIco(buffers))
+  return outPath
+}
+
 async function main() {
   await mkdir(join(ROOT, 'public/icons'), { recursive: true })
 
@@ -107,14 +136,24 @@ async function main() {
     squareIcon(180, 0.88, join(ROOT, 'src/app/apple-icon.png')),
     socialImage(join(ROOT, 'src/app/opengraph-image.png')),
     socialImage(join(ROOT, 'src/app/twitter-image.png')),
+
+    // The classic tab favicon. Was a generic black-circle/white-triangle
+    // placeholder that browsers preferred over the PNG icon above — this is
+    // what actually shows in the tab.
+    faviconIco(join(ROOT, 'src/app/favicon.ico')),
   ])
 
   for (const out of outputs) {
-    const { width, height, format } = await sharp(out).metadata()
     // Read the byte count off disk — sharp's metadata().size is only populated
     // when the input was a Buffer, and reads NaN for a file path.
     const { size } = await stat(out)
     const rel = out.replace(ROOT, '').replace(/\\/g, '/').replace(/^\//, '')
+    // sharp can't introspect .ico; report it without dimensions.
+    if (out.endsWith('.ico')) {
+      console.log(`  ${rel.padEnd(42)} 16/32/48 ico ${(size / 1024).toFixed(1)}KB`)
+      continue
+    }
+    const { width, height, format } = await sharp(out).metadata()
     console.log(`  ${rel.padEnd(42)} ${String(width).padStart(4)}x${String(height).padEnd(4)} ${format} ${(size / 1024).toFixed(1)}KB`)
   }
 

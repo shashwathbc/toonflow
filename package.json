@@ -58,6 +58,7 @@
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "png-to-ico": "^3.0.2",
     "postcss": "^8.5.4",
     "prettier": "^3.4.2",
     "sharp": "^0.35.3",

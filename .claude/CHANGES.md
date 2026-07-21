@@ -1189,3 +1189,8 @@ Phase 1: revoked leaked object URLs at 3 upload sites (each pinned a full image 
 Caveat stated to user: already-installed PWAs snapshot icons at install and won't update without reinstall.
 
 Gates: `tsc` clean · `eslint` clean · `vitest` 26/26 · `next build` OK. Prod server smoke-tested: /, /browse, /originals, /terms, /privacy, /ai-policy, /login, /earnings, /coming-soon → 200; bad path → 404; all icons serve image/png; legal placeholders + shared date render on all 3 legal pages.
+
+## Follow-up: favicon.ico + text-only wordmark (2026-07-21)
+- **favicon.ico was never the brand.** Root cause of "browser icon not changed": the prior pass regenerated icon.png/apple-icon/OG but left favicon.ico, assuming it was already the mark. It was a generic black-circle/white-triangle placeholder, and browsers prefer favicon.ico for the tab. Added `png-to-ico` (devDep) + a `faviconIco()` step to `scripts/generate-icons.mjs` that packs 16/32/48 frames of the TF mark (dropped the 256 frame — png-to-ico stores frames as uncompressed BMP, so 256 ballooned the file to 278KB; now 14.7KB). Next content-hashes the convention favicon, so the tag URL cache-busts on rebuild.
+- **Wordmark → text only** (user request). Rewrote `src/components/ui/Logo.tsx` to drop the logomain image mark and render two-tone text "Toonflow Studio Paint" ("Studio Paint" in text-secondary; studio variant → "Toonflow Studio"). Removed the now-unused image/showText/priority/textClassName props; updated Navbar + auth-layout callers. logomain.png still drives the favicon/PWA/OG assets via the script.
+- Gates: tsc/eslint clean, next build OK. favicon link tag confirmed rehashed (48x48), wordmark confirmed text-only in built HTML.

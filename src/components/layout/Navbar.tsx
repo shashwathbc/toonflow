@@ -35,7 +35,7 @@ function Navbar() {
           className="flex items-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
           aria-label="Toonflow Studio Paint — home"
         >
-          <Logo size="md" priority textClassName="hidden sm:inline" />
+          <Logo size="md" priority />
         </Link>
 
         {/* Desktop nav links */}
