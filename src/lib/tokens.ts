@@ -5,14 +5,13 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from './firebase/serverApp'
 
-export const TOKEN_COSTS = {
-  'synopsis-generate': 3,
-  'synopsis-improve': 2,
-  'synopsis-expand': 2,
-  'image-prompt': 1,
-  'image-generate': 15,
-  'novel-assist': 2,
-} as const
+// All AI features are currently FREE for every user — the story assistant,
+// cover/banner image generation, and synopsis generate/improve/expand no longer
+// charge tokens, so this map is intentionally empty. The charging machinery
+// below (and the wallet/balance/transactions product) is kept dormant: to make
+// a feature paid again, add its `action: cost` here and call chargeTokens() from
+// that route.
+export const TOKEN_COSTS = {} as const
 
 export type TokenAction = keyof typeof TOKEN_COSTS
 

@@ -1,21 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { chargeTokens } from '@/lib/tokens'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
 
 export const runtime = 'nodejs'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-type Action = 'generate-synopsis' | 'improve-synopsis' | 'expand-synopsis'
-
-const ACTION_TOKEN_MAP: Record<Action, 'synopsis-generate' | 'synopsis-improve' | 'synopsis-expand'> = {
-  'generate-synopsis': 'synopsis-generate',
-  'improve-synopsis': 'synopsis-improve',
-  'expand-synopsis': 'synopsis-expand',
-}
 
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -48,15 +39,8 @@ export async function POST(request: NextRequest) {
     }
     const { action, novelTitle, currentSynopsis, userPrompt } = parsed.data
 
-    // Charge tokens against the VERIFIED user — never a client-supplied id
-    const tokenAction = ACTION_TOKEN_MAP[action]
-    const charge = await chargeTokens(uid, tokenAction, `AI ${action.replace(/-/g, ' ')} for "${novelTitle}"`)
-    if (!charge.ok) {
-      return NextResponse.json(
-        { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
-        { status: 402 }
-      )
-    }
+    // AI synopsis generation / improvement / expansion is free for all users —
+    // no token charge. Auth is still required above (verifiedUid).
 
     let userMessage = ''
 

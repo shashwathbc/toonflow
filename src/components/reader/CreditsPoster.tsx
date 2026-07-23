@@ -21,16 +21,23 @@ interface CreditsPosterProps {
   chapterNumber: number
 }
 
-// One credit cell — a skewed white slab with a dark role tab, exactly like the
-// reference's "TL · SHOUNEN" chips.
+// One credit cell — a dark role tab, a brush-stroke slash, then a skewed white
+// slab, exactly like the reference's "TL / SHOUNEN" chips.
 function Credit({ role, value }: { role: string; value: string }) {
   return (
-    <div className="flex items-center gap-2 min-w-0">
+    <div className="flex items-center gap-1.5 min-w-0">
       <span
         className="flex-shrink-0 text-[10px] sm:text-xs font-black tracking-wider text-white/80 -skew-x-12 px-1"
         aria-hidden="true"
       >
         {role}
+      </span>
+      {/* Brush-stroke slash separator — echoes the reference's paint slash */}
+      <span
+        aria-hidden="true"
+        className="flex-shrink-0 -skew-x-12 text-lg sm:text-xl font-black leading-none text-violet-400 [text-shadow:0_0_10px_#8B5CF6]"
+      >
+        /
       </span>
       <span className="relative min-w-0 -skew-x-12 bg-white text-black font-black text-[11px] sm:text-sm tracking-wide px-3 py-1 shadow-[0_0_12px_rgba(139,92,246,0.5)] [clip-path:polygon(6%_0,100%_0,94%_100%,0_100%)]">
         <span className="block skew-x-12 truncate uppercase">{value || '—'}</span>
@@ -69,6 +76,14 @@ export function CreditsPoster({ novel, chapterNumber }: CreditsPosterProps) {
         <div className="absolute inset-0 opacity-[0.12] bg-[image:linear-gradient(#8B5CF655_1px,transparent_1px),linear-gradient(90deg,#8B5CF655_1px,transparent_1px)] bg-[length:46px_46px] [mask-image:radial-gradient(ellipse_80%_70%_at_50%_45%,black_30%,transparent_85%)]" />
         <div className="absolute inset-0 opacity-40 bg-[repeating-linear-gradient(115deg,transparent_0_42px,#8B5CF60f_42px_43px)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_100%_at_50%_50%,transparent_45%,rgba(0,0,0,0.8)_100%)]" />
+      </div>
+
+      {/* ── Angular corner-bracket frame (signature of the reference banner) ── */}
+      <div className="pointer-events-none absolute inset-3 sm:inset-4 z-20" aria-hidden="true">
+        <span className="absolute top-0 left-0 w-7 h-7 sm:w-9 sm:h-9 border-t-2 border-l-2 border-violet-500/70 [box-shadow:0_0_12px_#8B5CF655]" />
+        <span className="absolute top-0 right-0 w-7 h-7 sm:w-9 sm:h-9 border-t-2 border-r-2 border-violet-500/70 [box-shadow:0_0_12px_#8B5CF655]" />
+        <span className="absolute bottom-0 left-0 w-7 h-7 sm:w-9 sm:h-9 border-b-2 border-l-2 border-violet-500/70 [box-shadow:0_0_12px_#8B5CF655]" />
+        <span className="absolute bottom-0 right-0 w-7 h-7 sm:w-9 sm:h-9 border-b-2 border-r-2 border-violet-500/70 [box-shadow:0_0_12px_#8B5CF655]" />
       </div>
 
       {/* ── Poster banner ── */}
@@ -112,6 +127,11 @@ export function CreditsPoster({ novel, chapterNumber }: CreditsPosterProps) {
               className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center bg-[radial-gradient(circle_at_50%_40%,rgba(20,10,40,0.9),#000)] shadow-[0_0_0_2px_#8B5CF6,0_0_30px_#8B5CF688,inset_0_0_20px_#8B5CF655]"
               aria-label={`Chapter ${chapterNumber}`}
             >
+              {/* Broken glowing arc sweeping the medallion — as in the reference */}
+              <span
+                aria-hidden="true"
+                className="absolute -inset-[6px] rounded-full border-[3px] border-transparent border-t-violet-300 border-r-violet-300 [box-shadow:0_0_16px_#8B5CF6] rotate-[35deg]"
+              />
               <span className="text-4xl sm:text-5xl font-black text-white italic [font-family:Georgia,serif] [text-shadow:0_0_18px_#8B5CF6]">
                 {chapterNumber}
               </span>

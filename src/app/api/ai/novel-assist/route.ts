@@ -1,7 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { chargeTokens } from '@/lib/tokens'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
 import { SYSTEM_PROMPT, WRITE_CHAPTER_PROMPT } from '@/lib/ai/prompts'
@@ -88,14 +87,8 @@ export async function POST(request: NextRequest) {
       mode,
     } = parsed.data
 
-    // Charge tokens against the VERIFIED user — never a client-supplied id
-    const charge = await chargeTokens(uid, 'novel-assist', `AI story assistant for "${novelTitle}"`)
-    if (!charge.ok) {
-      return NextResponse.json(
-        { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
-        { status: 402 }
-      )
-    }
+    // The AI story assistant is free for all users — no token charge. Auth is
+    // still required above (verifiedUid) so usage stays tied to a real account.
 
     // Previous chapters power the consistency engine — cap total size to protect the context window
     const previousChaptersBlock = (previousChapters ?? [])

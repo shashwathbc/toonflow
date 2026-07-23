@@ -1,7 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { chargeTokens } from '@/lib/tokens'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
 
@@ -46,14 +45,8 @@ export async function POST(request: NextRequest) {
       if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
       const { novelTitle, novelSynopsis, imageType } = parsed.data
 
-      // Charge 1 token for prompt generation (verified user only)
-      const charge = await chargeTokens(uid, 'image-prompt', `AI image prompt for "${novelTitle}"`)
-      if (!charge.ok) {
-        return NextResponse.json(
-          { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
-          { status: 402 }
-        )
-      }
+      // AI image prompt generation is free for all users — no token charge.
+      // Auth is still required above (verifiedUid).
 
       const isCover = imageType === 'cover'
 
@@ -91,14 +84,8 @@ Return ONLY the image prompt text.`,
       if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
       const { prompt, imageType } = parsed.data
 
-      // Charge 15 tokens for image generation (verified user only)
-      const charge = await chargeTokens(uid, 'image-generate', `AI ${imageType} image generation`)
-      if (!charge.ok) {
-        return NextResponse.json(
-          { error: `Insufficient tokens. You need ${charge.required} tokens but have ${charge.balance}. Buy more tokens in your Wallet.`, insufficientTokens: true },
-          { status: 402 }
-        )
-      }
+      // AI image generation is free for all users — no token charge.
+      // Auth is still required above (verifiedUid).
 
       const apiKey = process.env.STABILITY_API_KEY
       if (!apiKey) {

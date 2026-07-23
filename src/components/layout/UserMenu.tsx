@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { LogOut, User, LayoutDashboard, Shield, Star } from 'lucide-react'
+import { LogOut, User, LayoutDashboard, Star } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import * as Avatar from '@radix-ui/react-avatar'
 import { useAuth } from '@/hooks/useAuth'
@@ -81,7 +81,7 @@ export function UserDropdownContent({
   align?: 'start' | 'center' | 'end'
   sideOffset?: number
 }) {
-  const { userProfile, isAdmin, isSuperAdmin } = useAuth()
+  const { userProfile, isSuperAdmin } = useAuth()
 
   const handleLogout = async () => {
     try {
@@ -115,9 +115,6 @@ export function UserDropdownContent({
 
         <MenuItem href={`/profile/${userProfile?.uid}`} icon={<User size={14} />} label="Profile" />
         <MenuItem href="/dashboard" icon={<LayoutDashboard size={14} />} label="Dashboard" />
-        {isAdmin && (
-          <MenuItem href="/admin" icon={<Shield size={14} />} label="Admin Panel" />
-        )}
         {isSuperAdmin && (
           <MenuItem href="/admin/super" icon={<Star size={14} />} label="Super Admin" />
         )}

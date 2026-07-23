@@ -1,5 +1,49 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-07-23 — Cover/banner remove button + free AI synopsis (Create/Edit Novel modal)
+Two changes to `CreateNovelModal`, plus making the last token-gated AI feature free.
+- **src/components/novel/CreateNovelModal.tsx**:
+  - `UploadBox` now renders a circular **remove (X) button** in the top-right corner of the cover/banner preview when an image is present (and not mid-upload). It's a sibling of the `<label>` inside a new `relative` wrapper — not nested inside the label — preserving the "no nested interactive controls" rule; has `aria-label="Remove {label}"`, focus ring, and a `Tooltip`. New required `onRemove` prop.
+  - Added `handleRemoveCover` / `handleRemoveBanner`: revoke the object URL, clear the pending file, null the URL, reset progress. Wired into both `UploadBox` instances.
+  - `onSubmit` now seeds `finalCoverURL`/`finalBannerURL` from the live `coverURL`/`bannerURL` state (not `editNovel?.…`) so removing an existing image **persists** on save in edit mode (pending files still overwrite via upload).
+  - Synopsis placeholder now advertises all three AI tools: "Write a rough idea — then use ✨ Generate (from title), Improve, or Expand above" (the give-a-brief-idea → AI-polishes-it flow the user asked about — Generate = from title, Improve = correct/polish your draft, Expand = flesh out a short blurb).
+- **src/app/api/ai/novel-content/route.ts**: removed the `chargeTokens` call + 402 response and the now-unused `ACTION_TOKEN_MAP` and `chargeTokens` import. Synopsis generate/improve/expand are now free (were 3/2/2 tokens). Auth (verifiedUid) unchanged.
+- **src/lib/tokens.ts**: `TOKEN_COSTS` is now `{}` — synopsis was the last paid action. Charging machinery (`chargeTokens`, `getUserBalance`) kept dormant with a comment; re-enabling a paid feature = add `action: cost` + call the fn. `TokenAction` is now `never`; `tsc` clean.
+- **src/app/(studio)/wallet/page.tsx**: `'AI Synopsis'` → `0` (renders "Free"). (AI Novel/Webtoon Generation rows still show 50 — display-only placeholders, never wired to charging.)
+
+## 2026-07-23 — Make AI cover/banner image generation free for all users
+The AI image feature in the Create/Edit Novel modal charged 15 tokens per generated image (`image-generate`) and 1 token per "Auto-fill from novel" prompt (`image-prompt`), which blocked users with a 0 balance ("Insufficient tokens. You need 15 tokens but have 0."). Both are now free; auth (verifiedUid) is still required.
+- **src/app/api/ai/generate-image/route.ts**: removed the `chargeTokens` calls + 402 responses from both the `prompt` and `generate` actions; dropped the now-unused `chargeTokens` import. Stability/Anthropic key checks and error handling unchanged.
+- **src/lib/tokens.ts**: removed the `'image-prompt': 1` and `'image-generate': 15` entries from `TOKEN_COSTS` (their only caller is gone); expanded the free-features comment.
+- **src/app/(studio)/wallet/page.tsx**: set `'AI Cover Image'` and `'AI Banner Image'` to `0` in the pricing reference (render as `Free`, reusing the cost===0 branch added earlier).
+- Left as-is: `AIImageGenerator.tsx` still has harmless `insufficientTokens` client branches (now dead for these actions, but resilient if token gating is ever reinstated). `tsc` clean apart from the pre-existing stale `.next/types` validator entry for the deleted `/admin` page.
+
+## 2026-07-23 — Intro (credits) poster: closer to the scanlation reference format
+Brought `CreditsPoster` (the locked "Intro page" shown before every chapter in both the novel editor preview and the reader) closer to the AsuraScans-style banner reference, keeping the Toonflow Studio Paint watermark/tag and data-driven credits.
+- **src/components/reader/CreditsPoster.tsx**:
+  - `Credit` cell now renders `ROLE / VALUE` with a glowing violet brush-stroke slash separator between the role tab and the white value slab (matches the reference's `TL / SHOUNEN` chips).
+  - Added an angular corner-bracket frame (4 glowing L-corners, `inset-3 sm:inset-4`, `pointer-events-none`, `aria-hidden`) around the whole banner — a signature of the reference.
+  - Added a broken glowing arc sweeping the chapter-number medallion (partial violet ring) echoing the reference's broken ring.
+  - Unchanged: Toonflow Studio Paint cover watermark, @handle + site links, title banner, and the metadata-based credit rows (AUTHOR/STUDIO/GENRE/STATUS/CHAPTERS/LANG — the original-content equivalent of scanlation team roles). Purple accent stays in arbitrary-value classes (not inline styles), consistent with the existing file.
+
+## 2026-07-23 — Make novel AI Story Assistant free for all users
+The novel-editor AI Assistant (chat + "Write Full Chapter to Canvas") previously charged 2 tokens per request via `chargeTokens(uid, 'novel-assist', …)`. It is now always free; auth is still required (verifiedUid) so usage stays tied to a real account.
+- **src/app/api/ai/novel-assist/route.ts**: removed the `chargeTokens` call and the 402 insufficient-tokens response (both `chat` and `write-chapter` modes); dropped the now-unused `chargeTokens` import. `verifiedUid` auth gate unchanged.
+- **src/lib/tokens.ts**: removed the `'novel-assist': 2` entry from `TOKEN_COSTS` (its only caller is gone); left a comment noting the assistant is intentionally free.
+- **src/app/(studio)/wallet/page.tsx**: set `'AI Story Assist'` to `0` in the pricing reference and updated the cost cell to render `Free` (accent-colored) when cost is 0, else `{cost} tokens`.
+- `tsc` clean apart from the pre-existing stale `.next/types` validator entry for the deleted `/admin` page.
+
+## 2026-07-23 — Remove /admin placeholder panel
+Removed the non-functional `/admin` "Admin Panel" placeholder (all stats were "—"). The functional Super Admin panel at `/admin/super/**` is untouched.
+- **src/app/(studio)/admin/page.tsx**: deleted. `/admin` now 404s (its `/admin/super/**` subroutes still resolve).
+- **src/components/layout/StudioSidebar.tsx**: dropped the `/admin` sidebar item, the now-unused `Shield` import, the `adminOnly` field, and the `isAdmin` filter branch (destructure now only pulls `isSuperAdmin`).
+- **src/components/layout/UserMenu.tsx**: dropped the `{isAdmin && ...}` "Admin Panel" dropdown item and the unused `Shield` import / `isAdmin` destructure.
+- **src/proxy.ts**: removed the dead admin-role gate (only guarded the deleted route — `/admin/super` is still gated by the super-admin block above it) plus its now-unused `ADMIN_ROLES` const, `userRole` cookie read, and `ROLE_COOKIE_NAME` import. Matcher unchanged so `/admin/super/**` stays protected.
+- Left as-is: `robots.ts` `/admin` disallow (still covers `/admin/super`), and the `useAuth().isAdmin` helper (general capability flag, out of scope). `tsc` clean apart from a stale `.next/types` validator entry that regenerates on the next Turbopack compile.
+
+## 2026-07-23 — Lock Webtoon Studio (Coming Soon)
+- **src/lib/utils/constants.ts**: set `FEATURE_FLAGS.webtoonStudio` back to `false`. This locks the Webtoon Studio card on `/create` (renders the "Coming Soon" locked card with the Lock badge instead of the clickable Link) and makes `proxy.ts` redirect `/create/webtoon/**` deep links to `/coming-soon?feature=studio`. Novel Studio and the rest of the hub are unaffected. Super admin bypass is unchanged.
+
 ## 2026-07-11 — Enable forceConsistentCasingInFileNames
 - **tsconfig.json**: added `"forceConsistentCasingInFileNames": true` to `compilerOptions` to enforce consistent file-reference casing and clear the Edge Tools lint warning (prevents cross-OS casing issues between case-sensitive and case-insensitive filesystems).
 

@@ -62,55 +62,74 @@ function UploadBox({
   value,
   progress,
   onChange,
+  onRemove,
 }: {
   label: string
   aspect: string
   value: string | null
   progress: number
   onChange: (file: File) => void
+  onRemove: () => void
 }) {
   const inputId = `upload-${label.replace(/\W+/g, '-').toLowerCase()}`
+  const uploading = progress > 0 && progress < 100
 
   return (
     <div>
       <p className="text-xs font-medium text-white/60 mb-1.5" id={`${inputId}-label`}>
         {label}
       </p>
-      {/* label wraps the file input — no nested interactive controls */}
-      <label
-        htmlFor={inputId}
-        className={`relative bg-bg-elevated border-2 border-dashed border-bg-border rounded-xl overflow-hidden cursor-pointer hover:border-white/30 transition-colors block ${aspect}`}
-        aria-labelledby={`${inputId}-label`}
-      >
-        {value ? (
-          <Image src={value} alt={label} fill className="object-cover" />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <ImageIcon size={20} className="text-white/30" aria-hidden="true" />
-            <span className="text-xs text-white/40">Click to upload</span>
-          </div>
-        )}
-
-        {progress > 0 && progress < 100 && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 size={20} className="text-white animate-spin mx-auto mb-1" aria-hidden="true" />
-              <span className="text-xs text-white">{Math.round(progress)}%</span>
+      {/* Relative wrapper so the remove button sits OUTSIDE the <label> — a
+          <label> must not contain nested interactive controls */}
+      <div className="relative">
+        <label
+          htmlFor={inputId}
+          className={`relative bg-bg-elevated border-2 border-dashed border-bg-border rounded-xl overflow-hidden cursor-pointer hover:border-white/30 transition-colors block ${aspect}`}
+          aria-labelledby={`${inputId}-label`}
+        >
+          {value ? (
+            <Image src={value} alt={label} fill className="object-cover" />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <ImageIcon size={20} className="text-white/30" aria-hidden="true" />
+              <span className="text-xs text-white/40">Click to upload</span>
             </div>
-          </div>
-        )}
+          )}
 
-        <input
-          id={inputId}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="sr-only"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) onChange(file)
-          }}
-        />
-      </label>
+          {uploading && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+              <div className="text-center">
+                <Loader2 size={20} className="text-white animate-spin mx-auto mb-1" aria-hidden="true" />
+                <span className="text-xs text-white">{Math.round(progress)}%</span>
+              </div>
+            </div>
+          )}
+
+          <input
+            id={inputId}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) onChange(file)
+            }}
+          />
+        </label>
+
+        {value && !uploading && (
+          <Tooltip label="Remove image" side="left">
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label={`Remove ${label}`}
+              className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white/80 backdrop-blur-sm transition-colors hover:bg-danger hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <X size={12} aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
+      </div>
     </div>
   )
 }
@@ -209,6 +228,26 @@ export function CreateNovelModal({
     setBannerURL(url)
   }
 
+  function handleRemoveCover() {
+    if (coverObjectURL.current) {
+      URL.revokeObjectURL(coverObjectURL.current)
+      coverObjectURL.current = null
+    }
+    setPendingCover(null)
+    setCoverURL(null)
+    setCoverProgress(0)
+  }
+
+  function handleRemoveBanner() {
+    if (bannerObjectURL.current) {
+      URL.revokeObjectURL(bannerObjectURL.current)
+      bannerObjectURL.current = null
+    }
+    setPendingBanner(null)
+    setBannerURL(null)
+    setBannerProgress(0)
+  }
+
   async function handleSynopsisAI(action: 'generate-synopsis' | 'improve-synopsis' | 'expand-synopsis') {
     const currentTitle = getValues('title')
     const currentSynopsis = getValues('synopsis')
@@ -262,8 +301,10 @@ export function CreateNovelModal({
 
   async function onSubmit(data: FormData) {
     try {
-      let finalCoverURL = editNovel?.coverURL ?? null
-      let finalBannerURL = editNovel?.bannerURL ?? null
+      // Base on current state so an explicit removal (null) persists on save,
+      // not just a swap. Pending files overwrite these via upload below.
+      let finalCoverURL = coverURL
+      let finalBannerURL = bannerURL
 
       if (isEditing && editNovel) {
         // Upload images if pending
@@ -351,6 +392,7 @@ export function CreateNovelModal({
                   value={coverURL}
                   progress={coverProgress}
                   onChange={handleCoverFile}
+                  onRemove={handleRemoveCover}
                 />
                 <button
                   type="button"
@@ -370,6 +412,7 @@ export function CreateNovelModal({
                   value={bannerURL}
                   progress={bannerProgress}
                   onChange={handleBannerFile}
+                  onRemove={handleRemoveBanner}
                 />
                 <button
                   type="button"
@@ -472,7 +515,7 @@ export function CreateNovelModal({
                 {...register('synopsis')}
                 rows={4}
                 className="input-base resize-none"
-                placeholder="Describe your story — or use ✨ Generate above"
+                placeholder="Write a rough idea — then use ✨ Generate (from title), Improve, or Expand above"
                 aria-describedby={errors.synopsis ? 'synopsis-error' : undefined}
                 {...(errors.synopsis ? { 'aria-invalid': 'true' } : { 'aria-invalid': 'false' })}
               />

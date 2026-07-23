@@ -8,7 +8,6 @@ import {
   ImageIcon,
   LayoutDashboard,
   Wallet,
-  Shield,
   Star,
   ChevronLeft,
   Home,
@@ -22,7 +21,6 @@ interface SidebarItem {
   href: string
   label: string
   icon: React.ReactNode
-  adminOnly?: boolean
   superAdminOnly?: boolean
 }
 
@@ -31,7 +29,6 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { href: '/create/webtoon', label: 'Webtoon Studio', icon: <ImageIcon size={18} /> },
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { href: '/wallet', label: 'Wallet', icon: <Wallet size={18} /> },
-  { href: '/admin', label: 'Admin Panel', icon: <Shield size={18} />, adminOnly: true },
   { href: '/admin/super', label: 'Super Admin', icon: <Star size={18} />, superAdminOnly: true },
 ]
 
@@ -44,11 +41,10 @@ interface StudioSidebarProps {
 
 export default function StudioSidebar({ onClose, onNavigate }: StudioSidebarProps) {
   const pathname = usePathname()
-  const { isAdmin, isSuperAdmin } = useAuth()
+  const { isSuperAdmin } = useAuth()
 
   const visibleItems = SIDEBAR_ITEMS.filter((item) => {
     if (item.superAdminOnly) return isSuperAdmin
-    if (item.adminOnly) return isAdmin
     return true
   })
 

@@ -19,10 +19,10 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import type { Transaction, Withdrawal, WithdrawalMethod } from '@/types'
 
 const TOKEN_COSTS: Record<string, number> = {
-  'AI Story Assist': 2,
-  'AI Synopsis': 5,
-  'AI Cover Image': 20,
-  'AI Banner Image': 20,
+  'AI Story Assist': 0,
+  'AI Synopsis': 0,
+  'AI Cover Image': 0,
+  'AI Banner Image': 0,
   'AI Novel Generation': 50,
   'AI Webtoon Generation': 50,
 }
@@ -498,7 +498,9 @@ function WalletPageInner() {
             {Object.entries(TOKEN_COSTS).map(([feature, cost]) => (
               <div key={feature} className="flex items-center justify-between bg-bg-elevated rounded-lg px-3 py-2">
                 <span className="text-xs text-white/60">{feature}</span>
-                <span className="text-xs font-bold text-white">{cost} tokens</span>
+                <span className={cn('text-xs font-bold', cost === 0 ? 'text-accent' : 'text-white')}>
+                  {cost === 0 ? 'Free' : `${cost} tokens`}
+                </span>
               </div>
             ))}
           </div>
