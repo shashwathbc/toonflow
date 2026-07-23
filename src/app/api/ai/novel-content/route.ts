@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
+import { aiRateLimited } from '@/lib/api/aiRateLimit'
 
 export const runtime = 'nodejs'
 
@@ -31,6 +32,10 @@ export async function POST(request: NextRequest) {
     console.error('[/api/ai/novel-content] ANTHROPIC_API_KEY is not set')
     return NextResponse.json({ error: 'AI service is not configured' }, { status: 503 })
   }
+
+  // Free to users, but every call spends on Anthropic — cap per account.
+  const limited = aiRateLimited(uid, 'text')
+  if (limited) return limited
 
   try {
     const parsed = bodySchema.safeParse(await request.json())

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
+import { aiRateLimited } from '@/lib/api/aiRateLimit'
 
 export const runtime = 'nodejs'
 
@@ -46,7 +47,9 @@ export async function POST(request: NextRequest) {
       const { novelTitle, novelSynopsis, imageType } = parsed.data
 
       // AI image prompt generation is free for all users — no token charge.
-      // Auth is still required above (verifiedUid).
+      // Auth (above) + a per-user hourly cap keep vendor spend bounded.
+      const limited = aiRateLimited(uid, 'text')
+      if (limited) return limited
 
       const isCover = imageType === 'cover'
 
@@ -84,8 +87,10 @@ Return ONLY the image prompt text.`,
       if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
       const { prompt, imageType } = parsed.data
 
-      // AI image generation is free for all users — no token charge.
-      // Auth is still required above (verifiedUid).
+      // AI image generation is free for all users — no token charge. Auth
+      // (above) + a tight per-user hourly cap bound Stability AI spend.
+      const limited = aiRateLimited(uid, 'image')
+      if (limited) return limited
 
       const apiKey = process.env.STABILITY_API_KEY
       if (!apiKey) {

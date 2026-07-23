@@ -23,6 +23,36 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
+    // A signed-in user may bump likeCount by EXACTLY ±1 (matching the client's
+    // increment(±1) in toggleLike). Without the ±1 bound a client could write an
+    // arbitrary count (e.g. 999999) straight to the doc. .get(key,0) tolerates
+    // legacy docs created before the counter field existed.
+    function likeCountBumped() {
+      return onlyUpdates(['likeCount'])
+        && request.resource.data.likeCount is int
+        && (request.resource.data.likeCount == resource.data.get('likeCount', 0) + 1
+            || request.resource.data.likeCount == resource.data.get('likeCount', 0) - 1);
+    }
+
+    // A signed-in user may update the rating aggregate ONLY as the setRating
+    // transaction does: the average stays in [0,5] and ratingCount moves by at
+    // most ±1 (add / change / remove one rating). This blocks the catastrophic
+    // manipulation the old unbounded rule allowed (e.g. rating=1, ratingCount=1e5
+    // on a rival's work). NOTE: this bounds the *shape* of the write, not its
+    // truthfulness — a scripted client could still cast/withdraw one fake vote.
+    // Full tamper-proofing requires moving aggregation to an Admin-SDK route
+    // (tracked as the P1 rating-integrity follow-up).
+    function ratingAdjusted() {
+      return onlyUpdates(['rating', 'ratingCount'])
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 0 && request.resource.data.rating <= 5
+        && request.resource.data.ratingCount is int
+        && request.resource.data.ratingCount >= 0
+        && (request.resource.data.ratingCount == resource.data.get('ratingCount', 0)
+            || request.resource.data.ratingCount == resource.data.get('ratingCount', 0) + 1
+            || request.resource.data.ratingCount == resource.data.get('ratingCount', 0) - 1);
+    }
+
     // Public content — anyone can read published novels/webtoons
     match /novels/{novelId} {
       allow read: if true;
@@ -32,16 +62,17 @@ service cloud.firestore {
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.viewCount == 0
         && request.resource.data.likeCount == 0;
-      // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it
+      // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it.
+      // like/rating bumps are delta-bounded (see likeCountBumped/ratingAdjusted).
       allow update: if isOwner(resource.data.authorId) || isAdmin()
-        || onlyUpdates(['likeCount', 'rating', 'ratingCount']);
+        || likeCountBumped() || ratingAdjusted();
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /chapters/{chapterId} {
         allow read: if true;
         allow create, delete: if isOwner(get(/databases/$(database)/documents/novels/$(novelId)).data.authorId) || isAdmin();
         allow update: if isOwner(get(/databases/$(database)/documents/novels/$(novelId)).data.authorId) || isAdmin()
-          || onlyUpdates(['likeCount']);
+          || likeCountBumped();
       }
     }
 
@@ -51,16 +82,17 @@ service cloud.firestore {
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.viewCount == 0
         && request.resource.data.likeCount == 0;
-      // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it
+      // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it.
+      // like/rating bumps are delta-bounded (see likeCountBumped/ratingAdjusted).
       allow update: if isOwner(resource.data.authorId) || isAdmin()
-        || onlyUpdates(['likeCount', 'rating', 'ratingCount']);
+        || likeCountBumped() || ratingAdjusted();
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /episodes/{episodeId} {
         allow read: if true;
         allow create, delete: if isOwner(get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId) || isAdmin();
         allow update: if isOwner(get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId) || isAdmin()
-          || onlyUpdates(['likeCount']);
+          || likeCountBumped();
       }
     }
 
@@ -135,7 +167,7 @@ service cloud.firestore {
         && request.resource.data.content is string
         && request.resource.data.content.size() <= 5000;
       allow update: if isOwner(resource.data.authorId) || isAdmin()
-        || onlyUpdates(['likeCount']);
+        || likeCountBumped();
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
     }
 

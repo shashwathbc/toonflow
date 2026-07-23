@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
+import { aiRateLimited } from '@/lib/api/aiRateLimit'
 import { SYSTEM_PROMPT, WRITE_CHAPTER_PROMPT } from '@/lib/ai/prompts'
 
 export const runtime = 'nodejs'
@@ -88,7 +89,11 @@ export async function POST(request: NextRequest) {
     } = parsed.data
 
     // The AI story assistant is free for all users — no token charge. Auth is
-    // still required above (verifiedUid) so usage stays tied to a real account.
+    // still required above (verifiedUid) so usage stays tied to a real account,
+    // and a per-user hourly cap bounds Anthropic spend. Full-chapter generation
+    // (Opus, long output) is the priciest tier, so it's capped tighter than chat.
+    const limited = aiRateLimited(uid, mode === 'write-chapter' ? 'assistChapter' : 'assistChat')
+    if (limited) return limited
 
     // Previous chapters power the consistency engine — cap total size to protect the context window
     const previousChaptersBlock = (previousChapters ?? [])

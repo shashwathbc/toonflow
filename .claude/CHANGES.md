@@ -1325,3 +1325,12 @@ Large follow-on pass building on the 1:1 messaging system.
   - storage.ts upload helpers now take `uid` and build these paths; callers pass the current uid (`authorId` in the novel/webtoon modals, `firebaseUser.uid` in the episode editor).
   - Old-path assets stay readable (public read still matches), just no new writes there.
 - Deployed `firebase deploy --only storage` (compiled OK). tsc + eslint clean.
+
+## Security P0: AI cost-abuse rate limiting + bounded like/rating rules (2026-07-23)
+Two production-blocking gaps from the full engineering audit, fixed surgically.
+
+- **P0a — AI endpoints were auth-gated but unthrottled** (`/api/ai/generate-image`, `/api/ai/novel-content`, `/api/ai/novel-assist`). Each call hits a paid provider (Stability AI / Anthropic) and is free to users, so one authenticated account could loop a route and run up unbounded vendor spend. Added `src/lib/api/aiRateLimit.ts` (`aiRateLimited(uid, bucket)`), reusing the existing in-memory `checkRateLimit`. Per-user hourly caps by cost tier: image 20/h, text (Haiku prompt/synopsis) 40/h, assist chat (Sonnet) 60/h, write-chapter (Opus) 20/h. Returns 429 with a friendly message. Wired into all three routes after `verifiedUid`.
+  - NOTE: limiter is per-process (in-memory) — see P2 follow-up to back it with Redis for multi-instance.
+- **P0b — like/rating counters were unbounded in `firestore.rules`.** The update rules allowed `onlyUpdates(['likeCount','rating','ratingCount'])` with NO value bound, so any signed-in user could write any value to any content (e.g. set a rival's rating=1, ratingCount=100000, or inflate likeCount arbitrarily) — while `followerCount` 12 lines below was correctly bounded to ±1. Added `likeCountBumped()` (±1, matching client `increment`) and `ratingAdjusted()` (rating∈[0,5], ratingCount delta ∈ {-1,0,+1}, matching the `setRating` transaction). Applied to novels, webtoons, chapters, episodes, comments. Verified compatible with `engagement.ts` client writes.
+  - NOTE: this bounds the write *shape*, not truthfulness; full tamper-proofing needs Admin-SDK rating aggregation (P1 follow-up, noted in rule comments).
+- Gate: `tsc --noEmit` clean, `vitest run` 26/26 pass. Rules NOT yet deployed — deploy with `firebase deploy --only firestore:rules --project toonflow-studio-paint-f384c`.
