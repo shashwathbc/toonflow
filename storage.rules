@@ -24,52 +24,47 @@ service firebase.storage {
       return request.resource.size < 25 * 1024 * 1024;
     }
 
-    // Only the novel/webtoon author may write its assets. The content document is
-    // created (Admin/client) before any asset upload, so this lookup resolves.
-    function ownsNovel(novelId) {
-      return isAuth() &&
-        firestore.get(/databases/(default)/documents/novels/$(novelId)).data.authorId == request.auth.uid;
-    }
+    // NOTE: ownership is proven from the PATH — every content asset is stored
+    // under the uploader's uid as the second segment (…/{uid}/…), so writes are
+    // gated with isOwner(uid). We deliberately avoid cross-service Firestore
+    // reads (firestore.get) from Storage rules: they don't resolve reliably in
+    // this project, which silently denied every author's own upload. Reads stay
+    // public (assets are referenced by tokenised download URLs).
 
-    function ownsWebtoon(webtoonId) {
-      return isAuth() &&
-        firestore.get(/databases/(default)/documents/webtoons/$(webtoonId)).data.authorId == request.auth.uid;
-    }
-
-    // User avatars — owner only
+    // User avatars / banners — owner only
     match /users/{uid}/avatar/{file} {
       allow read: if true;
       allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
     }
-
-    // User banners — owner only
     match /users/{uid}/banner/{file} {
       allow read: if true;
       allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
     }
 
-    // Novel covers — author only (was any authenticated user → cross-user deface)
-    match /novels/{novelId}/cover/{file} {
+    // Novel cover + banner — novels/{uid}/{novelId}/cover.ext | banner.ext
+    match /novels/{uid}/{novelId}/{file} {
       allow read: if true;
-      allow write: if ownsNovel(novelId) && isSafeImage() && isUnder10MB();
+      allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
     }
 
-    // Novel banners — author only
-    match /novels/{novelId}/banner/{file} {
+    // Webtoon cover — webtoons/{uid}/{webtoonId}/cover.ext
+    match /webtoons/{uid}/{webtoonId}/{file} {
       allow read: if true;
-      allow write: if ownsNovel(novelId) && isSafeImage() && isUnder10MB();
+      allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
     }
 
-    // Webtoon covers — author only
-    match /webtoons/{webtoonId}/cover/{file} {
+    // Webtoon episode panels (up to 25MB) — webtoons/{uid}/{webtoonId}/{episodeId}/panel_N.ext
+    match /webtoons/{uid}/{webtoonId}/{episodeId}/{file} {
       allow read: if true;
-      allow write: if ownsWebtoon(webtoonId) && isSafeImage() && isUnder10MB();
+      allow write: if isOwner(uid) && isSafeImage() && isUnder25MB();
     }
 
-    // Webtoon episode panels (up to 25MB per image) — author only
-    match /webtoons/{webtoonId}/episodes/{episodeId}/{file} {
+    // Direct-message images — conversations/{cid}/{uid}/{file}. Owner-scoped
+    // write; public read (the tokenised URL is only stored in the participant-
+    // only message doc, so it isn't discoverable without being in the chat).
+    match /conversations/{conversationId}/{uid}/{file} {
       allow read: if true;
-      allow write: if ownsWebtoon(webtoonId) && isSafeImage() && isUnder25MB();
+      allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
     }
 
     // Deny everything else by default.

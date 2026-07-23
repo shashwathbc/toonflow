@@ -1238,3 +1238,90 @@ Gates: `tsc` clean · `eslint` clean · `vitest` 26/26 · `next build` OK. Prod 
 - **favicon.ico was never the brand.** Root cause of "browser icon not changed": the prior pass regenerated icon.png/apple-icon/OG but left favicon.ico, assuming it was already the mark. It was a generic black-circle/white-triangle placeholder, and browsers prefer favicon.ico for the tab. Added `png-to-ico` (devDep) + a `faviconIco()` step to `scripts/generate-icons.mjs` that packs 16/32/48 frames of the TF mark (dropped the 256 frame — png-to-ico stores frames as uncompressed BMP, so 256 ballooned the file to 278KB; now 14.7KB). Next content-hashes the convention favicon, so the tag URL cache-busts on rebuild.
 - **Wordmark → text only** (user request). Rewrote `src/components/ui/Logo.tsx` to drop the logomain image mark and render two-tone text "Toonflow Studio Paint" ("Studio Paint" in text-secondary; studio variant → "Toonflow Studio"). Removed the now-unused image/showText/priority/textClassName props; updated Navbar + auth-layout callers. logomain.png still drives the favicon/PWA/OG assets via the script.
 - Gates: tsc/eslint clean, next build OK. favicon link tag confirmed rehashed (48x48), wordmark confirmed text-only in built HTML.
+
+## Fix: sign-in fails when Firestore is blocked/denied (2026-07-23)
+- **Symptom:** `/login` showed "Login failed" while the console reported `net::ERR_BLOCKED_BY_CLIENT` on `firestore.googleapis.com` (Brave Shields/ad blocker) plus `createUserDocument` "Missing or insufficient permissions".
+- **Root cause:** `signInWithEmail`/`signInWithGoogle`/`signUpWithEmail` in `src/lib/firebase/auth.ts` awaited `createUserDocument` with no try/catch. `signInWithEmailAndPassword` succeeded, but the subsequent Firestore write threw (blocked by client, or rejected by rules), rejecting the whole sign-in — even though the user was authenticated. AuthContext.onIdTokenChanged already creates the doc and already guards it, so the auth.ts call was redundant *and* unguarded.
+- **Fix:** wrapped the doc write in an `ensureUserDocument()` helper (try/catch + console.error), mirroring AuthContext's best-effort pattern. Sign-in now resolves on successful auth regardless of Firestore availability.
+- **Environmental note (not code):** the `ERR_BLOCKED_BY_CLIENT` requires the user to lower Brave Shields for localhost (or use a browser without an ad blocker) for the profile doc to actually read/write.
+- **Latent issue flagged (not changed):** `createUserDocument`'s backfill of an existing doc writes `role`/`isCreator`/`createdAt`, which the users `update` rule forbids for non-admin owners — a genuine "Missing or insufficient permissions" for legacy docs. Proper fix is server-side (Admin SDK); left as-is since role/isCreator are server-managed by design and the fix above makes it non-fatal.
+- Gates: change is TypeScript-safe (spread over `Parameters<typeof createUserDocument>`); no rules or behavior change beyond swallowing the Firestore error.
+
+## Feature: Followers/Following social system + 1:1 messaging (2026-07-23)
+Built an Instagram/X-style social layer on the profile page, plus a working 1:1 chat. Uses the EXISTING stack (Radix primitives in ui/* + Firestore service + hooks — no shadcn/ui, no TanStack Query per CLAUDE.md) and reuses the existing follow system (followUser/unfollowUser + follows edges + counts).
+
+**Data / service**
+- `src/types/messaging.ts` (Conversation, ConversationMessage) + `SocialUser` view-model in `types/user.ts`; both exported from `types/index.ts`.
+- `src/lib/firebase/social.ts` — `getFollowConnections()` pages the PUBLIC `users/{uid}/{followers|following}` subcollections (20/page, cursor, single-field createdAt order → no composite index), hydrates profiles via batched `documentId() in`, and computes viewer flags (viewerFollows/followsViewer/isMutual) via two batched `follows` edge lookups. `getFriendship()` for the mutual check.
+- `src/lib/firebase/messaging.ts` — deterministic `conversationIdFor` (sorted uids), `getOrCreateConversation` (transaction, mutual-follow gated), `sendMessage` (batch: message + preview + recipient unread++), `listenMessages`/`listenConversation` (onSnapshot), `markConversationRead`.
+
+**Hooks**
+- `useFollow` gained an optional `initialFollowing` to skip the per-row read (backward compatible).
+- `useFollowList` — paginated loader with generation-guarded out-of-order safety, infinite scroll, retry. `useConversationThread` — live thread + send + markRead.
+
+**UI**
+- New primitives `ui/Avatar.tsx` (Radix avatar + initials, lazy img) and `ui/Tabs.tsx` (WAI-ARIA tabs w/ arrow-key nav).
+- `components/social/`: `SocialListDialog` (responsive Radix Dialog — centered desktop / full-screen mobile sheet; tabs, debounced search, sort/filter dropdown, skeletons, empty + error/retry states), `SocialUserRow` (avatar, handle, bio, counts, Friends badge, Follow/Message/View actions, local relationship state), `FollowButton`, `MessageButton` (mutual-gated, aria-disabled + tooltip when locked).
+- `/messages/[conversationId]` route (`page.tsx` + `ThreadClient.tsx`): real-time bubbles, composer (Enter to send), unread clearing, access/error/empty states.
+- Wired the Followers/Following stat cards in `ProfilePageClient` to open the dialog (clickable StatCard variant).
+
+**Security / config**
+- `firestore.rules`: new `conversations` + `messages` block — participant-only reads, create gated on mutual follow via `exists()` on both edges, immutable messages bound to sender, updates limited to lastMessage/unreadCount/updatedAt with participants frozen.
+- `src/proxy.ts`: `/messages` added to the auth gate + matcher.
+- No new Firestore composite indexes required; storage rules unchanged.
+
+**Known limitations (by design this pass):** search/sort operate over progressively loaded pages (not the entire follower set); no global `/messages` inbox; conversation preview/unread counters are client-written and trusted between the two consenting participants; terminology is "Follow/Following" here vs the app-wide "Subscribe" on the same backend.
+
+**Gates:** tsc clean · eslint clean · `next build` OK (`/messages/[conversationId]` present as a dynamic route).
+**ACTION REQUIRED to run against live Firestore:** deploy rules — `firebase deploy --only firestore:rules --project toonflow-studio-paint-f384c`.
+
+### Fix: messaging "Missing or insufficient permissions" (2026-07-23)
+- **Root cause:** the `conversations` READ rule was `if isParticipant()`, which dereferences `resource.data.participants`. `getOrCreateConversation` does `tx.get()` on a not-yet-existing conversation doc, where `resource == null` → the expression throws → read denied → the whole transaction fails before create. (Classic Firestore "get() on a non-existent doc still runs the read rule with resource=null" gotcha.)
+- **Fix:** read rule now `isSignedIn() && (resource == null || request.auth.uid in resource.data.participants)` — a signed-in user can probe a non-existent conversation (reveals nothing; id derives from their own uid) but can only read an existing one if they're a participant. Also simplified the create rule (removed a fragile nested map-index; now checks two distinct participants + `unreadCount is map` + mutual follow).
+- Deployed: `firebase deploy --only firestore:rules --project toonflow-studio-paint-f384c` → compiled successfully + released.
+
+## Feature: Messages inbox + nav badge, block user, emoji/image, legal + fixes (2026-07-23)
+Large follow-on pass building on the 1:1 messaging system.
+
+**Navbar / inbox**
+- `useUnreadCount` (array-contains listener, no composite index) drives a real-time unread badge on a new **Messages** nav item (next to Browse) in Navbar + a dot in MobileNav (authed only).
+- Two-pane `/messages` inbox: `messages/layout.tsx` (client, responsive — list-only on mobile index, thread full-screen on mobile detail, both panes on desktop), `messages/page.tsx` (desktop placeholder), `ConversationSidebar` (real-time list via `useConversations`, search, New Message dialog, unread badges, skeletons, empty states, infinite scroll), `NewMessageDialog` (pick a mutual follower).
+- `ThreadClient` refactored to fill the pane (removed a duplicate `<main id="main-content">`): date separators, "Seen" read receipt (derived from unreadCount), typing indicator, mobile back button, load-earlier, voice/video header placeholders.
+- `useConversationThread` extended: `otherTyping` (interval-computed to avoid Date.now() in render + self-expiry), throttled `setTyping`/`stopTyping`, `loadOlder`, `seenByOther`.
+
+**Emoji + image (composer)** — replaced the placeholder buttons with a working `EmojiPicker` (caret insertion, no dep) and image attachment: `uploadMessageImage` (Storage) + `sendImageMessage` (type:'image', imageURL + intrinsic dims) rendered via next/image bubbles.
+
+**Block user** — `blocks.ts` (block drops the blocker's own follow so the pair is no longer mutual) + `useBlock` + `ProfileActions` (Subscribe + mutual-gated Message + ⋯ Block/Unblock) wired into the profile header (replaces the standalone SubscribeButton).
+
+**Rules / indexes / storage (deployed together)**
+- firestore.rules: `users/{uid}/blocked/{id}` (owner-only); `follows` create gated so a blocked user can't (re)follow; conversations create gated on `notBlocked`; conversations update allowlist gains `typing`; message create now accepts image messages (type:'image' + imageURL) as well as text.
+- firestore.indexes.json: composite (conversations: participants CONTAINS + updatedAt DESC) for the inbox.
+- storage.rules: `conversations/{cid}/{file}` participant-only read/write (safe image, <10MB).
+
+**Unrelated fixes (same pass, per request)**
+- Footer: `pb-16 md:pb-0` so the copyright/legal row clears the fixed mobile bottom nav on phones.
+- SupportModal: Name + Email disabled (read-only) when signed in (prefilled from account); still editable for signed-out visitors. Submit reads state, so locking is safe.
+- Legal details filled from the LLP's registration docs: constants LEGAL_ENTITY_NAME='Toonflow Studio Paint LLP', real registered address, LEGAL_JURISDICTION='Bengaluru, Karnataka', new LEGAL_GSTIN/LEGAL_LLPIN surfaced in Terms §11; LEGAL_LAST_UPDATED bumped to July 23, 2026. (Kept the platform's own terms — did NOT swap in the studio-services PDF, which is a different legal context.)
+
+**Gates:** tsc clean (only stale .next dev route-types noise) · eslint clean · next build OK.
+**Deploy required:** `firebase deploy --only firestore:rules,firestore:indexes,storage --project toonflow-studio-paint-f384c`.
+
+## Fix: sanitize Stability AI image-gen errors (2026-07-23)
+- **Symptom:** the AI cover "Generate" surfaced the raw upstream message to end users — "You lack sufficient credits… purchase more credits at platform.stability.ai…". `generate-image/route.ts` forwarded Stability's `errors[0]` verbatim with the upstream status.
+- **Root cause (operational):** the Stability AI account is out of credits (HTTP 402). Not a code bug — image generation can't run until the account is topped up.
+- **Fix:** map upstream failures to clean, provider-agnostic messages (402/credits→503 "temporarily unavailable, upload your own image for now"; 429→wait; 400/403→"rephrase the description"; else→502). The true upstream reason (incl. billing state) is logged server-side only. Client (AIImageGenerator) already toasts `data.error`, so it now shows the friendly text. Manual image upload remains available as the fallback.
+- Gate: eslint clean.
+
+## Fix: cover upload storage/unauthorized (2026-07-23)
+- **Symptom:** saving a novel cover → "Firebase Storage: User does not have permission to access 'novels/.../cover/cover.png' (storage/unauthorized)". Surfaced after storage.rules were (re)deployed, activating the strict content rules.
+- **Root cause (primary):** the Firestore content rules allow `isOwner(authorId) || isAdmin()` to edit a novel/webtoon, but storage.rules only allowed the author (`ownsNovel`/`ownsWebtoon`, no admin). So an admin/super-admin editing content they don't author could update the doc but NOT upload its cover/banner/panels. Aligned storage with Firestore: added `isAdmin()` (reads users/{uid}.role) and made asset writes `owns… || isAdmin()`.
+- **Secondary hardening:** `uploadFile` now falls back to an extension-derived contentType when `file.type` is empty (some drag/drop or programmatic Files), since the storage `isSafeImage()` match rejects an empty contentType.
+- Deployed: `firebase deploy --only storage`. eslint clean.
+
+## Fix (real cause): cover/asset uploads denied — cross-service Storage rules (2026-07-23)
+- **Diagnosis:** the earlier admin-bypass fix did NOT resolve it. Read the novel doc via Admin SDK: `novels/b1IEojPKR0SOmPqSZ8O6` authorId = the SIGNED-IN super admin (shashwathbc@gmail.com). So both `ownsNovel` (author matches) AND `isAdmin` (superadmin) *should* have passed — yet the write was denied. Conclusion: **cross-service `firestore.get()` inside Storage rules does not resolve in this project** (avatars, which use path-based `isOwner`, always worked; only novel/webtoon covers, which used the Firestore lookup, broke). My storage deploy had activated those cross-service rules for the first time, exposing this.
+- **Fix:** removed ALL cross-service reads from storage.rules. Content assets are now stored under the uploader's uid as the 2nd path segment, so ownership is provable from the path with `isOwner(uid)`:
+  - `novels/{uid}/{novelId}/cover|banner.ext`, `webtoons/{uid}/{webtoonId}/cover.ext`, `webtoons/{uid}/{webtoonId}/{episodeId}/panel_N.ext`, `conversations/{cid}/{uid}/{file}`.
+  - storage.ts upload helpers now take `uid` and build these paths; callers pass the current uid (`authorId` in the novel/webtoon modals, `firebaseUser.uid` in the episode editor).
+  - Old-path assets stay readable (public read still matches), just no new writes there.
+- Deployed `firebase deploy --only storage` (compiled OK). tsc + eslint clean.

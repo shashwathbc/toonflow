@@ -27,9 +27,20 @@ export interface UseFollowResult {
  * protection. The underlying service runs a Firestore transaction, so even a
  * request that slips past the in-flight guard can never double-count.
  */
-export function useFollow(targetUid: string | null | undefined): UseFollowResult {
+export function useFollow(
+  targetUid: string | null | undefined,
+  options?: {
+    /**
+     * Seed the follow state instead of fetching it. Pass this from a list that
+     * already knows the relationship (e.g. a followers modal) so N rows don't
+     * fire N `isFollowing` reads on mount.
+     */
+    initialFollowing?: boolean
+  }
+): UseFollowResult {
   const { firebaseUser } = useAuth()
-  const [following, setFollowing] = useState(false)
+  const seeded = options?.initialFollowing
+  const [following, setFollowing] = useState(seeded ?? false)
   const [pending, setPending] = useState(false)
   const inFlight = useRef(false)
 
@@ -38,13 +49,15 @@ export function useFollow(targetUid: string | null | undefined): UseFollowResult
   const canFollow = !!uid && !!targetUid && !isSelf
 
   useEffect(() => {
+    // Caller supplied the state — trust it and skip the network read.
+    if (seeded !== undefined) return
     if (!uid || !targetUid || uid === targetUid) return
     let cancelled = false
     isFollowing(uid, targetUid)
       .then((v) => { if (!cancelled) setFollowing(v) })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [uid, targetUid])
+  }, [uid, targetUid, seeded])
 
   const toggle = useCallback(async (): Promise<boolean | null> => {
     if (!uid || !targetUid || uid === targetUid) return null

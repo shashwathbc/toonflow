@@ -170,6 +170,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
         setUploadingProgress((prev) => ({ ...prev, [tempKey]: 1 }))
 
         const url = await uploadEpisodePanel(
+          firebaseUser!.uid,
           webtoonId,
           activeEpisode.id,
           file,
@@ -335,6 +336,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
 
     try {
       const url = await uploadEpisodePanel(
+        firebaseUser!.uid,
         webtoonId,
         activeEpisode.id,
         file,

@@ -151,13 +151,13 @@ export function CreateWebtoonModal({
 
   const handleCoverUpload = useCallback(
     async (file: File, webtoonId: string) => {
-      const url = await uploadWebtoonCover(webtoonId, file, ({ progress }) =>
+      const url = await uploadWebtoonCover(authorId, webtoonId, file, ({ progress }) =>
         setCoverProgress(progress)
       )
       setCoverURL(url)
       return url
     },
-    []
+    [authorId]
   )
 
   const [pendingCover, setPendingCover] = useState<File | null>(null)

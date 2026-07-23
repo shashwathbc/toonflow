@@ -75,7 +75,9 @@ function Footer() {
 
   return (
     <footer
-      className="bg-bg border-t border-bg-border mt-16"
+      // pb clears the fixed mobile bottom nav (h-14) so the copyright/legal row
+      // isn't hidden behind it on phones; no offset needed on md+ (no bottom nav).
+      className="bg-bg border-t border-bg-border mt-16 pb-16 md:pb-0"
       role="contentinfo"
       aria-label="Site footer"
     >

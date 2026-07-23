@@ -177,24 +177,24 @@ export function CreateNovelModal({
 
   const handleCoverUpload = useCallback(
     async (file: File, novelId: string) => {
-      const url = await uploadNovelCover(novelId, file, ({ progress }) =>
+      const url = await uploadNovelCover(authorId, novelId, file, ({ progress }) =>
         setCoverProgress(progress)
       )
       setCoverURL(url)
       return url
     },
-    []
+    [authorId]
   )
 
   const handleBannerUpload = useCallback(
     async (file: File, novelId: string) => {
-      const url = await uploadNovelBanner(novelId, file, ({ progress }) =>
+      const url = await uploadNovelBanner(authorId, novelId, file, ({ progress }) =>
         setBannerProgress(progress)
       )
       setBannerURL(url)
       return url
     },
-    []
+    [authorId]
   )
 
   const [pendingCover, setPendingCover] = useState<File | null>(null)

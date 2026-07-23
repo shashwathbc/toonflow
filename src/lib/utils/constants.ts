@@ -27,17 +27,21 @@ export const SOCIAL_HANDLE = '@toonflowstudiopaint'
 
 /** Effective date shown on all three legal pages. Declared once so Terms,
  *  Privacy and AI Policy can never drift apart. Update when any of them change. */
-export const LEGAL_LAST_UPDATED = 'July 3, 2026'
+export const LEGAL_LAST_UPDATED = 'July 23, 2026'
 
 /**
- * Company details required on the legal pages.
- * TODO(legal): replace these placeholders before public launch — they render
- * verbatim on /terms and /privacy. The platform bills in INR and charges GST
- * via Razorpay, so the governing-law clause in particular is not optional.
+ * Registered company details, shown verbatim on /terms and /privacy. Sourced
+ * from the LLP's incorporation (LLPIN) and GST registration certificates.
  */
-export const LEGAL_ENTITY_NAME = '[LEGAL ENTITY NAME — TO BE COMPLETED]'
-export const LEGAL_ADDRESS = '[REGISTERED ADDRESS — TO BE COMPLETED]'
-export const LEGAL_JURISDICTION = '[CITY, STATE — TO BE COMPLETED]'
+export const LEGAL_ENTITY_NAME = 'Toonflow Studio Paint LLP'
+export const LEGAL_ADDRESS =
+  'No 10, Sri Mata, 5th Main, Adithya Nagar, JP Nagar 8th Phase, Anjanapura, Bengaluru South, Bengaluru, Karnataka 560078, India'
+export const LEGAL_JURISDICTION = 'Bengaluru, Karnataka'
+/** GST Identification Number — displayed on the legal pages (a GSTIN must be
+ *  prominently displayed at the place of business). */
+export const LEGAL_GSTIN = '29AAZFT9560H1Z3'
+/** LLP Identification Number from the Certificate of Incorporation. */
+export const LEGAL_LLPIN = 'ACX-3877'
 
 export const PAGINATION_LIMIT = 20
 export const BROWSE_LIMIT = 24

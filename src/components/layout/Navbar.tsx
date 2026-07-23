@@ -3,8 +3,9 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, MessagesSquare } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useUnreadCount } from '@/hooks/useUnreadCount'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Logo } from '@/components/ui/Logo'
@@ -19,6 +20,8 @@ const NAV_LINKS = [
 function Navbar() {
   const pathname = usePathname()
   const { isAuthenticated } = useAuth()
+  const unread = useUnreadCount()
+  const messagesActive = pathname.startsWith('/messages')
 
   return (
     <header
@@ -60,6 +63,33 @@ function Navbar() {
               </li>
             )
           })}
+
+          {/* Messages — next to Browse, with a live unread badge */}
+          {isAuthenticated && (
+            <li>
+              <Link
+                href="/messages"
+                aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
+                aria-current={messagesActive ? 'page' : undefined}
+                className={cn(
+                  'relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  messagesActive ? 'bg-bg-elevated text-text' : 'text-text-secondary hover:text-text'
+                )}
+              >
+                <MessagesSquare size={16} aria-hidden="true" />
+                Messages
+                {unread > 0 && (
+                  <span
+                    className="ml-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-foreground"
+                    aria-hidden="true"
+                  >
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
+              </Link>
+            </li>
+          )}
         </ul>
 
         {/* Right actions */}

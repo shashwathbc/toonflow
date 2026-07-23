@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { SUPPORT_EMAIL, LEGAL_LAST_UPDATED, LEGAL_ENTITY_NAME, LEGAL_ADDRESS, LEGAL_JURISDICTION } from '@/lib/utils/constants'
+import { SUPPORT_EMAIL, LEGAL_LAST_UPDATED, LEGAL_ENTITY_NAME, LEGAL_ADDRESS, LEGAL_JURISDICTION, LEGAL_GSTIN, LEGAL_LLPIN } from '@/lib/utils/constants'
 
 export const metadata: Metadata = {
   // Brand omitted on purpose — the root template appends it.
@@ -113,6 +113,8 @@ export default function TermsPage() {
         <p>Toonflow Studio Paint is operated by{' '}
         <strong className="text-text">{LEGAL_ENTITY_NAME}</strong>, registered at{' '}
         <strong className="text-text">{LEGAL_ADDRESS}</strong>.</p>
+        <p>LLPIN: <strong className="text-text">{LEGAL_LLPIN}</strong> · GSTIN:{' '}
+        <strong className="text-text">{LEGAL_GSTIN}</strong>.</p>
         <p>Questions about these terms? Email{' '}
         <a href={`mailto:${SUPPORT_EMAIL}`} className="text-accent hover:underline focus-visible:ring-2 focus-visible:ring-accent rounded">
           {SUPPORT_EMAIL}

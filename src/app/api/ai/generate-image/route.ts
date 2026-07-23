@@ -120,10 +120,30 @@ Return ONLY the image prompt text.`,
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}))
-        const message =
-          (errData as { errors?: string[] }).errors?.[0] ?? `Stability AI error ${response.status}`
-        console.error('[/api/ai/generate-image] Stability AI error:', message)
-        return NextResponse.json({ error: message }, { status: response.status })
+        const rawMessage =
+          (errData as { errors?: string[] }).errors?.[0] ?? `HTTP ${response.status}`
+        // Log the true upstream reason (incl. billing state) server-side only —
+        // never forward the provider name or "buy credits" links to end users.
+        console.error('[/api/ai/generate-image] Stability AI error:', response.status, rawMessage)
+
+        const s = response.status
+        let clientError: string
+        let clientStatus: number
+        if (s === 402 || /credit|quota|billing/i.test(rawMessage)) {
+          // Provider credits exhausted — a transient outage from the user's view.
+          clientError = 'AI image generation is temporarily unavailable. Please upload your own image for now, or try again later.'
+          clientStatus = 503
+        } else if (s === 429) {
+          clientError = 'Too many image requests right now. Please wait a moment and try again.'
+          clientStatus = 429
+        } else if (s === 400 || s === 403) {
+          clientError = "That description couldn't be turned into an image. Try rephrasing it and generate again."
+          clientStatus = 422
+        } else {
+          clientError = 'Image service temporarily unavailable. Please try again later.'
+          clientStatus = 502
+        }
+        return NextResponse.json({ error: clientError }, { status: clientStatus })
       }
 
       const data = (await response.json()) as { image: string }

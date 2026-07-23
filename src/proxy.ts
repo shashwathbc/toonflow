@@ -24,7 +24,12 @@ export function proxy(request: NextRequest) {
   }
 
   // Authenticated-user gate
-  if (pathname.startsWith('/create') || pathname.startsWith('/dashboard') || pathname.startsWith('/wallet')) {
+  if (
+    pathname.startsWith('/create') ||
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/wallet') ||
+    pathname.startsWith('/messages')
+  ) {
     if (!authToken) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('redirect', pathname)
@@ -36,5 +41,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/create/:path*', '/dashboard/:path*', '/admin/:path*', '/wallet/:path*'],
+  matcher: ['/create/:path*', '/dashboard/:path*', '/admin/:path*', '/wallet/:path*', '/messages/:path*'],
 }

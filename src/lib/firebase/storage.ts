@@ -16,6 +16,24 @@ export interface UploadProgress {
   error?: Error
 }
 
+const EXT_CONTENT_TYPE: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+}
+
+// Some File objects arrive with an empty `type` (certain drag/drop or
+// programmatically-built files). Storage rules gate on contentType via a
+// `image/(png|jpeg|jpg|webp|gif)` match, so fall back to the extension rather
+// than sending an empty contentType that the rules would reject.
+function resolveContentType(file: File): string | undefined {
+  if (file.type) return file.type
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  return ext ? EXT_CONTENT_TYPE[ext] : undefined
+}
+
 export function uploadFile(
   path: string,
   file: File,
@@ -23,7 +41,7 @@ export function uploadFile(
 ): { task: UploadTask; promise: Promise<string> } {
   const storageRef = ref(storage, path)
   const task = uploadBytesResumable(storageRef, file, {
-    contentType: file.type,
+    contentType: resolveContentType(file),
     cacheControl: 'public, max-age=31536000',
   })
 
@@ -61,37 +79,46 @@ export async function uploadUserBanner(uid: string, file: File): Promise<string>
   return promise
 }
 
+// Content asset paths are scoped by the uploader's uid as the SECOND segment
+// (novels/{uid}/… , webtoons/{uid}/…), so the storage rules can authorize by
+// `isOwner(uid)` from the path alone. This avoids cross-service Firestore reads
+// from Storage rules, which don't resolve reliably in this project.
+
 export async function uploadNovelCover(
+  uid: string,
   novelId: string,
   file: File,
   onProgress?: (p: UploadProgress) => void
 ): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
-  const { promise } = uploadFile(`novels/${novelId}/cover/cover.${ext}`, file, onProgress)
+  const { promise } = uploadFile(`novels/${uid}/${novelId}/cover.${ext}`, file, onProgress)
   return promise
 }
 
 export async function uploadNovelBanner(
+  uid: string,
   novelId: string,
   file: File,
   onProgress?: (p: UploadProgress) => void
 ): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
-  const { promise } = uploadFile(`novels/${novelId}/banner/banner.${ext}`, file, onProgress)
+  const { promise } = uploadFile(`novels/${uid}/${novelId}/banner.${ext}`, file, onProgress)
   return promise
 }
 
 export async function uploadWebtoonCover(
+  uid: string,
   webtoonId: string,
   file: File,
   onProgress?: (p: UploadProgress) => void
 ): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
-  const { promise } = uploadFile(`webtoons/${webtoonId}/cover/cover.${ext}`, file, onProgress)
+  const { promise } = uploadFile(`webtoons/${uid}/${webtoonId}/cover.${ext}`, file, onProgress)
   return promise
 }
 
 export async function uploadEpisodePanel(
+  uid: string,
   webtoonId: string,
   episodeId: string,
   file: File,
@@ -100,7 +127,23 @@ export async function uploadEpisodePanel(
 ): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
   const { promise } = uploadFile(
-    `webtoons/${webtoonId}/episodes/${episodeId}/panel_${order}.${ext}`,
+    `webtoons/${uid}/${webtoonId}/${episodeId}/panel_${order}.${ext}`,
+    file,
+    onProgress
+  )
+  return promise
+}
+
+export async function uploadMessageImage(
+  conversationId: string,
+  senderId: string,
+  file: File,
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg'
+  // senderId is a path segment so the storage rule authorizes via isOwner(uid).
+  const { promise } = uploadFile(
+    `conversations/${conversationId}/${senderId}/${Date.now()}.${ext}`,
     file,
     onProgress
   )

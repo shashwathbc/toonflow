@@ -16,7 +16,9 @@ import {
   updateUserProfile, syncAuthorContent, createUserDocument,
   getNovelById, getWebtoonById,
 } from '@/lib/firebase/firestore'
-import SubscribeButton from '@/components/social/SubscribeButton'
+import ProfileActions from '@/components/social/ProfileActions'
+import SocialListDialog from '@/components/social/SocialListDialog'
+import type { FollowListType } from '@/lib/firebase/social'
 import AnimatedNumber, { type NumberFormatter } from '@/components/ui/AnimatedNumber'
 import { Stat } from '@/components/ui/Stat'
 import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
@@ -57,16 +59,33 @@ function ContentCard({ title, coverURL, href, chapterCount, viewCount, status }:
 
 const compactFormat: NumberFormatter = (n) => formatCount(Math.round(n))
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
-  return (
-    <div className="bg-bg-card border border-bg-border rounded-xl p-4 text-center">
+function StatCard({ label, value, icon, onClick }: {
+  label: string; value: number; icon: React.ReactNode; onClick?: () => void
+}) {
+  const base = 'bg-bg-card border border-bg-border rounded-xl p-4 text-center'
+  const inner = (
+    <>
       <div className="flex justify-center text-white/40 mb-2" aria-hidden="true">{icon}</div>
       <p className="text-xl font-bold text-white">
         <AnimatedNumber value={value} format={compactFormat} />
       </p>
       <p className="text-xs text-white/50 mt-0.5">{label}</p>
-    </div>
+    </>
   )
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`View ${label}`}
+        aria-haspopup="dialog"
+        className={cn(base, 'w-full transition-colors hover:border-white/20 hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent')}
+      >
+        {inner}
+      </button>
+    )
+  }
+  return <div className={base}>{inner}</div>
 }
 
 interface EditProfileData {
@@ -330,6 +349,8 @@ export function ProfilePageClient({ uid }: { uid: string }) {
   const [activeTab, setActiveTab] = useState<Tab>('novels')
   const [showEdit, setShowEdit] = useState(false)
   const [followerCount, setFollowerCount] = useState(0)
+  // null = closed; otherwise the tab the Followers/Following dialog opens on
+  const [socialTab, setSocialTab] = useState<FollowListType | null>(null)
 
   const load = useCallback(() => {
     if (authLoading) return
@@ -513,9 +534,9 @@ export function ProfilePageClient({ uid }: { uid: string }) {
               <Edit3 size={14} aria-hidden="true" /> Edit Profile
             </button>
           ) : (
-            <SubscribeButton
+            <ProfileActions
               targetUid={uid}
-              onToggled={(delta) => setFollowerCount((c) => Math.max(0, c + delta))}
+              onFollowToggled={(delta) => setFollowerCount((c) => Math.max(0, c + delta))}
             />
           )}
         </div>
@@ -545,8 +566,8 @@ export function ProfilePageClient({ uid }: { uid: string }) {
       {/* Stats */}
       <div className="px-4 sm:px-6 mb-8">
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          <StatCard label="Followers" value={followerCount} icon={<Users size={16} />} />
-          <StatCard label="Following" value={profile.followingCount ?? 0} icon={<Users size={16} />} />
+          <StatCard label="Followers" value={followerCount} icon={<Users size={16} />} onClick={() => setSocialTab('followers')} />
+          <StatCard label="Following" value={profile.followingCount ?? 0} icon={<Users size={16} />} onClick={() => setSocialTab('following')} />
           <StatCard label="Novels" value={tabNovels.length} icon={<BookOpen size={16} />} />
           <StatCard label="Webtoons" value={tabWebtoons.length} icon={<ImageIcon size={16} />} />
           <StatCard label="Total Views" value={totalViews} icon={<Eye size={16} />} />
@@ -698,6 +719,19 @@ export function ProfilePageClient({ uid }: { uid: string }) {
           profile={profile}
           onClose={() => setShowEdit(false)}
           onSaved={(updated) => setProfile(updated)}
+        />
+      )}
+
+      {socialTab && (
+        <SocialListDialog
+          open
+          onClose={() => setSocialTab(null)}
+          profileUid={uid}
+          profileName={profile.displayName}
+          followerCount={followerCount}
+          followingCount={profile.followingCount ?? 0}
+          initialTab={socialTab}
+          viewerId={firebaseUser?.uid ?? null}
         />
       )}
     </div>

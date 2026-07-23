@@ -31,6 +31,10 @@ function SupportDialog({ initialType, onClose }: { initialType: SupportType; onC
   const [type, setType] = useState<SupportType>(initialType)
   const [name, setName] = useState(() => userProfile?.displayName ?? '')
   const [email, setEmail] = useState(() => firebaseUser?.email ?? '')
+  // Signed-in users have both prefilled from their account — lock them so they
+  // aren't edited. Signed-out visitors keep the fields editable (they must be
+  // able to enter a reply-to email). Submit reads state, so locking is safe.
+  const locked = !!firebaseUser
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -152,8 +156,9 @@ function SupportDialog({ initialType, onClose }: { initialType: SupportType; onC
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      disabled={locked}
                       maxLength={100}
-                      className="w-full px-3 py-2 bg-bg-elevated border border-bg-border rounded-xl text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                      className="w-full px-3 py-2 bg-bg-elevated border border-bg-border rounded-xl text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-70"
                       placeholder="Jane Doe"
                     />
                   </div>
@@ -165,10 +170,14 @@ function SupportDialog({ initialType, onClose }: { initialType: SupportType; onC
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      disabled={locked}
                       maxLength={254}
-                      className="w-full px-3 py-2 bg-bg-elevated border border-bg-border rounded-xl text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                      className="w-full px-3 py-2 bg-bg-elevated border border-bg-border rounded-xl text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-70"
                       placeholder="you@example.com"
                     />
+                    {locked && (
+                      <p className="mt-1 text-[11px] text-text-muted">From your account</p>
+                    )}
                   </div>
                 </div>
 

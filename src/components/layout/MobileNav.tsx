@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, BookOpen, Search, Plus, User } from 'lucide-react'
+import { Home, BookOpen, Search, Plus, User, MessagesSquare } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useAuth } from '@/hooks/useAuth'
+import { useUnreadCount } from '@/hooks/useUnreadCount'
 import { cn } from '@/lib/utils/cn'
 import * as Avatar from '@radix-ui/react-avatar'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -13,6 +14,7 @@ import { UserDropdownContent } from './UserMenu'
 export default function MobileNav() {
   const pathname = usePathname()
   const { isAuthenticated, userProfile } = useAuth()
+  const unread = useUnreadCount()
 
   const initials = userProfile?.displayName
     ?.split(' ')
@@ -40,6 +42,15 @@ export default function MobileNav() {
       icon: <Search size={20} />,
       isActive: pathname.startsWith('/browse'),
     },
+    ...(isAuthenticated
+      ? [{
+          href: '/messages',
+          label: 'Messages',
+          icon: <MessagesSquare size={20} />,
+          isActive: pathname.startsWith('/messages'),
+          badge: unread > 0,
+        }]
+      : []),
     {
       href: isAuthenticated ? '/create' : '/login?redirect=/create',
       label: 'Create',
@@ -123,6 +134,12 @@ export default function MobileNav() {
               <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
                 {content}
               </span>
+              {(item as { badge?: boolean }).badge && (
+                <span
+                  className="w-2 h-2 rounded-full bg-accent absolute top-1.5 right-2.5 ring-2 ring-bg animate-fade-in"
+                  aria-hidden="true"
+                />
+              )}
               {item.isActive && (
                 <span
                   className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
