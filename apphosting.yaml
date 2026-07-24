@@ -55,18 +55,16 @@ env:
     availability: [BUILD, RUNTIME]
 
   # ---- Server-side, non-secret values ----
-  # ⚠️ MISMATCH: the client (NEXT_PUBLIC_*) config above points at the NEW
-  # project toonflow-studio-paint-f76d5, but these Admin SDK creds + the
-  # FIREBASE_PRIVATE_KEY secret below are still the f384c service account.
-  # A prod deploy will fail token verification / read the wrong Firestore
-  # until you regenerate an f76d5 service account and update all three
-  # (FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL here + re-set the
-  # FIREBASE_PRIVATE_KEY secret via `firebase apphosting:secrets:set`).
+  # Admin SDK creds now match the client config (project toonflow-studio-paint-f76d5).
+  # The FIREBASE_PRIVATE_KEY secret was re-set to the f76d5 service account
+  # (firebase-adminsdk-fbsvc@toonflow-studio-paint-f76d5) on 2026-07-24. Keep these
+  # three in sync: FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL here + the
+  # FIREBASE_PRIVATE_KEY secret (re-set via `firebase apphosting:secrets:set`).
   - variable: FIREBASE_PROJECT_ID
-    value: toonflow-studio-paint-f384c
+    value: toonflow-studio-paint-f76d5
     availability: [RUNTIME]
   - variable: FIREBASE_CLIENT_EMAIL
-    value: firebase-adminsdk-fbsvc@toonflow-studio-paint-f384c.iam.gserviceaccount.com
+    value: firebase-adminsdk-fbsvc@toonflow-studio-paint-f76d5.iam.gserviceaccount.com
     availability: [RUNTIME]
   - variable: GMAIL_USER
     value: toonflowstudiopaint@gmail.com

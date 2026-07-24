@@ -8,7 +8,7 @@
     "bucket": "toonflow-studio-paint-f76d5.firebasestorage.app"
   },
   "apphosting": {
-    "backendId": "toonflow-bg",
+    "backendId": "toonflow",
     "rootDir": "/",
     "ignore": [
       "node_modules",
