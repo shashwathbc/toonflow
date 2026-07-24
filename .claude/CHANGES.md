@@ -1334,3 +1334,13 @@ Two production-blocking gaps from the full engineering audit, fixed surgically.
 - **P0b — like/rating counters were unbounded in `firestore.rules`.** The update rules allowed `onlyUpdates(['likeCount','rating','ratingCount'])` with NO value bound, so any signed-in user could write any value to any content (e.g. set a rival's rating=1, ratingCount=100000, or inflate likeCount arbitrarily) — while `followerCount` 12 lines below was correctly bounded to ±1. Added `likeCountBumped()` (±1, matching client `increment`) and `ratingAdjusted()` (rating∈[0,5], ratingCount delta ∈ {-1,0,+1}, matching the `setRating` transaction). Applied to novels, webtoons, chapters, episodes, comments. Verified compatible with `engagement.ts` client writes.
   - NOTE: this bounds the write *shape*, not truthfulness; full tamper-proofing needs Admin-SDK rating aggregation (P1 follow-up, noted in rule comments).
 - Gate: `tsc --noEmit` clean, `vitest run` 26/26 pass. Rules NOT yet deployed — deploy with `firebase deploy --only firestore:rules --project toonflow-studio-paint-f384c`.
+
+## Firebase App Hosting config for Next.js SSR deploy (2026-07-23)
+Preparing to move the app deploy from Vercel to Firebase (per request). App Hosting is Google's Next.js SSR path (Cloud Run backend, git-triggered rollouts like Vercel).
+
+- Added **`apphosting.yaml`** (repo root). Declares `runConfig` (1 CPU / 512 MiB / 0–100 instances / concurrency 80) and the full `env` set for the SSR + `/api/*` runtime:
+  - **Public values committed** (safe — client-inlined): all `NEXT_PUBLIC_FIREBASE_*`, `NEXT_PUBLIC_APP_URL` (= https://toonflowstudiopaint.com), `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`.
+  - **Server non-secret values**: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `GMAIL_USER`.
+  - **Secret Manager refs (no values in file)**: `FIREBASE_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `STABILITY_API_KEY`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `GMAIL_APP_PASSWORD`, `VIEW_TOKEN_SECRET` — set via `firebase apphosting:secrets:set <NAME>`.
+  - **TODO placeholders**: `NEXT_PUBLIC_RAZORPAY_KEY_ID` and `RAZORPAY_KEY_ID` = `rzp_test_REPLACE_ME` (real values were placeholders in `.env.local`).
+- **Not yet deployed / requires operator (console + interactive) steps**: (1) enable **Blaze** billing on `toonflow-studio-paint-f384c`; (2) `firebase init apphosting` to connect the GitHub repo + create the backend (region choice, live branch `main`); (3) `firebase apphosting:secrets:set` for the 7 secrets; (4) first rollout → verify at the App Hosting URL; (5) DNS cutover of `toonflowstudiopaint.com` from Vercel to App Hosting. `firestore.rules` already deployed earlier this session.

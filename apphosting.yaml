@@ -1,0 +1,93 @@
+# Firebase App Hosting configuration
+# Docs: https://firebase.google.com/docs/app-hosting/configure
+#
+# This backend runs the Next.js 15 SSR app (App Router + /api/* routes) on
+# Cloud Run. `npm run build` (next build) is detected automatically.
+#
+# NEXT_PUBLIC_* values are shipped to the browser and safe to commit here.
+# All server-side secrets are referenced by Secret Manager name only — set them
+# with:  firebase apphosting:secrets:set <NAME>
+# (never put secret values in this file — it is committed to git).
+
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 100
+  concurrency: 80
+
+env:
+  # ---- Public app config (client-inlined at build; safe to commit) ----
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://toonflowstudiopaint.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_APP_NAME
+    value: Toonflow Studio Paint
+    availability: [BUILD, RUNTIME]
+
+  # ---- Public Firebase web config (safe to expose / commit) ----
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyAdLZ5bfFEaAOr1VIkjo7N5Wi3sBPVbyL8
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: toonflow-studio-paint-f384c.firebaseapp.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: toonflow-studio-paint-f384c
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: toonflow-studio-paint-f384c.firebasestorage.app
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "680403100010"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:680403100010:web:a5797affa48392be46c513"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: G-0D5QL239YW
+    availability: [BUILD, RUNTIME]
+
+  # Public Razorpay key id (checkout.js). Replace the placeholder with the real
+  # live/test key id before deploying — must match RAZORPAY_KEY_ID below.
+  - variable: NEXT_PUBLIC_RAZORPAY_KEY_ID
+    value: rzp_test_REPLACE_ME
+    availability: [BUILD, RUNTIME]
+
+  # ---- Server-side, non-secret values ----
+  - variable: FIREBASE_PROJECT_ID
+    value: toonflow-studio-paint-f384c
+    availability: [RUNTIME]
+  - variable: FIREBASE_CLIENT_EMAIL
+    value: firebase-adminsdk-fbsvc@toonflow-studio-paint-f384c.iam.gserviceaccount.com
+    availability: [RUNTIME]
+  - variable: GMAIL_USER
+    value: toonflowstudiopaint@gmail.com
+    availability: [RUNTIME]
+  # Server Razorpay key id (pairs with the secret). Same value as the public one.
+  - variable: RAZORPAY_KEY_ID
+    value: rzp_test_REPLACE_ME
+    availability: [RUNTIME]
+
+  # ---- Secrets (values live in Secret Manager, NOT in this file) ----
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: FIREBASE_PRIVATE_KEY
+    availability: [RUNTIME]
+  - variable: ANTHROPIC_API_KEY
+    secret: ANTHROPIC_API_KEY
+    availability: [RUNTIME]
+  - variable: STABILITY_API_KEY
+    secret: STABILITY_API_KEY
+    availability: [RUNTIME]
+  - variable: RAZORPAY_KEY_SECRET
+    secret: RAZORPAY_KEY_SECRET
+    availability: [RUNTIME]
+  - variable: RAZORPAY_WEBHOOK_SECRET
+    secret: RAZORPAY_WEBHOOK_SECRET
+    availability: [RUNTIME]
+  - variable: GMAIL_APP_PASSWORD
+    secret: GMAIL_APP_PASSWORD
+    availability: [RUNTIME]
+  - variable: VIEW_TOKEN_SECRET
+    secret: VIEW_TOKEN_SECRET
+    availability: [RUNTIME]
