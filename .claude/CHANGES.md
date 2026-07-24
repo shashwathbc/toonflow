@@ -1344,3 +1344,19 @@ Preparing to move the app deploy from Vercel to Firebase (per request). App Host
   - **Secret Manager refs (no values in file)**: `FIREBASE_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `STABILITY_API_KEY`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `GMAIL_APP_PASSWORD`, `VIEW_TOKEN_SECRET` — set via `firebase apphosting:secrets:set <NAME>`.
   - **TODO placeholders**: `NEXT_PUBLIC_RAZORPAY_KEY_ID` and `RAZORPAY_KEY_ID` = `rzp_test_REPLACE_ME` (real values were placeholders in `.env.local`).
 - **Not yet deployed / requires operator (console + interactive) steps**: (1) enable **Blaze** billing on `toonflow-studio-paint-f384c`; (2) `firebase init apphosting` to connect the GitHub repo + create the backend (region choice, live branch `main`); (3) `firebase apphosting:secrets:set` for the 7 secrets; (4) first rollout → verify at the App Hosting URL; (5) DNS cutover of `toonflowstudiopaint.com` from Vercel to App Hosting. `firestore.rules` already deployed earlier this session.
+
+## 2026-07-24 — App Hosting rollout fix: created all 7 missing Secret Manager secrets
+- **Root cause of failing `toonflow-bg` rollout** (`misconfigured-secret` / `Error resolving secret version`): the project had **zero** Secret Manager secrets. All 7 secrets referenced by `apphosting.yaml` were never created, so App Hosting failed resolving the first one.
+- **Fix**: created every secret via `firebase apphosting:secrets:set <NAME> --data-file - --force --project toonflow-studio-paint-f384c` (non-interactive; `--force` also grants IAM to the compute + build SAs). Values for the 5 real ones were piped straight from `.env.local` using Next's own loader (`@next/env`) so the stored value is byte-identical to dev — matters for `FIREBASE_PRIVATE_KEY` (stored with real PEM newlines; `serverApp.ts` `.replace(/\n/g,'\n')` is then a no-op).
+  - From `.env.local`: `FIREBASE_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `STABILITY_API_KEY`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`.
+  - Generated: `VIEW_TOKEN_SECRET` = fresh 32-byte hex.
+  - Placeholder: `GMAIL_APP_PASSWORD` = `REPLACE_WITH_REAL_GMAIL_APP_PASSWORD`.
+- **Verified**: all 7 secrets now exist with an ENABLED version 1 and `firebase-app-hosting-compute@…` accessor access. `apphosting.yaml` left unchanged (already referenced all 7).
+- **Still placeholders** (deploy unblocked, features broken until real values set): `RAZORPAY_KEY_SECRET` + `RAZORPAY_WEBHOOK_SECRET` (were 3-char placeholders in `.env.local`), `GMAIL_APP_PASSWORD`, and the `rzp_test_REPLACE_ME` key ids in `apphosting.yaml`. Update each with `firebase apphosting:secrets:set <NAME>` (creates a new enabled version).
+- **Next step (not done here)**: trigger a new rollout (push to `main`, or from the App Hosting console) and confirm the build resolves secrets.
+
+## 2026-07-24 — Fix App Hosting build: package-lock.json out of sync (npm ci EUSAGE)
+- **Second rollout failure** (secrets now resolve fine): Cloud Build `npm ci` failed with `EUSAGE ... Missing: @emnapi/runtime@1.11.2 / @emnapi/core@1.11.2 from lock file`.
+- **Cause**: `package-lock.json` had been generated with **npm 11** (local, Node 24), which prunes cross-platform optional deps — specifically `sharp`'s `@img/sharp-wasm32` → `@emnapi/*` wasm subtree. App Hosting builds with **npm 10** (Node 22), which requires those nodes present, so `npm ci`'s ideal-tree vs lock check failed.
+- **Fix**: clean full reinstall with npm 10 (`rm -rf node_modules; npx npm@10 install`) to regenerate a complete, internally consistent lock. Verified with the build's exact command `npx npm@10 ci --dry-run` → exit 0. `@emnapi/runtime` + `@emnapi/core` now present at 1.11.2; sharp core/platform all consistent at 0.35.3; **package.json unchanged; no direct-dependency version changes** (diff is only re-added optional platform packages npm 11 had pruned).
+- **Action needed**: commit `package-lock.json` + push to `main`, then trigger a new rollout.
