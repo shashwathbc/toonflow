@@ -5,7 +5,7 @@
   },
   "storage": {
     "rules": "storage.rules",
-    "bucket": "toonflow-studio-paint-f384c.firebasestorage.app"
+    "bucket": "toonflow-studio-paint-f76d5.firebasestorage.app"
   },
   "apphosting": {
     "backendId": "toonflow-bg",

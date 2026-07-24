@@ -1360,3 +1360,30 @@ Preparing to move the app deploy from Vercel to Firebase (per request). App Host
 - **Cause**: `package-lock.json` had been generated with **npm 11** (local, Node 24), which prunes cross-platform optional deps — specifically `sharp`'s `@img/sharp-wasm32` → `@emnapi/*` wasm subtree. App Hosting builds with **npm 10** (Node 22), which requires those nodes present, so `npm ci`'s ideal-tree vs lock check failed.
 - **Fix**: clean full reinstall with npm 10 (`rm -rf node_modules; npx npm@10 install`) to regenerate a complete, internally consistent lock. Verified with the build's exact command `npx npm@10 ci --dry-run` → exit 0. `@emnapi/runtime` + `@emnapi/core` now present at 1.11.2; sharp core/platform all consistent at 0.35.3; **package.json unchanged; no direct-dependency version changes** (diff is only re-added optional platform packages npm 11 had pruned).
 - **Action needed**: commit `package-lock.json` + push to `main`, then trigger a new rollout.
+
+## 2026-07-24 — App Hosting toonflow-bg is LIVE (first successful deploy)
+- After fixing secrets + lockfile, `firebase deploy --only apphosting --project toonflow-studio-paint-f384c` succeeded. Rollout `build-2026-07-24-003` SUCCEEDED; traffic 100% → that build.
+- **Deploy mechanism confirmed**: backend has NO connected GitHub repo (`codebase: {}`), so it deploys from LOCAL source via `firebase deploy --only apphosting`. Pushing to `main` does NOT trigger a build; `apphosting:rollouts:create -b main` errors ("missing connected repository").
+- Live + verified at https://toonflow-bg--toonflow-studio-paint-f384c.asia-east1.hosted.app — homepage 200, /browse 200, /login 200, /api/views/stats 401 (expected).
+- **Decision**: d:\toonflow (a different codebase from the current live site) will become the NEW production for toonflowstudiopaint.com. Next: set real Razorpay/Gmail secret values, then DNS cutover from the existing host to this backend.
+
+## 2026-07-24 — Point client Firebase config at NEW project toonflow-studio-paint-f76d5
+- User supplied a new Firebase web app config. It belongs to a **different project** (`toonflow-studio-paint-f76d5`), not the current `toonflow-studio-paint-f384c`.
+- **Updated** the 7 client-side `NEXT_PUBLIC_FIREBASE_*` values in `.env.local` (apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId, measurementId) → f76d5.
+- `src/lib/firebase/config.ts` unchanged (reads env vars; measurementId still intentionally omitted — analytics never initialized).
+- **NOT changed / still on f384c (flagged to user):**
+  - Server admin creds in `.env.local`: `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` — service-account key is tied to f384c and must be regenerated from f76d5 (Console → Project Settings → Service Accounts). Until then client (f76d5) and admin (f384c) point at different projects → `verifyIdToken` and all server Firestore ops will fail/read wrong data.
+  - `apphosting.yaml` (all NEXT_PUBLIC_ + FIREBASE_PROJECT_ID/CLIENT_EMAIL) and App Hosting Secret Manager `FIREBASE_PRIVATE_KEY` — still f384c; prod deploy still targets the old project.
+  - `.firebaserc` default/staging — still f384c.
+- **To fully switch:** regenerate f76d5 service account, update the 3 admin env vars locally, then repoint apphosting.yaml + .firebaserc + re-set the App Hosting FIREBASE_PRIVATE_KEY secret.
+
+## 2026-07-24 — Propagate f76d5 client config to deploy files (continuation)
+- User re-supplied the same f76d5 web config. `.env.local` client values were already on f76d5 from the prior entry (no change needed).
+- **Updated the remaining stale PUBLIC config** to f76d5:
+  - `apphosting.yaml`: all 7 `NEXT_PUBLIC_FIREBASE_*` values (apiKey `AIzaSy…CrWxM`, authDomain, projectId, storageBucket, messagingSenderId `187206557893`, appId `…d510ac`, measurementId `G-MTQH69NE09`).
+  - `.firebaserc`: `default` + `staging` → f76d5 (Firebase CLI now targets the new project for rules/indexes/storage deploys).
+  - `firebase.json`: storage `bucket` → `toonflow-studio-paint-f76d5.firebasestorage.app`.
+- **Deliberately NOT changed (needs new service account — I don't have the creds):**
+  - `apphosting.yaml` server trio `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` + Secret Manager `FIREBASE_PRIVATE_KEY` — still f384c. Added an inline ⚠️ MISMATCH warning comment above them; a prod deploy will fail token verification / hit the wrong Firestore until the f76d5 service account is generated and all three updated.
+  - `.env.local` server trio — still f384c (same reason). Local admin/client currently point at different projects → `verifyIdToken` + server Firestore ops fail until the f76d5 service-account key is set.
+- Docs (`docs/*`, `SECURITY.md`) left referencing f384c — historical, not runtime config.
