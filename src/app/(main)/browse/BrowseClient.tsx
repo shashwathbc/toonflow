@@ -8,7 +8,7 @@ import {
   Search, SlidersHorizontal, BookOpen, Layers, Eye, Star, X,
 } from 'lucide-react'
 import { browseContent, searchContent } from '@/lib/firebase/firestore'
-import { formatCount } from '@/lib/utils/formatters'
+import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { Stat } from '@/components/ui/Stat'
 import { GENRES } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
@@ -74,7 +74,7 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
         </div>
       </div>
       <div className="p-3">
-        <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">{item.title}</h3>
+        <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">{toTitleCase(item.title)}</h3>
         {item.genres?.length > 0 && (
           <p className="text-[11px] text-white/50 mb-1.5 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
         )}
@@ -109,7 +109,10 @@ export function BrowseClient() {
     (searchParams.get('type') as ContentType) ?? 'all'
   )
   const [sortBy, setSortBy] = useState<SortBy>('trending')
-  const [genre, setGenre] = useState<string>(searchParams.get('genre') ?? '')
+  const [genres, setGenres] = useState<string[]>(() => {
+    const g = searchParams.get('genre')
+    return g ? [g] : []
+  })
   const [status, setStatus] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') ?? '')
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
@@ -119,7 +122,7 @@ export function BrowseClient() {
 
   // loading derives from "have the current filters been loaded" so the load
   // effect never calls setState synchronously (react-hooks/set-state-in-effect)
-  const filterKey = `${contentType}|${genre}|${status}|${sortBy}|${searchQuery}`
+  const filterKey = `${contentType}|${[...genres].sort().join(',')}|${status}|${sortBy}|${searchQuery}`
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
   const loading = loadedKey !== filterKey
 
@@ -147,7 +150,7 @@ export function BrowseClient() {
         })
       : browseContent({
           contentType,
-          genre: genre || undefined,
+          genres: genres.length ? genres : undefined,
           status: status || undefined,
           sortBy,
           limitCount: 48,
@@ -168,7 +171,7 @@ export function BrowseClient() {
       .finally(() => {
         if (isCurrent()) setLoadedKey(filterKey)
       })
-  }, [contentType, genre, status, sortBy, searchQuery, filterKey])
+  }, [contentType, genres, status, sortBy, searchQuery, filterKey])
 
   useEffect(() => { load() }, [load])
 
@@ -185,8 +188,12 @@ export function BrowseClient() {
     searchTimer.current = setTimeout(() => setSearchQuery(val), 400)
   }
 
+  function toggleGenre(g: string) {
+    setGenres((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]))
+  }
+
   function clearFilters() {
-    setGenre('')
+    setGenres([])
     setStatus('')
     setSortBy('trending')
     setSearchInput('')
@@ -194,7 +201,7 @@ export function BrowseClient() {
     setContentType('all')
   }
 
-  const hasActiveFilters = genre || status || sortBy !== 'trending' || contentType !== 'all' || searchQuery
+  const hasActiveFilters = genres.length > 0 || status || sortBy !== 'trending' || contentType !== 'all' || searchQuery
 
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-8">
@@ -319,26 +326,31 @@ export function BrowseClient() {
             </div>
           </fieldset>
 
-          {/* Genres */}
+          {/* Genres — multi-select (any-of) */}
           <fieldset>
-            <legend className="text-xs font-semibold text-white/40 tracking-widest uppercase mb-3">Genre</legend>
+            <legend className="text-xs font-semibold text-white/40 tracking-widest uppercase mb-3">
+              Genre{genres.length > 0 && <span className="text-accent normal-case tracking-normal"> · {genres.length}</span>}
+            </legend>
             <div className="flex flex-wrap gap-1.5">
-              {GENRES.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => setGenre(genre === g ? '' : g)}
-                  className={cn(
-                    'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent capitalize',
-                    genre === g
-                      ? 'bg-accent/10 text-accent border-accent/30'
-                      : 'bg-bg text-white/50 border-bg-border hover:border-white/30 hover:text-white'
-                  )}
-                  {...(genre === g ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-                >
-                  {g}
-                </button>
-              ))}
+              {GENRES.map((g) => {
+                const selected = genres.includes(g)
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => toggleGenre(g)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent capitalize',
+                      selected
+                        ? 'bg-accent/10 text-accent border-accent/30'
+                        : 'bg-bg text-white/50 border-bg-border hover:border-white/30 hover:text-white'
+                    )}
+                    {...(selected ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+                  >
+                    {g}
+                  </button>
+                )
+              })}
             </div>
           </fieldset>
 

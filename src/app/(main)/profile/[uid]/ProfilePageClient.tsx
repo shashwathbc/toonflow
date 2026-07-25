@@ -5,9 +5,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import {
   BookOpen, ImageIcon, Users, Heart, Eye, Bookmark, Edit3, Camera,
-  AtSign, Globe, ExternalLink, Check, X, Loader2,
+  Check, X, Loader2,
   BadgeCheck, Layers, Calendar,
 } from 'lucide-react'
+import { YoutubeIcon, InstagramIcon } from '@/components/ui/BrandIcons'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -23,7 +24,6 @@ import AnimatedNumber, { type NumberFormatter } from '@/components/ui/AnimatedNu
 import { Stat } from '@/components/ui/Stat'
 import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
-import { safeHttpUrl } from '@/lib/utils/url'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { UserProfile, Novel, Webtoon, BookmarkItem, SocialLinks } from '@/types'
@@ -91,8 +91,7 @@ function StatCard({ label, value, icon, onClick }: {
 interface EditProfileData {
   displayName: string
   bio: string
-  website: string
-  twitter: string
+  youtube: string
   instagram: string
   country: string
 }
@@ -110,8 +109,7 @@ function EditProfileModal({
   const [form, setForm] = useState<EditProfileData>({
     displayName: profile.displayName,
     bio: profile.bio ?? '',
-    website: profile.socialLinks?.website ?? '',
-    twitter: profile.socialLinks?.twitter ?? '',
+    youtube: profile.socialLinks?.youtube ?? '',
     instagram: profile.socialLinks?.instagram ?? '',
     country: '',
   })
@@ -172,11 +170,9 @@ function EditProfileModal({
       // rejects `undefined` values, so empty fields must be omitted, not set to
       // undefined (this was the "failed to save" error on an empty Social Links).
       const socialLinks: SocialLinks = {}
-      const website = form.website.trim()
-      const twitter = form.twitter.trim()
+      const youtube = form.youtube.trim()
       const instagram = form.instagram.trim()
-      if (website) socialLinks.website = website
-      if (twitter) socialLinks.twitter = twitter
+      if (youtube) socialLinks.youtube = youtube
       if (instagram) socialLinks.instagram = instagram
 
       const updates: Partial<UserProfile> = {
@@ -298,9 +294,8 @@ function EditProfileModal({
           <div className="space-y-3">
             <p className="text-xs font-medium text-white/60">Social Links</p>
             {[
-              { id: 'edit-website', key: 'website', label: 'Website', placeholder: 'https://yoursite.com', icon: <Globe size={13} /> },
-              { id: 'edit-twitter', key: 'twitter', label: 'Twitter / X', placeholder: '@handle', icon: <AtSign size={13} /> },
-              { id: 'edit-instagram', key: 'instagram', label: 'Instagram', placeholder: '@handle', icon: <AtSign size={13} /> },
+              { id: 'edit-youtube', key: 'youtube', label: 'YouTube', placeholder: '@channel', icon: <YoutubeIcon size={14} /> },
+              { id: 'edit-instagram', key: 'instagram', label: 'Instagram', placeholder: '@handle', icon: <InstagramIcon size={14} /> },
             ].map(({ id, key, label, placeholder, icon }) => (
               <div key={key} className="relative">
                 <label htmlFor={id} className="sr-only">{label}</label>
@@ -543,21 +538,16 @@ export function ProfilePageClient({ uid }: { uid: string }) {
       </div>
 
       {/* Social links */}
-      {(profile.socialLinks?.website || profile.socialLinks?.twitter || profile.socialLinks?.instagram) && (
+      {(profile.socialLinks?.youtube || profile.socialLinks?.instagram) && (
         <div className="px-4 sm:px-6 flex flex-wrap items-center gap-4 mb-6 text-sm text-white/50">
-          {safeHttpUrl(profile.socialLinks?.website) && (
-            <a href={safeHttpUrl(profile.socialLinks?.website)!} target="_blank" rel="noopener noreferrer nofollow ugc" className="flex items-center gap-1.5 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-accent rounded">
-              <Globe size={13} aria-hidden="true" /> Website <ExternalLink size={10} aria-hidden="true" />
-            </a>
-          )}
-          {profile.socialLinks?.twitter && (
-            <a href={`https://x.com/${profile.socialLinks.twitter.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-accent rounded">
-              <AtSign size={13} aria-hidden="true" /> {profile.socialLinks.twitter}
+          {profile.socialLinks?.youtube && (
+            <a href={`https://youtube.com/@${profile.socialLinks.youtube.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" aria-label={`YouTube — ${profile.socialLinks.youtube}`} className="flex items-center gap-1.5 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-accent rounded">
+              <YoutubeIcon size={15} /> {profile.socialLinks.youtube}
             </a>
           )}
           {profile.socialLinks?.instagram && (
-            <a href={`https://instagram.com/${profile.socialLinks.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-accent rounded">
-              <AtSign size={13} aria-hidden="true" /> {profile.socialLinks.instagram}
+            <a href={`https://instagram.com/${profile.socialLinks.instagram.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" aria-label={`Instagram — ${profile.socialLinks.instagram}`} className="flex items-center gap-1.5 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-accent rounded">
+              <InstagramIcon size={14} /> {profile.socialLinks.instagram}
             </a>
           )}
         </div>

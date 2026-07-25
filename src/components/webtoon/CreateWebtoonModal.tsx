@@ -25,9 +25,15 @@ import { AIImageGenerator } from '@/components/novel/AIImageGenerator'
 // module-scope: impure ID helper stays outside the compiled component (react-hooks/purity)
 const makeTempId = () => Math.random().toString(36).substring(7)
 
+// UI-safe input limits — enforced in zod AND on the inputs (maxLength) so an
+// oversized title/synopsis can never break the layout. Title is kept short so
+// it renders cleanly in cards/hero/headings; the synopsis textarea wraps.
+const TITLE_MAX = 100
+const SYNOPSIS_MAX = 2000
+
 const schema = z.object({
-  title: z.string().min(1, 'Title is required').max(120, 'Title too long'),
-  synopsis: z.string().min(10, 'Description must be at least 10 characters').max(2000, 'Too long'),
+  title: z.string().min(1, 'Title is required').max(TITLE_MAX, `Title must be ${TITLE_MAX} characters or less`),
+  synopsis: z.string().min(10, 'Description must be at least 10 characters').max(SYNOPSIS_MAX, `Description must be ${SYNOPSIS_MAX} characters or less`),
   genres: z.array(z.string()).min(1, 'Select at least one genre').max(5, 'Max 5 genres'),
   tags: z.array(z.string()),
   status: z.enum(['draft', 'ongoing', 'completed', 'hiatus']),
@@ -318,13 +324,19 @@ export function CreateWebtoonModal({
             <div className="md:col-span-2 space-y-4">
               {/* Title */}
               <div>
-                <label htmlFor="wt-title" className="text-xs font-semibold text-white/50 block mb-1">
-                  Title
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor="wt-title" className="text-xs font-semibold text-white/50 block">
+                    Title
+                  </label>
+                  <span className={`text-[10px] tabular-nums ${(titleValue?.length ?? 0) >= TITLE_MAX ? 'text-warning' : 'text-white/30'}`}>
+                    {titleValue?.length ?? 0}/{TITLE_MAX}
+                  </span>
+                </div>
                 <input
                   id="wt-title"
                   type="text"
                   placeholder="Enter webtoon title…"
+                  maxLength={TITLE_MAX}
                   className="input-base w-full text-sm"
                   {...(errors.title ? { 'aria-invalid': 'true' } : { 'aria-invalid': 'false' })}
                   {...register('title')}
@@ -337,9 +349,14 @@ export function CreateWebtoonModal({
               {/* Synopsis */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label htmlFor="wt-synopsis" className="text-xs font-semibold text-white/50 block">
-                    Synopsis / Description
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="wt-synopsis" className="text-xs font-semibold text-white/50 block">
+                      Synopsis / Description
+                    </label>
+                    <span className={`text-[10px] tabular-nums ${(synopsisValue?.length ?? 0) >= SYNOPSIS_MAX ? 'text-warning' : 'text-white/30'}`}>
+                      {synopsisValue?.length ?? 0}/{SYNOPSIS_MAX}
+                    </span>
+                  </div>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
@@ -366,6 +383,7 @@ export function CreateWebtoonModal({
                     id="wt-synopsis"
                     placeholder="Provide a compelling synopsis of your story…"
                     rows={4}
+                    maxLength={SYNOPSIS_MAX}
                     className="input-base w-full text-sm pr-10 resize-none"
                     {...(errors.synopsis ? { 'aria-invalid': 'true' } : { 'aria-invalid': 'false' })}
                     {...register('synopsis')}

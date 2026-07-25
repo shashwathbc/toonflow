@@ -474,7 +474,10 @@ export async function deleteComment(commentId: string): Promise<void> {
 
 export interface BrowseOptions {
   contentType?: 'novel' | 'webtoon' | 'all'
+  /** Single genre (legacy). Prefer `genres` for multi-select. */
   genre?: string
+  /** Any-of genre filter — an item matches when it has ≥1 of these genres. */
+  genres?: string[]
   status?: string
   sortBy?: 'trending' | 'newest' | 'rating'
   limitCount?: number
@@ -486,7 +489,10 @@ export interface BrowseResult {
 }
 
 export async function browseContent(options: BrowseOptions = {}): Promise<BrowseResult> {
-  const { contentType = 'all', genre, status, sortBy = 'trending', limitCount = BROWSE_LIMIT } = options
+  const { contentType = 'all', genre, genres, status, sortBy = 'trending', limitCount = BROWSE_LIMIT } = options
+
+  // Normalize to a single any-of genre list (supports the legacy `genre` too).
+  const genreList = (genres && genres.length ? genres : genre ? [genre] : []).slice(0, 10)
 
   const PUBLISHED_STATUSES = ['published', 'ongoing', 'completed']
   const sortKey = sortBy === 'newest' ? 'createdAt' : sortBy === 'rating' ? 'rating' : 'viewCount'
@@ -495,8 +501,9 @@ export async function browseContent(options: BrowseOptions = {}): Promise<Browse
   // all secondary filters and sorting happen client-side to avoid composite index requirements.
   const fetchCol = async <T extends Novel | Webtoon>(col: string): Promise<T[]> => {
     let q
-    if (genre) {
-      q = query(collection(db, col), where('genres', 'array-contains', genre), limit(limitCount * 4))
+    if (genreList.length) {
+      // array-contains-any = OR across selected genres (max 10 values).
+      q = query(collection(db, col), where('genres', 'array-contains-any', genreList), limit(limitCount * 4))
     } else if (status && status !== 'all') {
       q = query(collection(db, col), where('status', '==', status), limit(limitCount * 4))
     } else {
@@ -507,6 +514,9 @@ export async function browseContent(options: BrowseOptions = {}): Promise<Browse
     let items = snaps.docs.map((d) => fromDoc<T>(d))
 
     items = items.filter((item) => (item as Novel).visibility === 'public')
+    if (genreList.length) {
+      items = items.filter((item) => (item.genres ?? []).some((g) => genreList.includes(g)))
+    }
     if (status && status !== 'all') {
       items = items.filter((item) => (item as Novel).status === status)
     } else {
@@ -982,41 +992,73 @@ export async function getCreatorWithdrawals(creatorId: string): Promise<Withdraw
 
 // ── Search ────────────────────────────────────────────────────
 
+/** Size of the candidate pool fetched per collection before client-side ranking.
+ * The old Firestore range query on `title` was case-sensitive and prefix-only,
+ * so it silently missed every title not stored lowercase (e.g. "Karna…") and
+ * any mid-title word. We instead pull a bounded pool of public works and match
+ * case-insensitively over title/synopsis/genres/tags — instant and typo-friendly
+ * at this scale. (If the catalog grows past a few thousand works, move to a
+ * dedicated search index / lowercased token field.) */
+const SEARCH_POOL = 400
+
+/** Case-insensitive relevance score, or 0 when the item doesn't match ALL terms.
+ * Title hits rank highest (exact > prefix > substring), then other fields. */
+function searchScore(item: Novel | Webtoon, terms: string[]): number {
+  const title = item.title.toLowerCase()
+  const rest = [
+    (item as Novel).synopsis ?? '',
+    (item.genres ?? []).join(' '),
+    (item.tags ?? []).join(' '),
+    item.authorName ?? '',
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  let score = 0
+  for (const t of terms) {
+    if (title === t) score += 100
+    else if (title.startsWith(t)) score += 60
+    else if (title.includes(t)) score += 40
+    else if (rest.includes(t)) score += 10
+    else return 0 // every term must match somewhere → AND semantics
+  }
+  return score
+}
+
+/**
+ * Search public, live novels + webtoons by title/synopsis/genres/tags.
+ * Case-insensitive, substring, multi-word (all words must appear). Results are
+ * ranked by relevance then popularity.
+ */
 export async function searchContent(
   searchQuery: string,
   limitCount = 20
 ): Promise<{ novels: Novel[]; webtoons: Webtoon[] }> {
   const q = searchQuery.toLowerCase().trim()
   if (!q) return { novels: [], webtoons: [] }
+  const terms = q.split(/\s+/).filter(Boolean)
 
   const LIVE = ['published', 'ongoing', 'completed']
-  // Title range (prefix match) — uses single-field index on 'title' (auto-created).
-  // Filter status/visibility client-side to avoid composite index requirements.
-  const titleEnd = q.replace(/.$/, (c) => String.fromCharCode(c.charCodeAt(0) + 1))
 
-  const novelQ = query(
-    collection(db, 'novels'),
-    where('title', '>=', q),
-    where('title', '<', titleEnd),
-    limit(limitCount * 3)
-  )
-  const webtoonQ = query(
-    collection(db, 'webtoons'),
-    where('title', '>=', q),
-    where('title', '<', titleEnd),
-    limit(limitCount * 3)
-  )
+  // Single-field `visibility` filter (auto-indexed); status/text matched client
+  // side so no composite index is needed — same approach as browseContent.
+  const [novelSnaps, webtoonSnaps] = await Promise.all([
+    getDocs(query(collection(db, 'novels'), where('visibility', '==', 'public'), limit(SEARCH_POOL))),
+    getDocs(query(collection(db, 'webtoons'), where('visibility', '==', 'public'), limit(SEARCH_POOL))),
+  ])
 
-  const [novelSnaps, webtoonSnaps] = await Promise.all([getDocs(novelQ), getDocs(webtoonQ)])
+  const rank = <T extends Novel | Webtoon>(docs: T[]): T[] =>
+    docs
+      .filter((it) => LIVE.includes(it.status))
+      .map((it) => ({ it, score: searchScore(it, terms) }))
+      .filter((r) => r.score > 0)
+      .sort((a, b) => b.score - a.score || (b.it.viewCount ?? 0) - (a.it.viewCount ?? 0))
+      .slice(0, limitCount)
+      .map((r) => r.it)
+
   return {
-    novels: novelSnaps.docs
-      .map((d) => fromDoc<Novel>(d))
-      .filter((n) => LIVE.includes(n.status) && n.visibility === 'public')
-      .slice(0, limitCount),
-    webtoons: webtoonSnaps.docs
-      .map((d) => fromDoc<Webtoon>(d))
-      .filter((w) => LIVE.includes(w.status) && w.visibility === 'public')
-      .slice(0, limitCount),
+    novels: rank(novelSnaps.docs.map((d) => fromDoc<Novel>(d))),
+    webtoons: rank(webtoonSnaps.docs.map((d) => fromDoc<Webtoon>(d))),
   }
 }
 

@@ -11,6 +11,12 @@ export function fromTimestamp(ts: FirestoreTimestamp): Date {
   return new Date(ts.seconds * 1000)
 }
 
+/** Title Case: capitalize the first letter of every word, leaving the rest of
+ * each word untouched (so existing capitals / acronyms like "AI" survive). */
+export function toTitleCase(text: string): string {
+  return text.replace(/\S+/g, (word) => word.charAt(0).toUpperCase() + word.slice(1))
+}
+
 export function formatRelativeTime(ts: FirestoreTimestamp): string {
   const ms = fromTimestamp(ts).getTime()
   const diff = Math.floor((now() - ms) / 1000)

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { BookOpen, Eye, Heart, Layers, Star, Tv2, TrendingUp, Clock, StarIcon } from 'lucide-react'
 import { browseContent } from '@/lib/firebase/firestore'
-import { formatCount } from '@/lib/utils/formatters'
+import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { Stat } from '@/components/ui/Stat'
 import { cn } from '@/lib/utils/cn'
 import type { Novel, Webtoon } from '@/types'
@@ -80,7 +80,7 @@ function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | '
         </div>
       </div>
       <div className="p-3">
-        <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">{item.title}</h3>
+        <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">{toTitleCase(item.title)}</h3>
         <p className="text-xs text-white/50 mb-2">{item.authorName}</p>
         {item.genres?.length > 0 && (
           <p className="text-[11px] text-white/40 mb-2 truncate">{item.genres.slice(0, 2).join(' · ')}</p>

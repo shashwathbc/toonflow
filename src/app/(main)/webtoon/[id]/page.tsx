@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { getWebtoonById, getEpisodesByWebtoon } from '@/lib/firebase/firestore'
 import { useLiveViewCount } from '@/hooks/useLiveViewCount'
-import { formatCount, formatDate } from '@/lib/utils/formatters'
+import { formatCount, formatDate, toTitleCase } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import AuthorCard from '@/components/social/AuthorCard'
@@ -90,7 +90,7 @@ export default function WebtoonDetailPage() {
             <span className={cn('inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border mb-2', badge.color)}>
               {badge.label}
             </span>
-            <h1 className="text-2xl font-bold text-text leading-tight">{webtoon.title}</h1>
+            <h1 className="text-2xl font-bold text-text leading-tight break-words">{toTitleCase(webtoon.title)}</h1>
             <div className="mt-3 max-w-sm">
               <AuthorCard
                 authorId={webtoon.authorId}

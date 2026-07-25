@@ -11,7 +11,7 @@ import {
 import { useChapters } from '@/hooks/useChapters'
 import { useLiveViewCount } from '@/hooks/useLiveViewCount'
 import { getNovelById } from '@/lib/firebase/firestore'
-import { formatCount, formatDate, fromTimestamp } from '@/lib/utils/formatters'
+import { formatCount, formatDate, fromTimestamp, toTitleCase } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import RatingControl from '@/components/reader/RatingControl'
@@ -169,8 +169,8 @@ export default function NovelDetailPage() {
                 {publishedYear && <span className="opacity-70 font-normal">· {publishedYear}</span>}
               </span>
 
-              <h1 className="text-3xl sm:text-5xl font-extrabold text-text leading-tight tracking-tight">
-                {novel.title}
+              <h1 className="text-3xl sm:text-5xl font-extrabold text-text leading-tight tracking-tight break-words">
+                {toTitleCase(novel.title)}
               </h1>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-secondary">

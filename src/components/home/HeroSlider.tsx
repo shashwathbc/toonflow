@@ -7,7 +7,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { BookOpen, Tv2, Eye, ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react'
 import { getTrendingNovels, getTrendingWebtoons } from '@/lib/firebase/firestore'
 import { cachedRequest } from '@/lib/utils/requestCache'
-import { formatCount } from '@/lib/utils/formatters'
+import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
 import type { Novel, Webtoon } from '@/types'
 
@@ -242,7 +242,7 @@ export function HeroSlider() {
           {/* Title — 2 lines max. At 3 the headline swallowed the whole hero and
               pushed the CTA off the fold on short viewports. */}
           <h1 className="display-2xl text-white line-clamp-2">
-            {active.item.title}
+            {toTitleCase(active.item.title)}
           </h1>
 
           {/* Genres */}

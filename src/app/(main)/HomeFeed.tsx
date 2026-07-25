@@ -6,8 +6,9 @@ import Image from 'next/image'
 import { BookOpen, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'lucide-react'
 import { getTrendingNovels, getTrendingWebtoons, getNewReleases } from '@/lib/firebase/firestore'
 import { cachedRequest } from '@/lib/utils/requestCache'
-import { formatCount } from '@/lib/utils/formatters'
+import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { Stat } from '@/components/ui/Stat'
+import { HorizontalScroller } from '@/components/ui/HorizontalScroller'
 import type { Novel, Webtoon } from '@/types'
 
 function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }) {
@@ -62,7 +63,7 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
       </div>
       <div className="p-3">
         <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">
-          {item.title}
+          {toTitleCase(item.title)}
         </h3>
         {item.genres?.length > 0 && (
           <p className="text-[11px] text-white/50 mb-1.5 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
@@ -107,6 +108,19 @@ function SectionHeader({ id, title, href, linkLabel }: { id: string; title: stri
 }
 
 const GRID = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'
+
+/** A row of content cards that scrolls horizontally with left/right arrows. */
+function CardRow({ items, label }: { items: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }[]; label: string }) {
+  return (
+    <HorizontalScroller ariaLabel={label}>
+      {items.map(({ item, type }) => (
+        <div key={`${type}-${item.id}`} className="w-[44vw] sm:w-44 md:w-48 shrink-0 snap-start">
+          <ContentCard item={item} type={type} />
+        </div>
+      ))}
+    </HorizontalScroller>
+  )
+}
 
 export function HomeFeed() {
   const [novels, setNovels] = useState<Novel[]>([])
@@ -189,11 +203,7 @@ export function HomeFeed() {
             href="/browse?sort=trending"
             linkLabel="View all trending content"
           />
-          <div className={GRID}>
-            {allTrending.map(({ item, type }) => (
-              <ContentCard key={`${type}-${item.id}`} item={item} type={type} />
-            ))}
-          </div>
+          <CardRow items={allTrending} label="Trending content" />
         </section>
       )}
 
@@ -206,11 +216,7 @@ export function HomeFeed() {
             href="/browse?sort=newest"
             linkLabel="View all new releases"
           />
-          <div className={GRID}>
-            {newReleases.map(({ item, type }) => (
-              <ContentCard key={`${type}-${item.id}`} item={item} type={type} />
-            ))}
-          </div>
+          <CardRow items={newReleases} label="New releases" />
         </section>
       )}
 
@@ -223,9 +229,7 @@ export function HomeFeed() {
             href="/browse?type=novel"
             linkLabel="View all novels"
           />
-          <div className={GRID}>
-            {novels.slice(0, 6).map((n) => <ContentCard key={n.id} item={n} type="novel" />)}
-          </div>
+          <CardRow items={novels.slice(0, 12).map((n) => ({ item: n, type: 'novel' as const }))} label="Popular novels" />
         </section>
       )}
 
@@ -238,9 +242,7 @@ export function HomeFeed() {
             href="/browse?type=webtoon"
             linkLabel="View all webtoons"
           />
-          <div className={GRID}>
-            {webtoons.slice(0, 6).map((w) => <ContentCard key={w.id} item={w} type="webtoon" />)}
-          </div>
+          <CardRow items={webtoons.slice(0, 12).map((w) => ({ item: w, type: 'webtoon' as const }))} label="Popular webtoons" />
         </section>
       )}
 

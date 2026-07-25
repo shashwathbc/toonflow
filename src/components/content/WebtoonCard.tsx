@@ -2,7 +2,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Star, ImageOff } from 'lucide-react'
 import type { Webtoon } from '@/types'
-import { formatCount } from '@/lib/utils/formatters'
+import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import Badge from '@/components/ui/Badge'
 import { cn } from '@/lib/utils/cn'
 
@@ -59,7 +59,7 @@ export default function WebtoonCard({ webtoon }: WebtoonCardProps) {
       {/* Info */}
       <div className="p-3 flex flex-col gap-1 flex-1">
         <h3 className="text-sm font-semibold text-text line-clamp-2 leading-tight">
-          {webtoon.title}
+          {toTitleCase(webtoon.title)}
         </h3>
         <div className="flex items-center justify-between mt-auto pt-1">
           <span className="text-xs text-text-secondary capitalize">

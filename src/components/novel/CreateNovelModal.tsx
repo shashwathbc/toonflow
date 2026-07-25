@@ -28,9 +28,16 @@ import { AIImageGenerator } from './AIImageGenerator'
 // module-scope: impure ID helpers stay outside the compiled component (react-hooks/purity)
 const makeSlug = (title: string) => slugify(title) + '-' + Date.now().toString(36)
 
+// UI-safe input limits. Title stays short enough to render cleanly in cards,
+// hero and headings without wrapping into a wall of text; the synopsis textarea
+// wraps, so its cap is generous. These are enforced both here (zod) and on the
+// inputs (maxLength) so the layout can never be broken by an oversized value.
+const TITLE_MAX = 100
+const SYNOPSIS_MAX = 2000
+
 const schema = z.object({
-  title: z.string().min(1, 'Title is required').max(120, 'Title too long'),
-  synopsis: z.string().min(10, 'Description must be at least 10 characters').max(2000, 'Too long'),
+  title: z.string().min(1, 'Title is required').max(TITLE_MAX, `Title must be ${TITLE_MAX} characters or less`),
+  synopsis: z.string().min(10, 'Description must be at least 10 characters').max(SYNOPSIS_MAX, `Description must be ${SYNOPSIS_MAX} characters or less`),
   genres: z.array(z.string()).min(1, 'Select at least one genre').max(5, 'Max 5 genres'),
   tags: z.array(z.string()),
   status: z.enum(['draft', 'ongoing', 'completed', 'hiatus']),
@@ -443,12 +450,18 @@ export function CreateNovelModal({
 
             {/* Title */}
             <div>
-              <label htmlFor="novel-title" className="block text-xs font-medium text-white/60 mb-1.5">
-                Title *
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="novel-title" className="text-xs font-medium text-white/60">
+                  Title *
+                </label>
+                <span className={`text-[10px] tabular-nums ${(titleValue?.length ?? 0) >= TITLE_MAX ? 'text-warning' : 'text-white/30'}`}>
+                  {titleValue?.length ?? 0}/{TITLE_MAX}
+                </span>
+              </div>
               <input
                 id="novel-title"
                 {...register('title')}
+                maxLength={TITLE_MAX}
                 className="input-base"
                 placeholder="Your novel's title"
                 aria-describedby={errors.title ? 'title-error' : undefined}
@@ -464,9 +477,14 @@ export function CreateNovelModal({
             {/* Synopsis */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="novel-synopsis" className="text-xs font-medium text-white/60">
-                  Description / Synopsis *
-                </label>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="novel-synopsis" className="text-xs font-medium text-white/60">
+                    Description / Synopsis *
+                  </label>
+                  <span className={`text-[10px] tabular-nums ${(synopsisValue?.length ?? 0) >= SYNOPSIS_MAX ? 'text-warning' : 'text-white/30'}`}>
+                    {synopsisValue?.length ?? 0}/{SYNOPSIS_MAX}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1" role="group" aria-label="AI synopsis tools">
                   <Tooltip label="Generate synopsis from title" side="bottom">
                     <button
@@ -514,6 +532,7 @@ export function CreateNovelModal({
                 id="novel-synopsis"
                 {...register('synopsis')}
                 rows={4}
+                maxLength={SYNOPSIS_MAX}
                 className="input-base resize-none"
                 placeholder="Write a rough idea — then use ✨ Generate (from title), Improve, or Expand above"
                 aria-describedby={errors.synopsis ? 'synopsis-error' : undefined}

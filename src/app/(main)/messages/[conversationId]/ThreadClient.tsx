@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useConversationThread } from '@/hooks/useConversationThread'
 import { getUserProfile } from '@/lib/firebase/firestore'
 import { MESSAGE_MAX_LENGTH, sendImageMessage } from '@/lib/firebase/messaging'
+import { notifyMessage, markMessageNotificationRead } from '@/lib/firebase/notifications'
 import { uploadMessageImage } from '@/lib/firebase/storage'
 import Avatar from '@/components/ui/Avatar'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -33,7 +34,7 @@ async function readImageSize(file: File): Promise<{ width: number; height: numbe
 }
 
 export default function ThreadClient({ conversationId }: { conversationId: string }) {
-  const { firebaseUser, loading: authLoading } = useAuth()
+  const { firebaseUser, userProfile, loading: authLoading } = useAuth()
   const uid = firebaseUser?.uid ?? null
 
   const {
@@ -60,10 +61,29 @@ export default function ThreadClient({ conversationId }: { conversationId: strin
     return () => { cancelled = true }
   }, [otherUid])
 
-  // Clear our unread counter whenever there's something unread.
+  // Clear our unread counter whenever there's something unread, and dismiss the
+  // matching bell entry so the two stay in sync.
   useEffect(() => {
-    if (conversation && uid && (conversation.unreadCount?.[uid] ?? 0) > 0) markRead()
-  }, [conversation, uid, markRead])
+    if (conversation && uid && (conversation.unreadCount?.[uid] ?? 0) > 0) {
+      markRead()
+      markMessageNotificationRead(uid, conversationId).catch(() => {})
+    }
+  }, [conversation, uid, conversationId, markRead])
+
+  // Fire a live bell notification to the recipient (best-effort, never blocks).
+  const pingRecipient = (preview: string) => {
+    if (!uid || !otherUid) return
+    void notifyMessage({
+      recipientId: otherUid,
+      actor: {
+        uid,
+        displayName: userProfile?.displayName ?? 'Someone',
+        photoURL: userProfile?.photoURL ?? null,
+      },
+      conversationId,
+      preview,
+    })
+  }
 
   // Keep the newest message in view (and when the typing indicator appears).
   useEffect(() => {
@@ -87,6 +107,7 @@ export default function ThreadClient({ conversationId }: { conversationId: strin
       setText('')
       stopTyping()
       requestAnimationFrame(autoGrow)
+      pingRecipient(value)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send message')
     } finally {
@@ -125,6 +146,7 @@ export default function ThreadClient({ conversationId }: { conversationId: strin
       const dims = await readImageSize(file)
       const url = await uploadMessageImage(conversationId, uid, file)
       await sendImageMessage(conversationId, uid, { url, width: dims.width, height: dims.height })
+      pingRecipient('📷 Photo')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send image')
     } finally {

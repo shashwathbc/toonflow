@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, doc, updateDoc, deleteDoc, getDocs, writeBatch,
+  collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDocs, writeBatch,
   query, where, limit, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from './db'
@@ -28,6 +28,9 @@ interface CreateNotificationInput {
   targetId?: string
   targetTitle?: string
   preview?: string
+  /** Fixed doc id → the notification collapses (overwrites) instead of stacking.
+   * Used for message notifications so a chatty thread is one bell entry. */
+  docId?: string
 }
 
 /**
@@ -54,7 +57,12 @@ async function createNotification(input: CreateNotificationInput): Promise<void>
   if (input.preview) data.preview = input.preview.replace(/\s+/g, ' ').trim().slice(0, 280)
 
   try {
-    await addDoc(collection(db, 'users', recipientId, 'notifications'), data)
+    if (input.docId) {
+      // Deterministic id → overwrite the existing entry (collapse) and re-surface it.
+      await setDoc(doc(db, 'users', recipientId, 'notifications', input.docId), data)
+    } else {
+      await addDoc(collection(db, 'users', recipientId, 'notifications'), data)
+    }
   } catch (e) {
     console.error('[notifications] create failed:', e)
   }
@@ -130,6 +138,45 @@ export function notifyComment(params: {
     targetTitle: title,
     preview,
   })
+}
+
+/** Deterministic notification id for a conversation's message notification, so
+ * every message in a thread collapses into ONE bell entry. */
+function messageNotificationId(cid: string): string {
+  return `msg_${cid}`
+}
+
+/**
+ * Someone sent `recipientId` a message. Collapses per conversation (fixed id):
+ * a new message overwrites the same entry with the latest preview and re-marks
+ * it unread, rather than stacking a fresh notification for every message.
+ */
+export function notifyMessage(params: {
+  recipientId: string
+  actor: NotificationActor
+  conversationId: string
+  /** Latest message text (or e.g. "📷 Photo" for an image). */
+  preview: string
+}): Promise<void> {
+  const { recipientId, actor, conversationId, preview } = params
+  return createNotification({
+    recipientId,
+    actor,
+    type: 'message',
+    link: `/messages/${conversationId}`,
+    preview,
+    docId: messageNotificationId(conversationId),
+  })
+}
+
+/** Mark a conversation's message notification read (e.g. when the thread is
+ * opened). Best-effort — the entry may not exist yet. */
+export async function markMessageNotificationRead(uid: string, conversationId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, 'users', uid, 'notifications', messageNotificationId(conversationId)), { read: true })
+  } catch {
+    /* no notification for this thread yet — nothing to mark */
+  }
 }
 
 // ── Reader-side mutations (owner only) ───────────────────────

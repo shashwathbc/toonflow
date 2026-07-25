@@ -6,10 +6,8 @@ export interface FirestoreTimestamp {
 }
 
 export interface SocialLinks {
-  twitter?: string
+  youtube?: string
   instagram?: string
-  patreon?: string
-  website?: string
 }
 
 export interface UserProfile {
