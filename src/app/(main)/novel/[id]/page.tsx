@@ -226,6 +226,7 @@ export default function NovelDetailPage() {
                   contentId={id}
                   initialRating={novel.rating ?? 0}
                   initialCount={novel.ratingCount ?? 0}
+                  authorId={novel.authorId}
                   onRated={(rating, ratingCount) =>
                     setNovel((prev) => prev ? { ...prev, rating, ratingCount } : prev)
                   }

@@ -2,10 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, BookOpen, Search, Plus, User, MessagesSquare } from 'lucide-react'
+import { Home, BookOpen, Plus, User } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useAuth } from '@/hooks/useAuth'
-import { useUnreadCount } from '@/hooks/useUnreadCount'
 import { cn } from '@/lib/utils/cn'
 import * as Avatar from '@radix-ui/react-avatar'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -14,7 +13,6 @@ import { UserDropdownContent } from './UserMenu'
 export default function MobileNav() {
   const pathname = usePathname()
   const { isAuthenticated, userProfile } = useAuth()
-  const unread = useUnreadCount()
 
   const initials = userProfile?.displayName
     ?.split(' ')
@@ -36,21 +34,6 @@ export default function MobileNav() {
       icon: <BookOpen size={20} />,
       isActive: pathname.startsWith('/originals'),
     },
-    {
-      href: '/browse',
-      label: 'Browse',
-      icon: <Search size={20} />,
-      isActive: pathname.startsWith('/browse'),
-    },
-    ...(isAuthenticated
-      ? [{
-          href: '/messages',
-          label: 'Messages',
-          icon: <MessagesSquare size={20} />,
-          isActive: pathname.startsWith('/messages'),
-          badge: unread > 0,
-        }]
-      : []),
     {
       href: isAuthenticated ? '/create' : '/login?redirect=/create',
       label: 'Create',

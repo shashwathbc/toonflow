@@ -65,32 +65,6 @@ function Navbar() {
             )
           })}
 
-          {/* Messages — next to Browse, with a live unread badge */}
-          {isAuthenticated && (
-            <li>
-              <Link
-                href="/messages"
-                aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
-                aria-current={messagesActive ? 'page' : undefined}
-                className={cn(
-                  'relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-150',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  messagesActive ? 'bg-bg-elevated text-text' : 'text-text-secondary hover:text-text'
-                )}
-              >
-                <MessagesSquare size={16} aria-hidden="true" />
-                Messages
-                {unread > 0 && (
-                  <span
-                    className="ml-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-foreground"
-                    aria-hidden="true"
-                  >
-                    {unread > 9 ? '9+' : unread}
-                  </span>
-                )}
-              </Link>
-            </li>
-          )}
         </ul>
 
         {/* Right actions */}
@@ -126,6 +100,27 @@ function Navbar() {
               <Search size={18} aria-hidden="true" />
             </Link>
           </Tooltip>
+
+          {/* Messages */}
+          {isAuthenticated && (
+            <Tooltip label="Messages">
+              <Link
+                href="/messages"
+                className="relative btn-ghost p-2 rounded-lg"
+                aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
+              >
+                <MessagesSquare size={18} aria-hidden="true" />
+                {unread > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-foreground ring-2 ring-bg"
+                    aria-hidden="true"
+                  >
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
+              </Link>
+            </Tooltip>
+          )}
 
           {/* Live notifications (follows, likes, comments) */}
           <NotificationBell />

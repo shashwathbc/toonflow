@@ -14,12 +14,14 @@ interface RatingControlProps {
   contentId: string
   initialRating: number
   initialCount: number
+  /** The UID of the content author — used to prevent self-rating. */
+  authorId?: string
   /** Notifies the parent so aggregate displays (details tile, hero meta) stay in sync */
   onRated?: (rating: number, ratingCount: number) => void
 }
 
 export default function RatingControl({
-  contentType, contentId, initialRating, initialCount, onRated,
+  contentType, contentId, initialRating, initialCount, authorId, onRated,
 }: RatingControlProps) {
   const { firebaseUser } = useAuth()
   const [fetchedRating, setFetchedRating] = useState<number | null>(null)
@@ -30,6 +32,7 @@ export default function RatingControl({
   // signed-out users never have an own-rating; deriving this (instead of
   // resetting state in the effect) keeps the effect free of sync setState
   const userRating = firebaseUser ? fetchedRating : null
+  const isOwnContent = !!(firebaseUser && authorId && firebaseUser.uid === authorId)
 
   useEffect(() => {
     if (!firebaseUser) return
@@ -43,6 +46,10 @@ export default function RatingControl({
   const handleRate = async (value: number) => {
     if (!firebaseUser) {
       toast.error('Sign in to rate')
+      return
+    }
+    if (isOwnContent) {
+      toast.error('You cannot rate your own content')
       return
     }
     if (loading) return
@@ -75,7 +82,7 @@ export default function RatingControl({
           <Tooltip key={value} label={userRating === value ? 'Remove your rating' : `Rate ${value} star${value > 1 ? 's' : ''}`}>
             <button
               type="button"
-              disabled={loading}
+              disabled={loading || isOwnContent}
               onClick={() => handleRate(value)}
               onMouseEnter={() => setHovered(value)}
               onFocus={() => setHovered(value)}

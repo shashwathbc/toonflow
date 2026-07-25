@@ -62,7 +62,7 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
         </div>
       </div>
       <div className="p-3">
-        <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">
+        <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1 min-h-[2.5em]">
           {toTitleCase(item.title)}
         </h3>
         {item.genres?.length > 0 && (
