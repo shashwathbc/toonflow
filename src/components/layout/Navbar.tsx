@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Logo } from '@/components/ui/Logo'
 import UserMenu from './UserMenu'
+import NotificationBell from './NotificationBell'
 
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
@@ -125,6 +126,9 @@ function Navbar() {
               <Search size={18} aria-hidden="true" />
             </Link>
           </Tooltip>
+
+          {/* Live notifications (follows, likes, comments) */}
+          <NotificationBell />
 
           {/* User menu or auth buttons */}
           <div className="hidden md:block">

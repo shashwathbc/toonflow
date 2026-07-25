@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { followUser, unfollowUser, isFollowing } from '@/lib/firebase/firestore'
+import { notifyFollow } from '@/lib/firebase/notifications'
 
 export interface UseFollowResult {
   /** Current (optimistic) subscription state. */
@@ -38,7 +39,7 @@ export function useFollow(
     initialFollowing?: boolean
   }
 ): UseFollowResult {
-  const { firebaseUser } = useAuth()
+  const { firebaseUser, userProfile } = useAuth()
   const seeded = options?.initialFollowing
   const [following, setFollowing] = useState(seeded ?? false)
   const [pending, setPending] = useState(false)
@@ -69,8 +70,17 @@ export function useFollow(
     const next = !prev
     setFollowing(next) // optimistic
     try {
-      if (next) await followUser(uid, targetUid)
-      else await unfollowUser(uid, targetUid)
+      if (next) {
+        await followUser(uid, targetUid)
+        // Fire a live notification for the creator (best-effort, never blocks).
+        void notifyFollow(targetUid, {
+          uid,
+          displayName: userProfile?.displayName ?? 'Someone',
+          photoURL: userProfile?.photoURL ?? null,
+        })
+      } else {
+        await unfollowUser(uid, targetUid)
+      }
       return next
     } catch (err) {
       setFollowing(prev) // roll back
@@ -80,7 +90,7 @@ export function useFollow(
       inFlight.current = false
       setPending(false)
     }
-  }, [uid, targetUid, following])
+  }, [uid, targetUid, following, userProfile])
 
   return { following, pending, canFollow, isSelf, signedIn: !!uid, toggle }
 }

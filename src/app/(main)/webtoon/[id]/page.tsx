@@ -142,7 +142,7 @@ export default function WebtoonDetailPage() {
             ) : (
               <button type="button" disabled className="btn-accent text-sm opacity-50">No episodes yet</button>
             )}
-            <LikeButton contentType="webtoon" contentId={id} initialCount={webtoon.likeCount ?? 0} />
+            <LikeButton contentType="webtoon" contentId={id} initialCount={webtoon.likeCount ?? 0} authorId={webtoon.authorId} contentTitle={webtoon.title} />
             <BookmarkButton contentId={id} contentType="webtoon" showLabel />
           </div>
         </div>

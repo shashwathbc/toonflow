@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { onSnapshot } from 'firebase/firestore'
 import { Heart } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { toggleLike, isLiked } from '@/lib/firebase/engagement'
+import { toggleLike, isLiked, likeTargetRef } from '@/lib/firebase/engagement'
+import { notifyLike } from '@/lib/firebase/notifications'
 import { formatCount } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -16,16 +18,37 @@ interface LikeButtonProps {
   initialCount: number
   size?: 'sm' | 'md'
   showCount?: boolean
+  /** Creator to notify when liked. Omit (e.g. comment likes) to skip notifying. */
+  authorId?: string
+  /** Content title shown in the notification (e.g. the novel/webtoon name). */
+  contentTitle?: string
 }
 
 export default function LikeButton({
   contentType, contentId, parentId,
   initialCount, size = 'md', showCount = true,
+  authorId, contentTitle,
 }: LikeButtonProps) {
-  const { firebaseUser } = useAuth()
+  const { firebaseUser, userProfile } = useAuth()
   const [liked, setLiked] = useState(false)
   const [count, setCount] = useState(initialCount)
   const [loading, setLoading] = useState(false)
+
+  // Live like count — the authoritative value from the target document, so the
+  // number reflects EVERY user's likes in real time (not just this session's own
+  // toggle) and can never drift or show a stale/negative figure. `initialCount`
+  // seeds it so there's no flash before the first snapshot arrives.
+  useEffect(() => {
+    const unsub = onSnapshot(
+      likeTargetRef(contentType, contentId, parentId),
+      (snap) => {
+        const v = snap.data()?.likeCount
+        if (typeof v === 'number') setCount(v)
+      },
+      () => { /* transient listener errors are non-fatal — keep the last count */ },
+    )
+    return unsub
+  }, [contentType, contentId, parentId])
 
   useEffect(() => {
     if (!firebaseUser) return
@@ -42,13 +65,26 @@ export default function LikeButton({
     if (loading) return
     setLoading(true)
     const prev = liked
-    setLiked(!prev)
-    setCount((c) => prev ? c - 1 : c + 1)
+    setLiked(!prev) // optimistic heart; the count follows from the live listener
     try {
-      await toggleLike(firebaseUser.uid, contentType, contentId, parentId)
+      const nowLiked = await toggleLike(firebaseUser.uid, contentType, contentId, parentId)
+      // Notify the creator on a NEW like (not an unlike), best-effort.
+      if (nowLiked && authorId && contentType !== 'comment') {
+        void notifyLike({
+          recipientId: authorId,
+          actor: {
+            uid: firebaseUser.uid,
+            displayName: userProfile?.displayName ?? 'Someone',
+            photoURL: userProfile?.photoURL ?? null,
+          },
+          contentType,
+          contentId,
+          parentId,
+          title: contentTitle,
+        })
+      }
     } catch {
       setLiked(prev)
-      setCount((c) => prev ? c + 1 : c - 1)
       toast.error('Failed to update like')
     } finally {
       setLoading(false)

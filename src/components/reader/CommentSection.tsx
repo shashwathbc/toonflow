@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { getComments, addComment, deleteComment } from '@/lib/firebase/firestore'
 import { getReplies, addReply, toggleLike, isLiked } from '@/lib/firebase/engagement'
+import { notifyComment } from '@/lib/firebase/notifications'
 import { cn } from '@/lib/utils/cn'
 import { formatCount } from '@/lib/utils/formatters'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -272,9 +273,12 @@ interface CommentSectionProps {
   targetId: string
   targetType: Comment['targetType']
   creatorId?: string
+  /** Content title + canonical link, used for the creator's notification. */
+  contentTitle?: string
+  contentLink?: string
 }
 
-export default function CommentSection({ targetId, targetType, creatorId }: CommentSectionProps) {
+export default function CommentSection({ targetId, targetType, creatorId, contentTitle, contentLink }: CommentSectionProps) {
   const { firebaseUser, userProfile } = useAuth()
   const [comments, setComments] = useState<Comment[]>([])
   const [text, setText] = useState('')
@@ -329,6 +333,22 @@ export default function CommentSection({ targetId, targetType, creatorId }: Comm
       setComments((prev) => [optimistic, ...prev])
       setText('')
       toast.success('Comment posted!')
+      // Notify the creator of a new comment on their work (best-effort).
+      if (creatorId) {
+        void notifyComment({
+          recipientId: creatorId,
+          actor: {
+            uid: firebaseUser.uid,
+            displayName: userProfile.displayName,
+            photoURL: userProfile.photoURL,
+          },
+          targetType,
+          targetId,
+          title: contentTitle,
+          link: contentLink,
+          preview: optimistic.content,
+        })
+      }
     } catch {
       toast.error('Failed to post comment')
     } finally {

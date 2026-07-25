@@ -93,7 +93,7 @@ export default function EpisodeReaderPage() {
             Ep. {episode.episodeNumber} · {episode.title}
           </p>
 
-          <LikeButton contentType="episode" contentId={episodeId} parentId={id} initialCount={episode.viewCount ?? 0} size="sm" showCount={false} />
+          <LikeButton contentType="episode" contentId={episodeId} parentId={id} initialCount={episode.likeCount ?? 0} size="sm" showCount={false} authorId={webtoon?.authorId} contentTitle={webtoon?.title} />
         </div>
       </header>
 
@@ -154,7 +154,7 @@ export default function EpisodeReaderPage() {
 
         {/* Comments */}
         <div className="border-t border-bg-border px-4 pt-8 pb-16">
-          <CommentSection targetId={episodeId} targetType="episode" creatorId={webtoon?.authorId} />
+          <CommentSection targetId={episodeId} targetType="episode" creatorId={webtoon?.authorId} contentTitle={webtoon?.title} contentLink={`/webtoon/${id}/episode/${episodeId}`} />
         </div>
       </main>
     </div>

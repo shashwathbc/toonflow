@@ -1,5 +1,5 @@
 import {
-  doc, getDoc, setDoc, deleteDoc, updateDoc,
+  doc, getDoc,
   collection, getDocs, query, where, limit,
   increment, serverTimestamp, addDoc, runTransaction,
 } from 'firebase/firestore'
@@ -26,6 +26,26 @@ function contentRef(contentType: 'novel' | 'webtoon' | 'chapter' | 'episode', co
   return doc(db, 'webtoons', contentId)
 }
 
+/** The document that carries the public `likeCount` for a likeable target. */
+export function likeTargetRef(
+  contentType: 'novel' | 'webtoon' | 'chapter' | 'episode' | 'comment',
+  contentId: string,
+  parentId?: string,
+) {
+  if (contentType === 'comment') return doc(db, 'comments', contentId)
+  return contentRef(contentType, contentId, parentId)
+}
+
+/**
+ * Toggle the caller's like on a target, keeping the public `likeCount` correct.
+ *
+ * Runs in a single transaction so the like edge (likes/{uid_type_id}) and the
+ * counter can never drift apart under rapid re-clicks or concurrent tabs — the
+ * old two-write version could double-count or, worse, decrement a counter that
+ * was already 0 into the negatives. The counter is only ever decremented when
+ * it's above 0, so it can NEVER go negative, and increments/decrements stay at
+ * ±1 to satisfy the `likeCountBumped()` Firestore rule.
+ */
 export async function toggleLike(
   uid: string,
   contentType: 'novel' | 'webtoon' | 'chapter' | 'episode' | 'comment',
@@ -33,31 +53,30 @@ export async function toggleLike(
   parentId?: string,
 ): Promise<boolean> {
   const likeRef = doc(db, 'likes', likeDocId(uid, contentType, contentId))
-  const snap = await getDoc(likeRef)
+  const cRef = likeTargetRef(contentType, contentId, parentId)
 
-  if (snap.exists()) {
-    await deleteDoc(likeRef)
-    if (contentType === 'comment') {
-      await updateDoc(doc(db, 'comments', contentId), { likeCount: increment(-1) })
-    } else {
-      await updateDoc(contentRef(contentType as 'novel' | 'webtoon' | 'chapter' | 'episode', contentId, parentId), { likeCount: increment(-1) })
+  return runTransaction(db, async (tx) => {
+    const [likeSnap, cSnap] = await Promise.all([tx.get(likeRef), tx.get(cRef)])
+    const current = cSnap.exists() ? Number(cSnap.data().likeCount ?? 0) : 0
+
+    if (likeSnap.exists()) {
+      // Unlike — remove the edge; only decrement a positive counter (never < 0).
+      tx.delete(likeRef)
+      if (current > 0) tx.update(cRef, { likeCount: increment(-1) })
+      return false
     }
-    return false
-  } else {
-    await setDoc(likeRef, {
+
+    // Like — record the edge and bump the counter by exactly 1.
+    tx.set(likeRef, {
       uid,
       contentType,
       contentId,
       parentId: parentId ?? null,
       createdAt: serverTimestamp(),
     })
-    if (contentType === 'comment') {
-      await updateDoc(doc(db, 'comments', contentId), { likeCount: increment(1) })
-    } else {
-      await updateDoc(contentRef(contentType as 'novel' | 'webtoon' | 'chapter' | 'episode', contentId, parentId), { likeCount: increment(1) })
-    }
+    tx.update(cRef, { likeCount: increment(1) })
     return true
-  }
+  })
 }
 
 export async function isLiked(uid: string, contentType: string, contentId: string): Promise<boolean> {

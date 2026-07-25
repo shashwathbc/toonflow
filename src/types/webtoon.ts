@@ -73,6 +73,7 @@ export interface Episode {
   isPremium: boolean
   coinCost: number
   viewCount: number
+  likeCount: number
   status: 'draft' | 'published'
   intro?: EpisodeIntroMeta
   outro?: EpisodeOutroMeta
@@ -86,4 +87,4 @@ export type WebtoonCreateInput = Omit<
   'bookmarkCount' | 'episodeCount' | 'rating' | 'ratingCount' | 'createdAt' | 'updatedAt' | 'publishedAt'
 >
 
-export type EpisodeCreateInput = Omit<Episode, 'id' | 'webtoonId' | 'viewCount' | 'createdAt' | 'publishedAt'>
+export type EpisodeCreateInput = Omit<Episode, 'id' | 'webtoonId' | 'viewCount' | 'likeCount' | 'createdAt' | 'publishedAt'>

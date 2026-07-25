@@ -144,6 +144,33 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create, delete: if isOwner(userId);
       }
+
+      // Live notifications (follow / like / comment). Written cross-user by the
+      // ACTOR: the actor is bound to the caller (no impersonation), you can't
+      // notify yourself, the type is whitelisted, it starts unread, and the
+      // strings are length-capped so a client can't store a huge payload. Only
+      // the owner reads their feed, and may update ONLY `read` (mark-as-read) or
+      // delete (dismiss).
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+        allow create: if isSignedIn()
+          && request.auth.uid != userId
+          && request.resource.data.actorId == request.auth.uid
+          && request.resource.data.type in ['follow', 'like', 'comment']
+          && request.resource.data.read == false
+          && request.resource.data.actorName is string
+          && request.resource.data.actorName.size() <= 120
+          && request.resource.data.link is string
+          && request.resource.data.link.size() <= 300
+          && request.resource.data.get('targetTitle', '') is string
+          && request.resource.data.get('targetTitle', '').size() <= 140
+          && request.resource.data.get('preview', '') is string
+          && request.resource.data.get('preview', '').size() <= 280;
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read == true;
+        allow delete: if isOwner(userId);
+      }
     }
 
     // Bookmarks — owner only

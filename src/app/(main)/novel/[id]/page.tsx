@@ -219,7 +219,7 @@ export default function NovelDetailPage() {
                     <ChevronsRight size={14} aria-hidden="true" /> Latest
                   </Link>
                 )}
-                <LikeButton contentType="novel" contentId={id} initialCount={novel.likeCount ?? 0} />
+                <LikeButton contentType="novel" contentId={id} initialCount={novel.likeCount ?? 0} authorId={novel.authorId} contentTitle={novel.title} />
                 <BookmarkButton contentId={id} contentType="novel" />
                 <RatingControl
                   contentType="novel"

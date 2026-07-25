@@ -59,6 +59,7 @@ export interface Chapter {
   isPremium: boolean
   coinCost: number
   viewCount: number
+  likeCount: number
   status: 'draft' | 'published'
   createdAt: FirestoreTimestamp
   publishedAt: FirestoreTimestamp | null
@@ -70,4 +71,4 @@ export type NovelCreateInput = Omit<
   'bookmarkCount' | 'chapterCount' | 'rating' | 'ratingCount' | 'createdAt' | 'updatedAt' | 'publishedAt'
 > & { status: ContentStatus }
 
-export type ChapterCreateInput = Omit<Chapter, 'id' | 'novelId' | 'viewCount' | 'createdAt' | 'publishedAt'>
+export type ChapterCreateInput = Omit<Chapter, 'id' | 'novelId' | 'viewCount' | 'likeCount' | 'createdAt' | 'publishedAt'>

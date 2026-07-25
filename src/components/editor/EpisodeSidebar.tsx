@@ -251,6 +251,7 @@ export function EpisodeSidebar({
         isPremium: false,
         coinCost: 0,
         viewCount: 0,
+        likeCount: 0,
         status: 'draft',
         createdAt: nowTimestamp(),
         publishedAt: null,

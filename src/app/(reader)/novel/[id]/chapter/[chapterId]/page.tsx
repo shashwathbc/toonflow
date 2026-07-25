@@ -227,9 +227,11 @@ export default function ChapterReaderPage() {
               contentType="chapter"
               contentId={chapterId}
               parentId={id}
-              initialCount={chapter.viewCount ?? 0}
+              initialCount={chapter.likeCount ?? 0}
               size="sm"
               showCount={false}
+              authorId={novel.authorId}
+              contentTitle={novel.title}
             />
             <Tooltip label="Reading settings" side="bottom">
               <button
@@ -364,7 +366,7 @@ export default function ChapterReaderPage() {
 
         {/* ── Actions bar ─────────────────────────────────── */}
         <div className="flex items-center justify-center gap-3 mb-16 flex-wrap">
-          <LikeButton contentType="chapter" contentId={chapterId} parentId={id} initialCount={chapter.viewCount ?? 0} />
+          <LikeButton contentType="chapter" contentId={chapterId} parentId={id} initialCount={chapter.likeCount ?? 0} authorId={novel.authorId} contentTitle={novel.title} />
           <BookmarkButton contentId={id} contentType="novel" showLabel />
         </div>
 
@@ -421,7 +423,7 @@ export default function ChapterReaderPage() {
 
         {/* ── Comments ─────────────────────────────────────── */}
         <div className="border-t border-white/8 pt-12 mb-8">
-          <CommentSection targetId={chapterId} targetType="chapter" creatorId={novel.authorId} />
+          <CommentSection targetId={chapterId} targetType="chapter" creatorId={novel.authorId} contentTitle={novel.title} contentLink={`/novel/${id}/chapter/${chapterId}`} />
         </div>
       </main>
 
