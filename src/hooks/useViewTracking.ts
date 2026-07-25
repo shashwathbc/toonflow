@@ -12,10 +12,16 @@ export interface ViewTrackingTarget {
   parentId: string
 }
 
-// Client-side mirrors of the server thresholds (server is authoritative)
-const MIN_VISIBLE_MS = 20_000
+// Client-side mirrors of the server thresholds (server is authoritative). These
+// sit ~1s ABOVE the server floors (server: 5s / 3s) on purpose: the server times
+// dwell from token issue (begin), so begin/complete network latency makes its
+// measured dwell slightly SHORTER than the client's visible-time clock. The
+// margin guarantees that when the client decides to fire, the server's dwell has
+// comfortably cleared its floor — otherwise a near-threshold view would be
+// rejected yet still guarded for 24h, and silently lost.
+const MIN_VISIBLE_MS = 6_000
 const MIN_SCROLL_PCT = 50
-const MIN_VISIBLE_WITH_SCROLL_MS = 8_000
+const MIN_VISIBLE_WITH_SCROLL_MS = 4_000
 const GUARD_WINDOW_MS = 24 * 60 * 60 * 1000
 
 function guardKey(t: ViewTrackingTarget) {
@@ -148,7 +154,9 @@ export function useViewTracking(target: ViewTrackingTarget | null): void {
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('pagehide', onPageHide)
 
-    const interval = setInterval(() => { void complete() }, 2_000)
+    // Poll every 1s so a qualifying view fires promptly once the (few-second)
+    // threshold is crossed, instead of lagging up to a full interval behind.
+    const interval = setInterval(() => { void complete() }, 1_000)
 
     // ── Begin phase: get the server-timestamped view token ──
     fetch('/api/views', {

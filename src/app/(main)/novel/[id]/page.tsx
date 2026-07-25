@@ -9,6 +9,7 @@ import {
   Activity, Hash, Calendar, ArrowUpDown, Search, ChevronsRight,
 } from 'lucide-react'
 import { useChapters } from '@/hooks/useChapters'
+import { useLiveViewCount } from '@/hooks/useLiveViewCount'
 import { getNovelById } from '@/lib/firebase/firestore'
 import { formatCount, formatDate, fromTimestamp } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
@@ -69,6 +70,9 @@ export default function NovelDetailPage() {
   const [showAll, setShowAll] = useState(false)
   const [chapterQuery, setChapterQuery] = useState('')
   const [sortAsc, setSortAsc] = useState(true)
+
+  // Live view count — reflects /api/views increments without a page refresh.
+  const liveViews = useLiveViewCount('novels', id, novel?.viewCount ?? 0)
 
   // Real-time chapter listener — updates immediately when chapters are published
   const { chapters: allChapters, loading: chaptersLoading } = useChapters(id)
@@ -178,7 +182,7 @@ export default function NovelDetailPage() {
                   </span>
                 )}
                 <span className="flex items-center gap-1" title="Views">
-                  <Eye size={13} aria-hidden="true" /> {formatCount(novel.viewCount ?? 0)} views
+                  <Eye size={13} aria-hidden="true" /> {formatCount(liveViews)} views
                 </span>
               </div>
 
@@ -253,7 +257,7 @@ export default function NovelDetailPage() {
               <DetailTile icon={BookOpen} label="Type">Novel</DetailTile>
               <DetailTile icon={Activity} label="Status"><span className="capitalize">{novel.status}</span></DetailTile>
               <DetailTile icon={Hash} label="Chapters">{chapters.length}</DetailTile>
-              <DetailTile icon={Eye} label="Views">{formatCount(novel.viewCount ?? 0)}</DetailTile>
+              <DetailTile icon={Eye} label="Views">{formatCount(liveViews)}</DetailTile>
               <DetailTile icon={Calendar} label="Year">{publishedYear ?? '—'}</DetailTile>
             </div>
 

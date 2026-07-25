@@ -9,6 +9,7 @@ import {
   Clock, Play,
 } from 'lucide-react'
 import { getWebtoonById, getEpisodesByWebtoon } from '@/lib/firebase/firestore'
+import { useLiveViewCount } from '@/hooks/useLiveViewCount'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
@@ -30,6 +31,9 @@ export default function WebtoonDetailPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [loading, setLoading] = useState(true)
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
+
+  // Live view count — reflects /api/views increments without a page refresh.
+  const liveViews = useLiveViewCount('webtoons', id, webtoon?.viewCount ?? 0)
 
   useEffect(() => {
     Promise.all([getWebtoonById(id), getEpisodesByWebtoon(id)])
@@ -110,7 +114,7 @@ export default function WebtoonDetailPage() {
           {/* `title` names each icon on hover. The visible text already carries
               the unit ("1.2K views"), so no extra screen-reader text is needed. */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
-            <span className="flex items-center gap-1" title="Views"><Eye size={13} aria-hidden="true" /> {formatCount(webtoon.viewCount ?? 0)} views</span>
+            <span className="flex items-center gap-1" title="Views"><Eye size={13} aria-hidden="true" /> {formatCount(liveViews)} views</span>
             <span className="flex items-center gap-1" title="Likes"><Heart size={13} aria-hidden="true" /> {formatCount(webtoon.likeCount ?? 0)} likes</span>
             <span className="flex items-center gap-1" title="Episodes"><ImageIcon size={13} aria-hidden="true" /> {webtoon.episodeCount ?? episodes.length} episodes</span>
             {(webtoon.rating ?? 0) > 0 && (
