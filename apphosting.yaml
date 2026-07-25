@@ -25,6 +25,14 @@ env:
     value: Toonflow Studio Paint
     availability: [BUILD, RUNTIME]
 
+  # ---- Error tracking (Sentry) ----
+  # Set the real Sentry DSN via Secret Manager for production:
+  #   firebase apphosting:secrets:set NEXT_PUBLIC_SENTRY_DSN
+  # The placeholder below means errors silently degrade in dev/preview deploys.
+  - variable: NEXT_PUBLIC_SENTRY_DSN
+    value: https://examplePublicKey@o0.ingest.sentry.io/0
+    availability: [BUILD, RUNTIME]
+
   # ---- Public Firebase web config (safe to expose / commit) ----
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: AIzaSyAmKl8NwqLQP5bvssjx0GaQVcsqRuCrWxM
@@ -95,4 +103,10 @@ env:
     availability: [RUNTIME]
   - variable: VIEW_TOKEN_SECRET
     secret: VIEW_TOKEN_SECRET
+    availability: [RUNTIME]
+  - variable: UPSTASH_REDIS_REST_URL
+    secret: UPSTASH_REDIS_REST_URL
+    availability: [RUNTIME]
+  - variable: UPSTASH_REDIS_REST_TOKEN
+    secret: UPSTASH_REDIS_REST_TOKEN
     availability: [RUNTIME]

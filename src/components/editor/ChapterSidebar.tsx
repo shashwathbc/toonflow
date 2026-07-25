@@ -321,7 +321,7 @@ export function ChapterSidebar({
   if (collapsed) {
     return (
       <aside
-        className="w-10 border-r border-bg-border flex flex-col items-center pt-3 gap-2 bg-bg"
+        className="w-10 border-r border-bg-border hidden lg:flex flex-col items-center pt-3 gap-2 bg-bg"
         aria-label="Chapter list (collapsed)"
       >
         <Tooltip label="Expand sidebar" side="right">
@@ -359,7 +359,7 @@ export function ChapterSidebar({
 
   return (
     <aside
-      className="w-72 border-r border-bg-border flex flex-col bg-bg flex-shrink-0"
+      className="w-full lg:w-72 border-r border-bg-border flex flex-col bg-bg flex-shrink-0"
       aria-label="Chapter management"
     >
       {/* Sidebar header */}
@@ -377,7 +377,7 @@ export function ChapterSidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
+            className="w-6 h-6 rounded hover:bg-white/10 hidden lg:flex items-center justify-center text-white/40 hover:text-white transition-colors focus-visible:ring-1 focus-visible:ring-white"
             aria-label="Collapse chapter sidebar"
           >
             <ChevronLeft size={13} aria-hidden="true" />

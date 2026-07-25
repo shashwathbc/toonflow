@@ -174,27 +174,32 @@ body {
      headings; body copy uses `pretty` (orphan control only, much cheaper). */
   .display-2xl {
     @apply text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-[1.02] tracking-[-0.035em];
+    text-wrap: normal; /* fallback for Chrome < 114 */
     text-wrap: balance;
   }
 
   .display-xl {
     @apply text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-[1.06] tracking-[-0.03em];
+    text-wrap: normal; /* fallback for Chrome < 114 */
     text-wrap: balance;
   }
 
   .display-lg {
     @apply text-2xl sm:text-3xl font-bold leading-[1.12] tracking-[-0.022em];
+    text-wrap: normal; /* fallback for Chrome < 114 */
     text-wrap: balance;
   }
 
   .display-md {
     @apply text-xl sm:text-2xl font-bold leading-[1.2] tracking-[-0.018em];
+    text-wrap: normal; /* fallback for Chrome < 114 */
     text-wrap: balance;
   }
 
   /* Body copy: no balancing (expensive + unnecessary), just orphan control. */
   .text-body {
     @apply text-[15px] leading-[1.65] text-text-secondary;
+    text-wrap: normal; /* fallback for Chrome < 114 */
     text-wrap: pretty;
   }
 

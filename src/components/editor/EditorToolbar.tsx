@@ -15,6 +15,7 @@ import {
   Maximize2,
   ChevronDown,
   BookCopy,
+  MoreVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -83,7 +84,7 @@ export function EditorToolbar({
 
   return (
     <header
-      className="h-14 bg-bg border-b border-bg-border flex items-center gap-2 px-4 flex-shrink-0 sticky top-0 z-20"
+      className="h-14 bg-bg border-b border-bg-border flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 flex-shrink-0 sticky top-0 z-20"
       role="banner"
     >
       {/* Left: back + novel title */}
@@ -116,7 +117,10 @@ export function EditorToolbar({
       </div>
 
       {/* Right: actions */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Secondary utilities — inline on desktop, folded into an overflow
+            menu on mobile so the Publish CTAs stay unobstructed */}
+        <div className="hidden sm:flex items-center gap-1">
         <Tooltip label="Save changes" side="bottom">
           <button
             type="button"
@@ -209,11 +213,101 @@ export function EditorToolbar({
             <Maximize2 size={13} aria-hidden="true" />
           </button>
         </Tooltip>
+        </div>
+
+        {/* Mobile overflow — same utilities collapsed into one menu */}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              className="sm:hidden btn-ghost text-xs w-8 h-8 items-center justify-center flex"
+              aria-label="More editor actions"
+            >
+              <MoreVertical size={16} aria-hidden="true" />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className={cn(
+                'z-50 min-w-56 bg-bg-card border border-bg-border rounded-xl p-1.5 shadow-xl',
+                'data-[state=open]:animate-fade-in'
+              )}
+              side="bottom"
+              align="end"
+              sideOffset={8}
+              role="menu"
+              aria-label="Editor actions"
+            >
+              <DropdownMenu.Item
+                className={cn(
+                  'flex items-center gap-2.5 px-2 py-2 text-sm text-text rounded-lg cursor-pointer',
+                  'hover:bg-white/10 focus-visible:bg-white/10 outline-none disabled:opacity-40'
+                )}
+                disabled={saveState === 'saving'}
+                onSelect={onSave}
+                role="menuitem"
+              >
+                <Save size={15} aria-hidden="true" />
+                Save changes
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className={cn(
+                  'flex items-center gap-2.5 px-2 py-2 text-sm text-text rounded-lg cursor-pointer',
+                  'hover:bg-white/10 focus-visible:bg-white/10 outline-none'
+                )}
+                onSelect={() => onExportPDF('all')}
+                role="menuitem"
+              >
+                <BookCopy size={15} aria-hidden="true" />
+                Download all chapters
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className={cn(
+                  'flex items-center gap-2.5 px-2 py-2 text-sm text-text rounded-lg outline-none',
+                  chapter
+                    ? 'cursor-pointer hover:bg-white/10 focus-visible:bg-white/10'
+                    : 'opacity-40 cursor-not-allowed'
+                )}
+                disabled={!chapter}
+                onSelect={() => onExportPDF('current')}
+                role="menuitem"
+              >
+                <FileText size={15} aria-hidden="true" />
+                Download current chapter
+              </DropdownMenu.Item>
+              <DropdownMenu.Item asChild role="menuitem">
+                <Link
+                  href={novel ? `/novel/${novel.id}` : '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    'flex items-center gap-2.5 px-2 py-2 text-sm text-text rounded-lg cursor-pointer',
+                    'hover:bg-white/10 focus-visible:bg-white/10 outline-none'
+                  )}
+                >
+                  <Eye size={15} aria-hidden="true" />
+                  Preview novel
+                </Link>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className={cn(
+                  'flex items-center gap-2.5 px-2 py-2 text-sm text-text rounded-lg cursor-pointer',
+                  'hover:bg-white/10 focus-visible:bg-white/10 outline-none'
+                )}
+                onSelect={onToggleFullscreen}
+                role="menuitem"
+              >
+                <Maximize2 size={15} aria-hidden="true" />
+                {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
 
         {/* Chapter publish toggle */}
         {chapter && (
           <>
-            <div className="w-px h-5 bg-bg-border mx-1" aria-hidden="true" />
+            <div className="w-px h-5 bg-bg-border mx-0.5 sm:mx-1" aria-hidden="true" />
             {isChapterPublished ? (
               <Tooltip label="Chapter is live — click to unpublish" side="bottom">
                 <button
@@ -227,7 +321,7 @@ export function EditorToolbar({
                     ? <Loader2 size={11} className="animate-spin" aria-hidden="true" />
                     : <Globe size={11} aria-hidden="true" />
                   }
-                  <span className="hidden sm:inline">Chapter Live</span>
+                  <span className="whitespace-nowrap">Chapter Live</span>
                 </button>
               </Tooltip>
             ) : (
@@ -243,14 +337,14 @@ export function EditorToolbar({
                     ? <Loader2 size={11} className="animate-spin" aria-hidden="true" />
                     : <Globe size={11} aria-hidden="true" />
                   }
-                  <span className="hidden sm:inline">Publish Chapter</span>
+                  <span className="whitespace-nowrap">Publish Chapter</span>
                 </button>
               </Tooltip>
             )}
           </>
         )}
 
-        <div className="w-px h-5 bg-bg-border mx-1" aria-hidden="true" />
+        <div className="w-px h-5 bg-bg-border mx-0.5 sm:mx-1" aria-hidden="true" />
 
         {isPublished ? (
           <Tooltip label="Unpublish novel" side="bottom">
@@ -261,7 +355,7 @@ export function EditorToolbar({
               aria-label="Unpublish novel"
             >
               <EyeOff size={13} aria-hidden="true" />
-              <span className="hidden sm:inline">Unpublish</span>
+              <span className="whitespace-nowrap">Unpublish</span>
             </button>
           </Tooltip>
         ) : (

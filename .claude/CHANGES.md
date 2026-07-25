@@ -1,5 +1,19 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-07-25 — Reader title splash redesign (CreditsPoster: modern webtoon, no purple/robotic look)
+`CreditsPoster` (the chapter-1 brand/credits splash, shown in the reader and previewed in the novel editor) read as "AI-generated" and "robotic boxes": a synthetic purple (`#8B5CF6`) energy background (radial blooms + grid + diagonal scanlines), neon glows, angular clip-path/skew slabs, corner brackets, paint-slash separators and a broken-arc neon medallion. Rebuilt it as a clean, cover-forward, centered **modern webtoon** splash.
+- **src/components/reader/CreditsPoster.tsx** (full rewrite): removed all purple/violet, all `clip-path`/`-skew` slabs, the corner-bracket frame, the slash-separated credits grid, and the neon medallion. New layout is a single centered column: rounded cover (`rounded-2xl ring-1 ring-white/10`, `aspect-[3/4]`) with the "TOONFLOW STUDIO PAINT" watermark, genre **pills** (`rounded-full`), a bold uppercase title, a quiet `by Author` line, a dot-separated meta row (status · chapters · lang), an accent "Chapter N" divider marker, and a subtle `@handle` / site brand footer. Ambiance now comes from the novel's own cover (blurred + vignetted) instead of synthetic glow; the lone accent is the brand token `accent` (#00C896), used sparingly. The old detailed credits grid is absorbed organically (author→byline, studio→watermark, genre→pills, status/chapters/lang→meta row). `TitlePage` was already neutral and left unchanged.
+- Verified: `tsc --noEmit` clean, `eslint` clean.
+
+## 2026-07-25 — Novel editor mobile layout (Chapters / Write / Assistant switcher)
+The novel editor (`/create/novel/[novelId]`) was a desktop-only 3-column IDE layout (Chapters `w-72` │ Editor `flex-1` │ AI `w-[350px]`) with no responsive handling — on mobile all three columns crammed together with unusable controls. Adapted it to a single switchable panel on mobile while leaving the desktop layout untouched.
+- **New `src/components/editor/EditorMobileTabs.tsx`**: mobile-only (`lg:hidden`) bottom navigation with three clear tabs — **Chapters** (with live count badge), **Write**, **Assistant**. Active tab shows accent color + top indicator bar; `aria-current="page"`, focus rings, safe-area bottom padding.
+- **src/app/(novel)/create/novel/[novelId]/page.tsx**: added `mobilePanel` state (`'chapters' | 'editor' | 'ai'`, default `'editor'`). Each of the three panels is wrapped so only the active one shows on mobile (`flex w-full` vs `hidden`) while all three stay side-by-side on `lg+` (`lg:flex lg:w-auto`). Editor stays visible in fullscreen regardless of panel state. Tapping a chapter (`handleSelectChapterFromSidebar`) or applying an AI-written chapter now jumps to the Write panel on mobile. Renders `<EditorMobileTabs>` at the bottom when not fullscreen.
+- **src/components/editor/ChapterSidebar.tsx** + **AIAssistant.tsx**: expanded panels now `w-full lg:w-72` / `w-full lg:w-[350px]`; collapsed rails and collapse toggle buttons are `hidden lg:flex` (desktop-only — mobile uses the tab bar instead).
+- **src/components/editor/EditorToolbar.tsx**: secondary utilities (Save, PDF export, Preview, Fullscreen) are now inline on desktop (`hidden sm:flex`) but fold into a single mobile overflow menu (`⋮`, `sm:hidden`), keeping the **Publish** and **Publish Chapter** CTAs unobstructed on small screens. Tighter header padding/gap on mobile.
+- Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
+- **Follow-up (same day)**: the two publish toggles (Chapter Live/Publish Chapter and novel Unpublish/Publish) were icon-only on mobile and unreadable. Removed their `hidden sm:inline` label wrappers so the words always show (`whitespace-nowrap`); made the right-actions cluster `flex-shrink-0` so labels stay intact and the novel/chapter title truncates instead; tightened dividers to `mx-0.5 sm:mx-1`.
+
 ## 2026-07-23 — Cover/banner remove button + free AI synopsis (Create/Edit Novel modal)
 Two changes to `CreateNovelModal`, plus making the last token-gated AI feature free.
 - **src/components/novel/CreateNovelModal.tsx**:
@@ -1477,3 +1491,38 @@ Batch of UX fixes requested together.
 - **Titles render Title Case everywhere** (`toTitleCase` in formatters — capitalizes first letter of each word, leaves the rest so acronyms survive): applied to detail-page H1s (novel+webtoon) AND all discovery cards/hero — HomeFeed, BrowseClient, OriginalsClient, content/NovelCard, content/WebtoonCard, home/HeroSlider. Added `break-words` to the detail H1s so a long unbroken title can't overflow.
 - **Title/description input limits** (CreateNovelModal + CreateWebtoonModal): `TITLE_MAX=100`, `SYNOPSIS_MAX=2000` enforced in BOTH zod and the inputs' `maxLength` (was zod-only at 120, so the UI let you type an unbounded overflowing string). Added live `n/MAX` counters (turn `text-warning` at the cap) next to the Title and Synopsis labels.
 - Verified: `tsc --noEmit` clean, `eslint` clean.
+
+## Browse filters → mobile bottom-sheet modal (2026-07-25)
+- **BrowseClient**: on mobile the Filters button now opens a Radix Dialog **bottom-sheet modal** instead of expanding the sidebar inline (which pushed the results grid down and felt cramped). Desktop is unchanged — the `<aside>` sidebar is now permanently `hidden md:block`.
+- Extracted the Sort/Status/Genre controls + "Clear All" into a shared `FilterControls` component rendered by BOTH the desktop sidebar and the mobile modal (no markup duplication).
+- Mobile modal: slides up (`animate-slide-up`), `max-h-[85vh]` with scrollable body, sticky header ("Filters" + close) and sticky footer with a `btn-accent` "Show N results" button that closes it. Overlay/Content are `md:hidden`.
+- Filters button gains an accent count badge (genres + status + non-default sort) so active filters are visible without opening the sheet; `onClick` now opens (was toggle), `aria-label` → "Open filters".
+- `hasActiveFilters` coerced to a strict boolean (`Boolean(...)`) since it feeds the new `boolean` prop.
+- Verified: `tsc --noEmit` clean.
+
+## Browse mobile filter sheet — lighter, less blocking (2026-07-25)
+- Feedback: the sheet felt like it walled off the browse content behind it.
+- **Backdrop**: `bg-black/70 backdrop-blur-sm` → `bg-black/40` (no blur) so the grid behind stays visible — the sheet reads as an overlay panel, not a blackout.
+- **Height**: `max-h-[85vh]` → `max-h-[72vh]`, leaving more of the results visible above the sheet.
+- **Grab handle** added at the top (rounded bar, tap-to-close, keyboard-focusable with aria-label) as a clear dismiss affordance; removed the header's bottom border and tightened header padding for a lighter look.
+- **Footer** button gains `env(safe-area-inset-bottom)` padding so it clears gesture-nav bars.
+- Verified: `tsc --noEmit` clean.
+
+## Verified the Sentry + Playwright + CI changeset (2026-07-25)
+- Ran the full verification suite against the 17-file observability/testing changeset (Sentry error tracking, Playwright e2e, async Upstash rate limiter, CI/CD pipeline, CSP headers).
+- **typecheck** `tsc --noEmit` clean · **unit tests** 26/26 pass · **build** `next build` succeeds (Sentry runAfterProductionCompile hook runs, 44 pages generated) · **e2e** 17/17 chromium tests pass.
+- **Fixed lint regression** in next.config.js: the new `require('@sentry/nextjs')` tripped `@typescript-eslint/no-require-imports`, which would have failed CI's `npm run lint` step (first step of the verify → e2e → deploy pipeline). Added a scoped `eslint-disable-next-line` (next.config.js must be CommonJS).
+- **Fixed 5 broken e2e selectors** in e2e/basic.spec.ts (Playwright strict-mode violations, not app bugs): `locator('nav')` matched 5 navs → scoped to `getByRole('navigation', { name: 'Main navigation' })`; `getByRole('heading')` on /terms + /privacy matched 13–15 headings → target the specific h1; browse `button,select,[role=tab]` `.first()` grabbed the `md:hidden` mobile "Open filters" button → assert the always-visible `getByRole('tab', { name: 'All' })` instead.
+- Note: a spurious Windows `nul` device-file is present as untracked (harmless, git can't add it); `prettier --check` reports pre-existing project-wide formatting debt (183 files) but CI does not gate on it.
+
+## Message bubbles show per-message timestamps, WhatsApp-style (2026-07-25)
+- **ThreadClient**: every message bubble now shows a small time (e.g. "10:30 PM") from the existing `createdAt` Firestore timestamp — no data/schema change.
+  - Text bubbles: time is a right-aligned `<time>` line at the bottom of the bubble, tinted `text-accent-foreground/70` on my (accent) bubbles and `text-text-muted` on the other side.
+  - Image bubbles: time is overlaid at bottom-right over a `from-black/55` gradient scrim for legibility.
+  - New helpers `timeLabel()` (12h en-US, matches `dayLabel`), `isoLabel()` (for the `<time dateTime>`), and a `MessageTime` component; renders nothing while a message is still pending (no server timestamp yet). Existing day separators + global "Seen" receipt unchanged.
+- Verified: `tsc --noEmit` clean, `eslint` clean.
+
+## Diagnosed AI image generation "not working" (2026-07-25) — no code change
+- Root cause: the Stability AI account is **out of credits** (balance = 1; the `ultra` model in /api/ai/generate-image costs 8/image). Live repro returned HTTP 402 `payment_required`. Both ANTHROPIC_API_KEY and STABILITY_API_KEY are present and valid in .env.local (Stability /v1/user/account returns 200).
+- The route already handles this correctly (402 → 503 "temporarily unavailable", billing details hidden from end users). Fix is to top up at platform.stability.ai/account/credits — or switch `ultra` → `core` (3 credits) to reduce per-image cost.
+- Caveat for production: per prior migration notes the App Hosting backend may not have STABILITY_API_KEY set as a secret, in which case prod fails with the "not configured" path instead.

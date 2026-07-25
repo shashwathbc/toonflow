@@ -4,3 +4,5 @@ package-lock.json
 tsconfig.tsbuildinfo
 public/sw.js
 *.log
+test-results/
+playwright-report/

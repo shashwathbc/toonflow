@@ -17,6 +17,8 @@ import {
 import dynamic from 'next/dynamic'
 import { ChapterSidebar } from '@/components/editor/ChapterSidebar'
 import { EditorToolbar } from '@/components/editor/EditorToolbar'
+import { EditorMobileTabs, type EditorPanel } from '@/components/editor/EditorMobileTabs'
+import { cn } from '@/lib/utils/cn'
 import { CreditsPoster } from '@/components/reader/CreditsPoster'
 import { TitlePage } from '@/components/reader/TitlePage'
 import { EndingPoster } from '@/components/reader/EndingPoster'
@@ -59,6 +61,9 @@ export default function NovelEditorPage({ params }: PageProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [aiCollapsed, setAiCollapsed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  // Which panel is visible on mobile (< lg). On lg+ all three render side by
+  // side and this is ignored.
+  const [mobilePanel, setMobilePanel] = useState<EditorPanel>('editor')
   const [, setPublishing] = useState(false)
   const [chapterPublishing, setChapterPublishing] = useState(false)
 
@@ -132,6 +137,13 @@ export default function NovelEditorPage({ params }: PageProps) {
     lastSavedContent.current = chapter.content ?? ''
   }
 
+  // Tapping a chapter in the sidebar should jump straight to the canvas on
+  // mobile; on desktop the panel switch is a no-op (all panels are visible).
+  function handleSelectChapterFromSidebar(chapter: Chapter) {
+    selectChapter(chapter)
+    setMobilePanel('editor')
+  }
+
   function handleApplyAIChapter(html: string) {
     // Word count from the generated HTML (tags stripped)
     const text = html.replace(/<[^>]+>/g, ' ')
@@ -140,6 +152,8 @@ export default function NovelEditorPage({ params }: PageProps) {
     if (activeChapter) {
       triggerSave(activeChapter.id, html, wc, true)
     }
+    // Surface the freshly-written canvas on mobile so the result is visible.
+    setMobilePanel('editor')
   }
 
   function handleEditorChange(html: string, wc: number) {
@@ -367,22 +381,34 @@ export default function NovelEditorPage({ params }: PageProps) {
         chapterPublishing={chapterPublishing}
       />
 
-      {/* Three-column editor */}
+      {/* Three-column editor (desktop) / single switchable panel (mobile) */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Chapter sidebar */}
         {!fullscreen && (
-          <ChapterSidebar
-            novelId={novelId}
-            chapters={chapters}
-            activeChapterId={activeChapter?.id ?? null}
-            onSelectChapter={selectChapter}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-          />
+          <div
+            className={cn(
+              'flex-shrink-0 min-h-0 lg:flex lg:w-auto',
+              mobilePanel === 'chapters' ? 'flex w-full' : 'hidden'
+            )}
+          >
+            <ChapterSidebar
+              novelId={novelId}
+              chapters={chapters}
+              activeChapterId={activeChapter?.id ?? null}
+              onSelectChapter={handleSelectChapterFromSidebar}
+              collapsed={sidebarCollapsed}
+              onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+            />
+          </div>
         )}
 
         {/* Center: Editor */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-black">
+        <div
+          className={cn(
+            'flex-1 flex-col overflow-hidden bg-black min-w-0 lg:flex',
+            fullscreen || mobilePanel === 'editor' ? 'flex' : 'hidden'
+          )}
+        >
           {activeChapter ? (
             <>
               {/* TipTap editor — the formatting toolbar sits at the very top,
@@ -486,17 +512,33 @@ export default function NovelEditorPage({ params }: PageProps) {
 
         {/* Right: AI Assistant */}
         {!fullscreen && (
-          <AIAssistant
-            novel={novel}
-            chapter={activeChapter}
-            chapters={chapters}
-            novelId={novelId}
-            collapsed={aiCollapsed}
-            onToggleCollapse={() => setAiCollapsed((v) => !v)}
-            onApplyChapter={handleApplyAIChapter}
-          />
+          <div
+            className={cn(
+              'flex-shrink-0 min-h-0 lg:flex lg:w-auto',
+              mobilePanel === 'ai' ? 'flex w-full' : 'hidden'
+            )}
+          >
+            <AIAssistant
+              novel={novel}
+              chapter={activeChapter}
+              chapters={chapters}
+              novelId={novelId}
+              collapsed={aiCollapsed}
+              onToggleCollapse={() => setAiCollapsed((v) => !v)}
+              onApplyChapter={handleApplyAIChapter}
+            />
+          </div>
         )}
       </div>
+
+      {/* Mobile-only panel switcher */}
+      {!fullscreen && (
+        <EditorMobileTabs
+          active={mobilePanel}
+          onChange={setMobilePanel}
+          chapterCount={chapters.length}
+        />
+      )}
 
       <p className="sr-only" aria-live="polite" aria-atomic="true">
         {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}

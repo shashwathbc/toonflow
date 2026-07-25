@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import * as Dialog from '@radix-ui/react-dialog'
 import {
   Search, SlidersHorizontal, BookOpen, Layers, Eye, Star, X,
 } from 'lucide-react'
@@ -98,6 +99,110 @@ function SkeletonCard() {
         <div className="h-3.5 bg-bg-elevated rounded w-4/5" />
         <div className="h-3 bg-bg-elevated rounded w-1/2" />
       </div>
+    </div>
+  )
+}
+
+interface FilterControlsProps {
+  sortBy: SortBy
+  onSortChange: (v: SortBy) => void
+  status: string
+  onStatusChange: (v: string) => void
+  genres: string[]
+  onToggleGenre: (g: string) => void
+  hasActiveFilters: boolean
+  onClearFilters: () => void
+}
+
+/** The filter controls, shared by the desktop sidebar and the mobile modal. */
+function FilterControls({
+  sortBy, onSortChange, status, onStatusChange, genres, onToggleGenre, hasActiveFilters, onClearFilters,
+}: FilterControlsProps) {
+  return (
+    <div className="space-y-6">
+      {/* Sort */}
+      <fieldset>
+        <legend className="text-xs font-semibold text-white/40 tracking-widest uppercase mb-3">Sort By</legend>
+        <div className="space-y-1">
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onSortChange(opt.value)}
+              className={cn(
+                'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                sortBy === opt.value
+                  ? 'bg-accent/10 text-accent font-medium'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              )}
+              {...(sortBy === opt.value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      {/* Status */}
+      <fieldset>
+        <legend className="text-xs font-semibold text-white/40 tracking-widest uppercase mb-3">Status</legend>
+        <div className="space-y-1">
+          {STATUS_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onStatusChange(opt.value)}
+              className={cn(
+                'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                status === opt.value
+                  ? 'bg-accent/10 text-accent font-medium'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              )}
+              {...(status === opt.value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      {/* Genres — multi-select (any-of) */}
+      <fieldset>
+        <legend className="text-xs font-semibold text-white/40 tracking-widest uppercase mb-3">
+          Genre{genres.length > 0 && <span className="text-accent normal-case tracking-normal"> · {genres.length}</span>}
+        </legend>
+        <div className="flex flex-wrap gap-1.5">
+          {GENRES.map((g) => {
+            const selected = genres.includes(g)
+            return (
+              <button
+                key={g}
+                type="button"
+                onClick={() => onToggleGenre(g)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent capitalize',
+                  selected
+                    ? 'bg-accent/10 text-accent border-accent/30'
+                    : 'bg-bg text-white/50 border-bg-border hover:border-white/30 hover:text-white'
+                )}
+                {...(selected ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
+              >
+                {g}
+              </button>
+            )
+          })}
+        </div>
+      </fieldset>
+
+      {hasActiveFilters && (
+        <button
+          type="button"
+          onClick={onClearFilters}
+          className="w-full flex items-center justify-center gap-1.5 text-xs text-danger hover:text-white border border-danger/30 hover:border-white/30 rounded-lg py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <X size={12} aria-hidden="true" /> Clear All Filters
+        </button>
+      )}
     </div>
   )
 }
@@ -201,7 +306,10 @@ export function BrowseClient() {
     setContentType('all')
   }
 
-  const hasActiveFilters = genres.length > 0 || status || sortBy !== 'trending' || contentType !== 'all' || searchQuery
+  const hasActiveFilters = Boolean(genres.length > 0 || status || sortBy !== 'trending' || contentType !== 'all' || searchQuery)
+  // Count of filters controlled inside the sidebar/modal (search + content-type
+  // live outside it), used for the mobile Filters button badge.
+  const activeFilterCount = genres.length + (status ? 1 : 0) + (sortBy !== 'trending' ? 1 : 0)
 
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-8">
@@ -215,13 +323,18 @@ export function BrowseClient() {
         </div>
         <button
           type="button"
-          onClick={() => setSidebarOpen((v) => !v)}
-          className="btn-ghost text-sm md:hidden"
-          aria-label="Toggle filters"
+          onClick={() => setSidebarOpen(true)}
+          className="btn-ghost text-sm md:hidden relative"
+          aria-label="Open filters"
           {...(sidebarOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
         >
           <SlidersHorizontal size={16} aria-hidden="true" />
           Filters
+          {activeFilterCount > 0 && (
+            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-accent text-accent-foreground text-[11px] font-semibold">
+              {activeFilterCount}
+            </span>
+          )}
         </button>
       </div>
 
@@ -271,98 +384,72 @@ export function BrowseClient() {
         ))}
       </div>
 
-      <div className="flex gap-6">
-        {/* Filter sidebar */}
-        <aside
-          className={cn(
-            'w-52 shrink-0 space-y-6',
-            sidebarOpen ? 'block' : 'hidden md:block'
-          )}
-          aria-label="Content filters"
-        >
-          {/* Sort */}
-          <fieldset>
-            <legend className="text-xs font-semibold text-white/40 tracking-widest uppercase mb-3">Sort By</legend>
-            <div className="space-y-1">
-              {SORT_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setSortBy(opt.value)}
-                  className={cn(
-                    'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    sortBy === opt.value
-                      ? 'bg-accent/10 text-accent font-medium'
-                      : 'text-white/60 hover:bg-white/10 hover:text-white'
-                  )}
-                  {...(sortBy === opt.value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          {/* Status */}
-          <fieldset>
-            <legend className="text-xs font-semibold text-white/40 tracking-widest uppercase mb-3">Status</legend>
-            <div className="space-y-1">
-              {STATUS_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setStatus(opt.value)}
-                  className={cn(
-                    'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    status === opt.value
-                      ? 'bg-accent/10 text-accent font-medium'
-                      : 'text-white/60 hover:bg-white/10 hover:text-white'
-                  )}
-                  {...(status === opt.value ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          {/* Genres — multi-select (any-of) */}
-          <fieldset>
-            <legend className="text-xs font-semibold text-white/40 tracking-widest uppercase mb-3">
-              Genre{genres.length > 0 && <span className="text-accent normal-case tracking-normal"> · {genres.length}</span>}
-            </legend>
-            <div className="flex flex-wrap gap-1.5">
-              {GENRES.map((g) => {
-                const selected = genres.includes(g)
-                return (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => toggleGenre(g)}
-                    className={cn(
-                      'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent capitalize',
-                      selected
-                        ? 'bg-accent/10 text-accent border-accent/30'
-                        : 'bg-bg text-white/50 border-bg-border hover:border-white/30 hover:text-white'
-                    )}
-                    {...(selected ? { 'aria-pressed': 'true' } : { 'aria-pressed': 'false' })}
-                  >
-                    {g}
-                  </button>
-                )
-              })}
-            </div>
-          </fieldset>
-
-          {hasActiveFilters && (
+      {/* Mobile filter modal — a light bottom sheet: dim (not blackout) backdrop
+          and a compact height so the browse content behind stays visible and the
+          user never feels cut off from what they were reading. */}
+      <Dialog.Root open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-fade-in md:hidden" />
+          <Dialog.Content
+            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[72vh] flex-col rounded-t-2xl border-t border-bg-border bg-bg-card shadow-2xl data-[state=open]:animate-slide-up focus:outline-none md:hidden"
+            aria-describedby={undefined}
+          >
+            {/* Grab handle — signals the sheet is dismissible */}
             <button
               type="button"
-              onClick={clearFilters}
-              className="w-full flex items-center justify-center gap-1.5 text-xs text-danger hover:text-white border border-danger/30 hover:border-white/30 rounded-lg py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <X size={12} aria-hidden="true" /> Clear All Filters
-            </button>
-          )}
+              onClick={() => setSidebarOpen(false)}
+              className="mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0 rounded-full bg-white/20 hover:bg-white/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label="Close filters"
+            />
+
+            <div className="flex items-center justify-between px-5 py-3 shrink-0">
+              <Dialog.Title className="text-base font-semibold text-white">Filters</Dialog.Title>
+              <Dialog.Close asChild>
+                <button type="button" className="btn-ghost p-1.5 rounded-lg" aria-label="Close filters">
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="px-5 pb-4 overflow-y-auto flex-1">
+              <FilterControls
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                status={status}
+                onStatusChange={setStatus}
+                genres={genres}
+                onToggleGenre={toggleGenre}
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={clearFilters}
+              />
+            </div>
+
+            <div className="px-5 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-bg-border shrink-0">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                className="btn-accent w-full justify-center"
+              >
+                {loading ? 'Show results' : `Show ${items.length} result${items.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <div className="flex gap-6">
+        {/* Filter sidebar — desktop only; mobile uses the modal above */}
+        <aside className="hidden md:block w-52 shrink-0" aria-label="Content filters">
+          <FilterControls
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            status={status}
+            onStatusChange={setStatus}
+            genres={genres}
+            onToggleGenre={toggleGenre}
+            hasActiveFilters={hasActiveFilters}
+            onClearFilters={clearFilters}
+          />
         </aside>
 
         {/* Results grid */}

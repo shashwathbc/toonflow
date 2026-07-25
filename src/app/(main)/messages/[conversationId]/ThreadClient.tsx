@@ -266,6 +266,7 @@ export default function ThreadClient({ conversationId }: { conversationId: strin
                       )}
                     >
                       <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                      <MessageTime ts={m.createdAt} mine={mine} className="mt-0.5 block text-right" />
                     </div>
                   )}
                 </div>
@@ -364,6 +365,7 @@ function ImageBubble({ message, mine }: { message: ConversationMessage; mine: bo
   const ih = message.imageHeight && message.imageHeight > 0 ? message.imageHeight : 3
   const dispW = Math.min(240, iw)
   const dispH = Math.max(1, Math.round(dispW * (ih / iw)))
+  const time = timeLabel(message.createdAt)
   return (
     <a
       href={message.imageURL}
@@ -371,7 +373,7 @@ function ImageBubble({ message, mine }: { message: ConversationMessage; mine: bo
       rel="noopener noreferrer"
       aria-label="Open shared image in a new tab"
       className={cn(
-        'block overflow-hidden rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'relative block overflow-hidden rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         mine ? 'rounded-br-sm' : 'rounded-bl-sm'
       )}
     >
@@ -382,6 +384,14 @@ function ImageBubble({ message, mine }: { message: ConversationMessage; mine: bo
         height={dispH}
         className="h-auto max-w-full object-cover"
       />
+      {/* Time overlaid on the image with a scrim for legibility (WhatsApp-style). */}
+      {time && (
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-black/55 to-transparent px-2 pb-1 pt-5">
+          <time dateTime={isoLabel(message.createdAt)} className="text-[10px] leading-none tabular-nums text-white/90">
+            {time}
+          </time>
+        </span>
+      )}
     </a>
   )
 }
@@ -394,6 +404,34 @@ function TypingDots() {
       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:300ms]" />
     </span>
   )
+}
+
+/** Small per-bubble timestamp, e.g. "10:30 PM". Hidden while a message is still
+ *  pending (no server timestamp yet), so nothing renders until it resolves. */
+function MessageTime({ ts, mine, className }: { ts: FirestoreTimestamp | null; mine: boolean; className?: string }) {
+  const label = timeLabel(ts)
+  if (!label) return null
+  return (
+    <time
+      dateTime={isoLabel(ts)}
+      className={cn(
+        'text-[10px] leading-none tabular-nums',
+        mine ? 'text-accent-foreground/70' : 'text-text-muted',
+        className
+      )}
+    >
+      {label}
+    </time>
+  )
+}
+
+function timeLabel(ts: FirestoreTimestamp | null): string {
+  if (!ts?.seconds) return ''
+  return new Date(ts.seconds * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+function isoLabel(ts: FirestoreTimestamp | null): string | undefined {
+  return ts?.seconds ? new Date(ts.seconds * 1000).toISOString() : undefined
 }
 
 function dayKey(ts: FirestoreTimestamp | null): string {
