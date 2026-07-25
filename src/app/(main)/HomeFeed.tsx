@@ -68,7 +68,10 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
         {item.genres?.length > 0 && (
           <p className="text-[11px] text-white/50 mb-1.5 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
         )}
-        <div className="flex items-center gap-3 text-[11px] text-white/60">
+        {/* Wraps instead of clipping: on ≤360px phones the card is ~44vw wide and
+            three stats at gap-3 overran the card's overflow-hidden edge, cutting
+            the rating. gap-y lets the third stat drop to a second line if needed. */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-white/60">
           <Stat icon={Layers} value={chapterCount} label={unitLabel} />
           <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
           {item.rating > 0 && (
@@ -251,7 +254,7 @@ export function HomeFeed() {
         className="max-w-screen-xl mx-auto px-4 pb-16"
         aria-labelledby="originals-promo-heading"
       >
-        <div className="bg-bg-elevated border border-bg-border p-8 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="bg-bg-elevated border border-bg-border p-6 sm:p-8 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Sparkles size={18} className="text-accent" aria-hidden="true" />
