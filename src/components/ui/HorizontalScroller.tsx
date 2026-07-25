@@ -48,7 +48,7 @@ export function HorizontalScroller({ children, ariaLabel, className }: Horizonta
   }
 
   return (
-    <div className={cn('group/scroller relative', className)}>
+    <div className={cn('group/scroller relative overflow-hidden', className)}>
       <ArrowButton side="left" show={canLeft} onClick={() => page(-1)} />
 
       <div

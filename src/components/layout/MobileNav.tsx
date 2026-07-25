@@ -82,7 +82,8 @@ export default function MobileNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 bg-bg/90 backdrop-blur-lg border-t border-bg-border h-14 md:hidden flex items-center justify-around px-2 pb-safe"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-bg/90 backdrop-blur-lg border-t border-bg-border h-14 md:hidden flex items-center justify-around px-2"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Mobile navigation bar"
     >
       {items.map((item, idx) => {

@@ -30,7 +30,7 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
   return (
     <Link
       href={href}
-      className="group block rounded-xl overflow-hidden bg-bg-card border border-bg-border hover:border-white/20 transition-all duration-200"
+      className="group block relative rounded-xl overflow-hidden bg-bg-card border border-bg-border hover:border-white/20 transition-all duration-200"
       aria-label={cardLabel}
     >
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">

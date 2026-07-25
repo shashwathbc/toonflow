@@ -110,6 +110,7 @@ export default function NotificationBell() {
           side="bottom"
           align="end"
           sideOffset={8}
+          collisionPadding={8}
           className={cn(
             'z-50 w-[min(92vw,22rem)] overflow-hidden rounded-xl border border-bg-border bg-bg-card shadow-xl',
             'data-[state=open]:animate-fade-in',
