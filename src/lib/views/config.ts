@@ -5,16 +5,20 @@ export const VIEW_CONFIG = {
   /** One counted view per visitor per content within this rolling window. */
   dedupWindowMs: 24 * 60 * 60 * 1000, // 24h
 
-  /** Server-measured dwell (token issue → completion) that alone qualifies a view.
-   *  Product choice: count a view after a few seconds of genuine reading. The
-   *  client mirror (useViewTracking) fires ABOVE this so network jitter between
-   *  the begin/complete round-trips can never leave server dwell below the floor. */
-  minDwellMs: 5_000,
+  /** Server-measured dwell (token issue → completion) required to qualify a view.
+   *  Product choice: a view counts as soon as the chapter/episode is OPENED —
+   *  there is no minimum reading time. Kept at 0 so any valid, non-bot,
+   *  non-duplicate completion counts. Per-user counting still holds because the
+   *  24h per-visitor dedup below makes it one view per user (not per refresh),
+   *  and bot detection / rate limits / token + visitor-cookie validation all
+   *  still apply. */
+  minDwellMs: 0,
 
-  /** Scroll depth that qualifies a view (combined with a small dwell floor). */
+  /** Scroll depth that qualifies a view. No longer gates counting (minDwellMs is
+   *  0), but the scroll figure is still recorded for analytics. */
   minScrollPercent: 50,
-  /** Minimum server dwell even when the scroll threshold is met (anti scroll-jacking). */
-  minDwellWithScrollMs: 3_000,
+  /** Minimum server dwell even when the scroll threshold is met. */
+  minDwellWithScrollMs: 0,
 
   /** A view token older than this is stale and rejected (prevents replay of old tokens). */
   tokenMaxAgeMs: 6 * 60 * 60 * 1000, // 6h

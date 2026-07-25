@@ -13,6 +13,19 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const MAX_BODY_BYTES = 64 * 1024
 
+// Platform signature look. Appended to EVERY Flux prompt — drafted by AI,
+// auto-filled, or hand-typed by the user — so all covers/banners come out as
+// the same premium cinematic Korean webtoon / manhwa poster art (see the
+// Ravana / Karna / Shadow Island reference set), never generic stock imagery.
+// Flux's URL API has no negative-prompt field, so the "no text/logo" guards are
+// folded in here as positive phrasing (text is added later as a design overlay).
+const WEBTOON_STYLE_SUFFIX =
+  ', premium Korean webtoon manhwa cover art, cinematic dramatic lighting,' +
+  ' highly detailed digital painting, epic atmospheric composition,' +
+  ' rich moody cinematic color grading, bold heroic framing, clean professional' +
+  ' illustration, sharp focus, ultra detailed, high quality,' +
+  ' no text, no typography, no letters, no watermark, no logo'
+
 const promptSchema = z.object({
   action: z.literal('prompt'),
   novelTitle: z.string().max(300),
@@ -61,17 +74,18 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'user',
-            content: `Write a concise image generation prompt for a professional ${isCover ? 'book cover (2:3 portrait)' : 'banner image (16:9 landscape)'} for this novel:
+            content: `Write a concise image generation prompt for a premium ${isCover ? 'webtoon cover (2:3 portrait)' : 'webtoon banner (16:9 landscape)'} for this novel:
 
 Title: "${novelTitle}"
 Synopsis: "${novelSynopsis || 'No synopsis provided'}"
 
 Requirements:
-- Dramatic, emotionally resonant composition
-- Specific lighting, mood, color palette
-- ${isCover ? 'Portrait orientation, foreground subject dominant' : 'Wide cinematic landscape, atmospheric'}
+- Cinematic Korean webtoon / manhwa cover art — dramatic and emotionally resonant
+- A clear focal subject (the hero/character or an iconic scene) with a strong silhouette
+- Specific dramatic lighting, mood, and a rich cinematic color palette
+- ${isCover ? 'Portrait orientation, foreground subject dominant' : 'Wide cinematic landscape, atmospheric depth'}
+- Describe only the SCENE, subject, lighting and mood — do NOT name an art medium or software (the webtoon art style is applied separately)
 - No text, no typography, no letters in the image
-- Genre-appropriate visual style
 - 50–80 words maximum
 
 Return ONLY the image prompt text.`,
@@ -101,9 +115,13 @@ Return ONLY the image prompt text.`,
       const { width, height } =
         imageType === 'cover' ? { width: 768, height: 1152 } : { width: 1280, height: 720 }
 
+      // Force the platform's webtoon art look onto whatever prompt arrives,
+      // whether AI-drafted, auto-filled, or typed by hand.
+      const styledPrompt = `${prompt}${WEBTOON_STYLE_SUFFIX}`
+
       const seed = Math.floor(Math.random() * 1_000_000)
       const url =
-        `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
+        `https://image.pollinations.ai/prompt/${encodeURIComponent(styledPrompt)}` +
         `?width=${width}&height=${height}&model=flux&nologo=true&seed=${seed}`
 
       // Cap the wait so the request can't hang forever if the service stalls.

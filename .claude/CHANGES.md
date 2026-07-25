@@ -1,5 +1,20 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-07-25 — AI images always render as cinematic webtoon/manhwa poster art
+Every AI-generated cover/banner should share the platform's signature look (the Ravana / Karna / Shadow Island poster style) instead of generic stock imagery. Enforced server-side so it applies no matter how the prompt was produced.
+- **src/app/api/ai/generate-image/route.ts**:
+  - Added a `WEBTOON_STYLE_SUFFIX` constant ("premium Korean webtoon manhwa cover art, cinematic dramatic lighting, highly detailed digital painting, epic atmospheric composition, rich moody cinematic color grading, bold heroic framing, … no text/typography/logo") and **append it to every Flux prompt** in the `generate` action (`styledPrompt = prompt + SUFFIX`). This forces the webtoon look onto AI-drafted, auto-filled, AND hand-typed prompts alike. The no-text/no-logo guards are folded into the suffix as positive phrasing because Flux's URL API has no negative-prompt field (titles are added later as a design overlay, as in the reference posters).
+  - Biased the Haiku prompt-drafting (`action: 'prompt'`) toward "cinematic Korean webtoon / manhwa cover art" with a clear focal subject + strong silhouette, and told it to describe only the scene/subject/lighting/mood and NOT name an art medium (so the drafted prompt never fights the appended style).
+- Single entry point: the shared `AIImageGenerator` (used by both `CreateNovelModal` and `CreateWebtoonModal`) posts here, so novels and webtoons are both covered.
+- Verified: `tsc --noEmit` clean.
+
+## 2026-07-25 — Views: count 1 view per user on chapter/episode OPEN (drop dwell/scroll gate)
+View counts read low because a view only qualified after ≥5s server-measured dwell (6s client) OR ≥50% scroll + ≥3s dwell. Product change: opening a chapter/episode now counts as **1 view per user** immediately. Anti-abuse is unchanged — per-visitor **24h dedup** (so it's one per user, not one per refresh), bot detection, same-origin/CSRF, signed view token + visitor cookie, and per-IP/visitor/session rate limits all still apply.
+- **src/lib/views/config.ts**: `minDwellMs` 5000→**0** and `minDwellWithScrollMs` 3000→**0**, so any valid, non-bot, non-duplicate completion counts. `minScrollPercent` (50) kept but no longer gates counting — scroll depth is still recorded for analytics.
+- **src/hooks/useViewTracking.ts**: client mirrors `MIN_VISIBLE_MS` 6000→**0** and `MIN_VISIBLE_WITH_SCROLL_MS` 4000→**0** (thresholdMet now always true). The `complete` request also fires **immediately** once the begin token arrives (`void complete()` in the begin `.then`) instead of waiting for the 1s poll — so the view registers within one round-trip of opening. The 1s interval is retained purely as a retry net; visible-time/scroll accumulators are kept only to report engagement analytics. Updated the now-stale comments accordingly.
+- Note: dedup window is still 24h rolling (a user counts once per day, standard unique-daily behavior). Say the word if you want strictly once-ever per user instead.
+- Verified: `tsc --noEmit` clean.
+
 ## 2026-07-25 — Fix App Hosting build failure #2 (npm ci EUSAGE: missing @emnapi from lock file)
 After the secret fix unblocked the preparer step, the build then failed at the "build" step during `npm ci` with `EUSAGE — Missing: @emnapi/runtime@1.11.3 / @emnapi/core@1.11.3 from lock file`. Root cause: the committed `package-lock.json` had been regenerated with **npm 11** (local npm is 11.6.2), which prunes sharp's wasm-fallback optional subtree (`@img/sharp-wasm32` → `@emnapi/*`) out of the lockfile. Cloud Build's `npm ci` recomputes the ideal tree, expects those packages, finds them absent, and hard-fails.
 - **package-lock.json**: regenerated with **npm 10** via `npx --yes npm@10 install --package-lock-only`. This re-adds the two top-level entries `@emnapi/core@1.11.3` and `@emnapi/runtime@1.11.3` (plus the surrounding wasm subtree restructuring). Diff is confined entirely to the `@emnapi`/`sharp-wasm32`/`wasi-threads` subtree — no other package versions changed. Lockfile re-validated as parseable JSON.

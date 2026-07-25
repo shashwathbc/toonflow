@@ -12,16 +12,14 @@ export interface ViewTrackingTarget {
   parentId: string
 }
 
-// Client-side mirrors of the server thresholds (server is authoritative). These
-// sit ~1s ABOVE the server floors (server: 5s / 3s) on purpose: the server times
-// dwell from token issue (begin), so begin/complete network latency makes its
-// measured dwell slightly SHORTER than the client's visible-time clock. The
-// margin guarantees that when the client decides to fire, the server's dwell has
-// comfortably cleared its floor — otherwise a near-threshold view would be
-// rejected yet still guarded for 24h, and silently lost.
-const MIN_VISIBLE_MS = 6_000
+// A view counts as soon as the chapter/episode is OPENED — there is no minimum
+// reading time (the server thresholds are 0 too, see VIEW_CONFIG.minDwellMs).
+// The visible-time and scroll accumulators below are kept only to report
+// engagement/scroll depth to the server for analytics; they no longer decide
+// whether the view fires.
+const MIN_VISIBLE_MS = 0
 const MIN_SCROLL_PCT = 50
-const MIN_VISIBLE_WITH_SCROLL_MS = 4_000
+const MIN_VISIBLE_WITH_SCROLL_MS = 0
 const GUARD_WINDOW_MS = 24 * 60 * 60 * 1000
 
 function guardKey(t: ViewTrackingTarget) {
@@ -154,8 +152,9 @@ export function useViewTracking(target: ViewTrackingTarget | null): void {
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('pagehide', onPageHide)
 
-    // Poll every 1s so a qualifying view fires promptly once the (few-second)
-    // threshold is crossed, instead of lagging up to a full interval behind.
+    // Retry net: the view normally fires the moment the begin token arrives
+    // (below). This 1s poll re-attempts if that first send failed (network
+    // hiccup reset `sent`) or if the token arrived before listeners were ready.
     const interval = setInterval(() => { void complete() }, 1_000)
 
     // ── Begin phase: get the server-timestamped view token ──
@@ -172,7 +171,12 @@ export function useViewTracking(target: ViewTrackingTarget | null): void {
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { token?: string } | null) => {
-        if (!disposed && data?.token) token = data.token
+        if (disposed || !data?.token) return
+        token = data.token
+        // Count the view immediately now that the chapter is open — no need to
+        // wait for the poll interval. (The interval remains as a retry safety net
+        // if this first attempt hits a network hiccup and resets `sent`.)
+        void complete()
       })
       .catch(() => { /* tracking is best-effort; never break reading */ })
 
