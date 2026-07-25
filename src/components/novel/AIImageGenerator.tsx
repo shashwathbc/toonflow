@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Wand2, Sparkles, X, Check, Loader2, Copy, RotateCcw } from 'lucide-react'
+import { Wand2, Sparkles, X, Check, Loader2, RotateCcw } from 'lucide-react'
 import { Tooltip } from '@/components/ui/Tooltip'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
@@ -38,7 +38,7 @@ export function AIImageGenerator({
   const [loadingPrompt, setLoadingPrompt] = useState(false)
   const [loadingImage, setLoadingImage] = useState(false)
   const [imageBase64, setImageBase64] = useState<string | null>(null)
-  const [noKey, setNoKey] = useState(false)
+  const [imageMime, setImageMime] = useState('image/jpeg')
 
   const autoFillPrompt = useCallback(async () => {
     setLoadingPrompt(true)
@@ -79,26 +79,27 @@ export function AIImageGenerator({
     }
     setLoadingImage(true)
     setImageBase64(null)
-    setNoKey(false)
     try {
       const res = await fetch('/api/ai/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'generate', prompt: fullPrompt, imageType, userId }),
       })
-      const data = await res.json() as { imageBase64?: string; error?: string; noKey?: boolean; insufficientTokens?: boolean }
+      const data = await res.json() as { imageBase64?: string; imageMime?: string; error?: string; insufficientTokens?: boolean }
       if (!res.ok) {
-        if (data.noKey) setNoKey(true)
         if (data.insufficientTokens) {
           toast.error(data.error ?? 'Not enough tokens', { duration: 6000 })
           return
         }
         throw new Error(data.error)
       }
-      if (data.imageBase64) setImageBase64(data.imageBase64)
+      if (data.imageBase64) {
+        setImageBase64(data.imageBase64)
+        setImageMime(data.imageMime ?? 'image/jpeg')
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Generation failed'
-      if (!noKey) toast.error(msg)
+      toast.error(msg)
     } finally {
       setLoadingImage(false)
     }
@@ -110,7 +111,8 @@ export function AIImageGenerator({
     const ab = new ArrayBuffer(byteString.length)
     const ia = new Uint8Array(ab)
     for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i)
-    const file = new File([ab], `ai-${imageType}-${now()}.webp`, { type: 'image/webp' })
+    const ext = imageMime.includes('png') ? 'png' : imageMime.includes('webp') ? 'webp' : 'jpg'
+    const file = new File([ab], `ai-${imageType}-${now()}.${ext}`, { type: imageMime })
     onAccept(file)
     toast.success('AI image applied!')
   }
@@ -188,30 +190,6 @@ export function AIImageGenerator({
         </div>
       </div>
 
-      {/* No-key notice */}
-      {noKey && (
-        <div className="bg-warning/10 border border-warning/20 rounded-lg p-3 space-y-2">
-          <p className="text-[11px] text-warning font-medium">STABILITY_API_KEY not configured</p>
-          <p className="text-[10px] text-white/50">
-            Add <code className="bg-white/10 px-1 rounded">STABILITY_API_KEY=your_key</code> to{' '}
-            <code className="bg-white/10 px-1 rounded">.env.local</code> to auto-generate images.
-            Get a free key at{' '}
-            <span className="text-white/70">platform.stability.ai</span>
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(prompt + ', ' + style)
-              toast.success('Prompt copied — paste it in Midjourney or DALL-E!')
-            }}
-            className="flex items-center gap-1 text-[11px] text-white/60 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white rounded"
-          >
-            <Copy size={10} aria-hidden="true" />
-            Copy prompt for external tool
-          </button>
-        </div>
-      )}
-
       {/* Preview */}
       {imageBase64 && (
         <div className="space-y-2">
@@ -224,7 +202,7 @@ export function AIImageGenerator({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`data:image/webp;base64,${imageBase64}`}
+              src={`data:${imageMime};base64,${imageBase64}`}
               alt="AI generated preview"
               className="w-full h-full object-cover"
             />

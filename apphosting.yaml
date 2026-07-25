@@ -104,9 +104,19 @@ env:
   - variable: VIEW_TOKEN_SECRET
     secret: VIEW_TOKEN_SECRET
     availability: [RUNTIME]
-  - variable: UPSTASH_REDIS_REST_URL
-    secret: UPSTASH_REDIS_REST_URL
-    availability: [RUNTIME]
-  - variable: UPSTASH_REDIS_REST_TOKEN
-    secret: UPSTASH_REDIS_REST_TOKEN
-    availability: [RUNTIME]
+
+  # ---- Optional: distributed rate limiting via Upstash Redis ----
+  # src/lib/views/rateLimit.ts falls back to an in-memory limiter when these are
+  # unset, and no caller uses the async Upstash path yet — so they are OMITTED
+  # on purpose. Do NOT re-add these references until the secrets actually exist
+  # in Secret Manager, or the Cloud Build preparer hard-fails every build with
+  # fah/misconfigured-secret. To enable later:
+  #   firebase apphosting:secrets:set UPSTASH_REDIS_REST_URL   --project toonflow-studio-paint-f76d5
+  #   firebase apphosting:secrets:set UPSTASH_REDIS_REST_TOKEN --project toonflow-studio-paint-f76d5
+  # then uncomment:
+  # - variable: UPSTASH_REDIS_REST_URL
+  #   secret: UPSTASH_REDIS_REST_URL
+  #   availability: [RUNTIME]
+  # - variable: UPSTASH_REDIS_REST_TOKEN
+  #   secret: UPSTASH_REDIS_REST_TOKEN
+  #   availability: [RUNTIME]
