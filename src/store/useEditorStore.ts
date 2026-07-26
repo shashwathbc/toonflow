@@ -77,6 +77,24 @@ export interface Viewport {
   scale: number
 }
 
+/**
+ * Serializable snapshot of a canvas project, persisted per-episode to Firestore.
+ * Images referenced by elements are Storage URLs (never base64) so the document
+ * stays well under the 1 MB limit.
+ */
+export interface CanvasProject {
+  version: number
+  pages: Page[]
+  timelineOrder: string[]
+}
+
+/** Owner + location context so canvas image drops upload to the right Storage path. */
+export interface AssetContext {
+  uid: string
+  webtoonId: string
+  episodeId: string
+}
+
 export type LeftTab = 'pages' | 'layers' | 'assets' | 'characters' | 'ai'
 export type RightTab = 'properties' | 'assistant' | 'export'
 
@@ -123,6 +141,12 @@ interface EditorState {
   showSafeZone: boolean
   snapEnabled: boolean
 
+  // Export/publish: while true the Workspace renders every page (culling off)
+  // so off-screen pages can be rasterized.
+  exporting: boolean
+  // Upload target for canvas image drops (set by the editor once an episode binds).
+  assetCtx: AssetContext | null
+
   // Panel layout (resizable + collapsible)
   leftTab: LeftTab
   rightTab: RightTab
@@ -145,6 +169,11 @@ interface EditorState {
   setGridStyle: (g: GridStyle) => void
   toggleSafeZone: () => void
   toggleSnap: () => void
+
+  // Export / persistence
+  setExporting: (v: boolean) => void
+  setAssetCtx: (ctx: AssetContext | null) => void
+  loadProject: (project: CanvasProject | null) => void
 
   // Camera (animated navigation)
   animateViewport: (target: Viewport) => void
@@ -301,6 +330,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   showSafeZone: false,
   snapEnabled: true,
 
+  exporting: false,
+  assetCtx: null,
+
   leftTab: 'pages',
   rightTab: 'properties',
   leftOpen: true,
@@ -323,6 +355,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setGridStyle: (gridStyle) => set({ gridStyle }),
   toggleSafeZone: () => set((s) => ({ showSafeZone: !s.showSafeZone })),
   toggleSnap: () => set((s) => ({ snapEnabled: !s.snapEnabled })),
+
+  setExporting: (exporting) => set({ exporting }),
+  setAssetCtx: (assetCtx) => set({ assetCtx }),
+
+  // Replace the whole canvas with a persisted project (or clear it). Resets
+  // selection and history — the caller is switching episodes, not editing.
+  loadProject: (project) => {
+    cancelViewportAnim()
+    set({
+      pages: project ? structuredClone(project.pages) : [],
+      timelineOrder: project ? [...project.timelineOrder] : [],
+      selectedPageId: null,
+      selectedElementIds: [],
+      undoStack: [],
+      redoStack: [],
+    })
+  },
 
   animateViewport: (target) => {
     cancelViewportAnim()

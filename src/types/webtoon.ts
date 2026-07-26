@@ -1,5 +1,8 @@
 import type { FirestoreTimestamp } from './user'
 import type { ContentStatus, ContentGenre } from './novel'
+import type { CanvasProject } from '@/store/useEditorStore'
+
+export type { CanvasProject }
 
 /** Horizontal share of the canvas a panel occupies in the strip layout */
 export type PanelSpan = 'full' | 'half' | 'third' | 'two-thirds'
@@ -78,6 +81,10 @@ export interface Episode {
   status: 'draft' | 'published'
   intro?: EpisodeIntroMeta
   outro?: EpisodeOutroMeta
+  /** Infinite-canvas source project. Rich, non-destructive; the flat `panels`
+   *  above are rasterized from this at publish time for the public reader. */
+  canvasProject?: CanvasProject
+  canvasUpdatedAt?: FirestoreTimestamp
   createdAt: FirestoreTimestamp
   publishedAt: FirestoreTimestamp | null
 }

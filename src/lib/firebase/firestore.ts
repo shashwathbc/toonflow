@@ -38,6 +38,7 @@ import type {
   FollowRecord,
   Transaction,
   FirestoreTimestamp,
+  CanvasProject,
 } from '@/types'
 import { SUPER_ADMIN_EMAIL, TRENDING_LIMIT, BROWSE_LIMIT } from '@/lib/utils/constants'
 // compareTimestamps here sorts NEWEST first — preserve that by aliasing the
@@ -837,6 +838,23 @@ export async function updateEpisode(
   data: Partial<Episode>
 ): Promise<void> {
   await updateDoc(doc(db, 'webtoons', webtoonId, 'episodes', episodeId), data)
+  await updateDoc(doc(db, 'webtoons', webtoonId), { updatedAt: serverTimestamp() })
+}
+
+/**
+ * Autosave the infinite-canvas project for one episode. Writes the rich source
+ * (pages + elements + reading order) plus a server timestamp; images inside the
+ * project are already Storage URLs so the document stays small.
+ */
+export async function saveEpisodeCanvas(
+  webtoonId: string,
+  episodeId: string,
+  canvasProject: CanvasProject
+): Promise<void> {
+  await updateDoc(doc(db, 'webtoons', webtoonId, 'episodes', episodeId), {
+    canvasProject,
+    canvasUpdatedAt: serverTimestamp(),
+  })
   await updateDoc(doc(db, 'webtoons', webtoonId), { updatedAt: serverTimestamp() })
 }
 

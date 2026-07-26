@@ -28,6 +28,7 @@ import {
   type EditorElement,
 } from '@/store/useEditorStore'
 import { processWebtoonImage } from '@/lib/utils/imageProcessing'
+import { uploadCanvasImage } from '@/lib/editor/persistence'
 import { cn } from '@/lib/utils/cn'
 
 const TABS: { id: LeftTab; icon: typeof Layers; label: string }[] = [
@@ -260,11 +261,15 @@ function AssetsPanel() {
       for (const file of Array.from(files)) {
         if (!file.type.startsWith('image/')) continue
         const parts = await processWebtoonImage(file)
-        parts.forEach((img, i) => {
+        // Upload to Storage first so the element's src is a URL, never base64
+        // (keeps the persisted canvas project small).
+        for (let i = 0; i < parts.length; i++) {
+          const img = parts[i]
+          const url = await uploadCanvasImage(img.src, img.originalName)
           const w = Math.min(page.width * 0.8, 500)
           const h = (img.height / img.width) * w
-          addElement(pageId, { type: 'image', src: img.src, x: 40 + i * 20, y: 40 + i * 20, width: w, height: h, name: img.originalName })
-        })
+          addElement(pageId, { type: 'image', src: url, x: 40 + i * 20, y: 40 + i * 20, width: w, height: h, name: img.originalName })
+        }
       }
     } finally {
       setBusy(false)

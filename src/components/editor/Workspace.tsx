@@ -44,6 +44,7 @@ interface Draft {
 
 export function Workspace() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const glowRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const [dims, setDims] = useState({ width: 0, height: 0 })
@@ -75,6 +76,7 @@ export function Workspace() {
   const showSafeZone = useEditorStore((s) => s.showSafeZone)
   const fitAll = useEditorStore((s) => s.fitAll)
   const fitPage = useEditorStore((s) => s.fitPage)
+  const exporting = useEditorStore((s) => s.exporting)
 
   // ------- container measure ----------------------------------------------
   useEffect(() => {
@@ -93,6 +95,31 @@ export function Workspace() {
     registerStage(stageRef.current)
     return () => registerStage(null)
   }, [dims.width, dims.height])
+
+  // ------- cursor "gravity" glow over blank canvas -------------------------
+  // A soft light-well follows the pointer. It sits behind the Konva canvas, so
+  // it only shows through the empty grid — pages paint over it. Driven by CSS
+  // vars on a native listener to avoid a re-render per mouse move.
+  useEffect(() => {
+    const el = containerRef.current
+    const glow = glowRef.current
+    if (!el || !glow) return
+    const onMove = (e: MouseEvent) => {
+      const r = el.getBoundingClientRect()
+      glow.style.setProperty('--gx', `${e.clientX - r.left}px`)
+      glow.style.setProperty('--gy', `${e.clientY - r.top}px`)
+      glow.style.opacity = '1'
+    }
+    const onLeave = () => {
+      glow.style.opacity = '0'
+    }
+    el.addEventListener('mousemove', onMove)
+    el.addEventListener('mouseleave', onLeave)
+    return () => {
+      el.removeEventListener('mousemove', onMove)
+      el.removeEventListener('mouseleave', onLeave)
+    }
+  }, [])
 
   // ------- space-to-pan ----------------------------------------------------
   useEffect(() => {
@@ -147,8 +174,10 @@ export function Workspace() {
     [pages],
   )
 
-  // ------- wheel zoom / pan -------------------------------------------------
-  // Wheel = cursor-centered zoom; Shift+wheel = horizontal pan; Ctrl/⌘ = precision.
+  // ------- wheel: Figma-style scroll-to-pan --------------------------------
+  // Two-finger trackpad scroll (or a mouse wheel) PANS in any direction.
+  // Pinch — which browsers report as ctrlKey — and ⌘/Ctrl+wheel ZOOM toward the
+  // cursor. Shift turns a vertical-only wheel into horizontal panning.
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault()
     const stage = stageRef.current
@@ -156,19 +185,23 @@ export function Workspace() {
     const pointer = stage.getPointerPosition()
     if (!pointer) return
 
-    if (e.evt.shiftKey && !e.evt.ctrlKey && !e.evt.metaKey) {
-      const d = e.evt.deltaX || e.evt.deltaY
-      setViewport({ x: viewport.x - d, y: viewport.y, scale: viewport.scale })
+    const { ctrlKey, metaKey, shiftKey, deltaX, deltaY } = e.evt
+
+    if (ctrlKey || metaKey) {
+      const oldScale = viewport.scale
+      // Clamp so a chunky mouse wheel (deltaY ≈ ±100) doesn't jump zoom levels
+      // while a trackpad pinch (deltaY ≈ ±5) stays smooth.
+      const dz = Math.max(-40, Math.min(40, deltaY))
+      const scale = Math.max(0.02, Math.min(oldScale * Math.exp(-dz * 0.01), 16))
+      const worldX = (pointer.x - viewport.x) / oldScale
+      const worldY = (pointer.y - viewport.y) / oldScale
+      setViewport({ x: pointer.x - worldX * scale, y: pointer.y - worldY * scale, scale })
       return
     }
 
-    const oldScale = viewport.scale
-    const precision = e.evt.ctrlKey || e.evt.metaKey
-    const factor = Math.exp(-e.evt.deltaY * (precision ? 0.0008 : 0.0016))
-    const scale = Math.max(0.02, Math.min(oldScale * factor, 16))
-    const worldX = (pointer.x - viewport.x) / oldScale
-    const worldY = (pointer.y - viewport.y) / oldScale
-    setViewport({ x: pointer.x - worldX * scale, y: pointer.y - worldY * scale, scale })
+    const panX = shiftKey && deltaX === 0 ? deltaY : deltaX
+    const panY = shiftKey && deltaX === 0 ? 0 : deltaY
+    setViewport({ x: viewport.x - panX, y: viewport.y - panY, scale: viewport.scale })
   }
 
   const panning = spaceDown || activeTool === 'hand'
@@ -471,9 +504,13 @@ export function Workspace() {
     maxX: (dims.width - viewport.x) / viewport.scale + M,
     maxY: (dims.height - viewport.y) / viewport.scale + M,
   }
-  const visiblePages = pages.filter(
-    (p) => p.x < view.maxX && p.x + p.width > view.minX && p.y < view.maxY && p.y + p.height > view.minY,
-  )
+  // During export/publish, render every page (even off-screen) so their nodes
+  // exist to be rasterized; otherwise cull to the viewport for performance.
+  const visiblePages = exporting
+    ? pages
+    : pages.filter(
+        (p) => p.x < view.maxX && p.x + p.width > view.minX && p.y < view.maxY && p.y + p.height > view.minY,
+      )
 
   // ------- grid background --------------------------------------------------
   const g = 24 * viewport.scale
@@ -501,6 +538,17 @@ export function Workspace() {
     >
       {/* infinite grid background */}
       {gridBg && <div className="absolute inset-0 pointer-events-none" style={gridBg} />}
+
+      {/* cursor gravity glow — behind the Konva canvas, shows only over blank space */}
+      <div
+        ref={glowRef}
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-300"
+        style={{
+          background:
+            'radial-gradient(circle 240px at var(--gx, 50%) var(--gy, 50%), rgba(76,154,255,0.16), rgba(76,154,255,0.05) 42%, transparent 70%)',
+        }}
+      />
 
       {dims.width > 0 && (
         <Stage

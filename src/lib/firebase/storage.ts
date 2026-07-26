@@ -145,6 +145,29 @@ export async function uploadEpisodePanel(
   return promise
 }
 
+/**
+ * Uploads an image placed on the infinite canvas. Shares the same
+ * `webtoons/{uid}/{webtoonId}/{episodeId}/…` prefix as panel uploads, so the
+ * existing Storage owner-write rule already authorizes it. Storing the returned
+ * URL (never a base64 data URL) on the element keeps the canvas project small.
+ */
+export async function uploadCanvasAsset(
+  uid: string,
+  webtoonId: string,
+  episodeId: string,
+  file: File,
+  assetId: string,
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+  const { promise } = uploadFile(
+    `webtoons/${uid}/${webtoonId}/${episodeId}/asset_${assetId}.${ext}`,
+    file,
+    onProgress
+  )
+  return promise
+}
+
 export async function uploadMessageImage(
   conversationId: string,
   senderId: string,

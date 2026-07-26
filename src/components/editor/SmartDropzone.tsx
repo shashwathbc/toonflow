@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { UploadCloud, Loader2 } from 'lucide-react'
 import { processWebtoonImage, ProcessedImage } from '@/lib/utils/imageProcessing'
 import { ImportReviewModal } from '@/components/editor/ImportReviewModal'
+import { uploadCanvasImage } from '@/lib/editor/persistence'
 import { useEditorStore } from '@/store/useEditorStore'
 
 export function SmartDropzone({ children }: { children: React.ReactNode }) {
@@ -60,42 +61,50 @@ export function SmartDropzone({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     // Current number of pages to offset X coordinate
     const startX = pages.length > 0 ? pages[pages.length - 1].x + pages[pages.length - 1].width + 100 : 0
-    
-    processedImages.forEach((img, idx) => {
-      // 1. Create a new page
-      const pageId = crypto.randomUUID()
-      addPage({
-        id: pageId,
-        name: img.originalName,
-        width: img.width,
-        height: img.height,
-        x: startX + (idx * (img.width + 100)), // Lay them out horizontally
-        y: 0,
-        backgroundColor: '#FFFFFF',
-      })
-
-      // 2. Add the image element to that page
-      addElement(pageId, {
-        id: crypto.randomUUID(),
-        type: 'image',
-        src: img.src,
-        x: 0,
-        y: 0,
-        width: img.width,
-        height: img.height,
-        rotation: 0,
-        opacity: 1,
-        isLocked: true, // Lock imported images by default so they act as background
-        isHidden: false,
-        name: 'Background Image'
-      })
-    })
 
     setIsModalOpen(false)
-    setProcessedImages([])
+    setIsProcessing(true)
+    try {
+      for (let idx = 0; idx < processedImages.length; idx++) {
+        const img = processedImages[idx]
+        // Upload to Storage first so the persisted project stores a URL, not base64.
+        const url = await uploadCanvasImage(img.src, img.originalName)
+
+        // 1. Create a new page
+        const pageId = crypto.randomUUID()
+        addPage({
+          id: pageId,
+          name: img.originalName,
+          width: img.width,
+          height: img.height,
+          x: startX + idx * (img.width + 100), // Lay them out horizontally
+          y: 0,
+          backgroundColor: '#FFFFFF',
+        })
+
+        // 2. Add the image element to that page
+        addElement(pageId, {
+          id: crypto.randomUUID(),
+          type: 'image',
+          src: url,
+          x: 0,
+          y: 0,
+          width: img.width,
+          height: img.height,
+          rotation: 0,
+          opacity: 1,
+          isLocked: true, // Lock imported images by default so they act as background
+          isHidden: false,
+          name: 'Background Image',
+        })
+      }
+    } finally {
+      setIsProcessing(false)
+      setProcessedImages([])
+    }
   }
 
   // Handle document level drag and drop as fallback
