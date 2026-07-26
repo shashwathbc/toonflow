@@ -460,8 +460,6 @@ export function CreateNovelModal({
             {/* AI Image Generator panel */}
             {aiPanel && (
               <AIImageGenerator
-                novelTitle={titleValue}
-                novelSynopsis={synopsisValue}
                 imageType={aiPanel}
                 userId={userId}
                 onAccept={(file) => {

@@ -13,17 +13,33 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const MAX_BODY_BYTES = 64 * 1024
 
-// Platform signature look. Appended to EVERY Flux prompt — drafted by AI,
-// auto-filled, or hand-typed by the user — so all covers/banners come out as
-// the same premium cinematic Korean webtoon / manhwa poster art (see the
-// Ravana / Karna / Shadow Island reference set), never generic stock imagery.
+// Premium look appended to EVERY Flux prompt — drafted by AI, auto-filled, or
+// hand-typed — so covers/banners come out polished and cinematic, never generic
+// stock imagery.
+//
+// IMPORTANT: this suffix describes only the RENDERING STYLE (lighting, colour,
+// detail, quality) — never the SUBJECT, COMPOSITION, or ART MEDIUM.
+//
+// It deliberately does NOT say "Korean webtoon / manhwa cover art". Empirically
+// (verified against the live Flux service), that exact phrase carries such a
+// strong "beautiful character portrait" prior that it OVERRIDES the actual
+// subject: typing "bow" produced a manhwa man's face, "a magic sword" produced a
+// man holding a sword, etc. — the subject got ignored. Even a lightened
+// "manhwa digital art style" still forced a person unless "no humans" was added,
+// and "no humans" can't be hardcoded because most covers DO want a character.
+//
+// Neutral premium-illustration wording renders objects as objects AND still
+// renders characters/scenes as characters (driven by the prompt content — the
+// Auto-fill action and character prompts describe people, so they still get a
+// person). The webtoon/manhwa flavour for character covers now lives in the
+// Auto-fill prompt text itself (see the 'prompt' action below), not here.
+//
 // Flux's URL API has no negative-prompt field, so the "no text/logo" guards are
 // folded in here as positive phrasing (text is added later as a design overlay).
-const WEBTOON_STYLE_SUFFIX =
-  ', premium Korean webtoon manhwa cover art, cinematic dramatic lighting,' +
-  ' highly detailed digital painting, epic atmospheric composition,' +
-  ' rich moody cinematic color grading, bold heroic framing, clean professional' +
-  ' illustration, sharp focus, ultra detailed, high quality,' +
+const STYLE_SUFFIX =
+  ', premium digital illustration, cinematic dramatic lighting,' +
+  ' highly detailed, rich cinematic color grading, sharp focus,' +
+  ' ultra detailed, high quality,' +
   ' no text, no typography, no letters, no watermark, no logo'
 
 const promptSchema = z.object({
@@ -84,7 +100,7 @@ Requirements:
 - A clear focal subject (the hero/character or an iconic scene) with a strong silhouette
 - Specific dramatic lighting, mood, and a rich cinematic color palette
 - ${isCover ? 'Portrait orientation, foreground subject dominant' : 'Wide cinematic landscape, atmospheric depth'}
-- Describe only the SCENE, subject, lighting and mood — do NOT name an art medium or software (the webtoon art style is applied separately)
+- Explicitly render it in a premium Korean webtoon / manhwa cover illustration art style (name this style in the prompt — it is NOT added elsewhere)
 - No text, no typography, no letters in the image
 - 50–80 words maximum
 
@@ -115,9 +131,11 @@ Return ONLY the image prompt text.`,
       const { width, height } =
         imageType === 'cover' ? { width: 768, height: 1152 } : { width: 1280, height: 720 }
 
-      // Force the platform's webtoon art look onto whatever prompt arrives,
-      // whether AI-drafted, auto-filled, or typed by hand.
-      const styledPrompt = `${prompt}${WEBTOON_STYLE_SUFFIX}`
+      // Repeat the incoming prompt up front and mark it as the main subject, so
+      // a short subject ("bow") stays dominant over the style descriptors instead
+      // of being swamped and mis-rendered. Verified against the live Flux service:
+      // this reliably renders the actual subject for both objects and characters.
+      const styledPrompt = `${prompt}. ${prompt}, as the main subject of the image${STYLE_SUFFIX}`
 
       const seed = Math.floor(Math.random() * 1_000_000)
       const url =

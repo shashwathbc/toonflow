@@ -12,7 +12,6 @@ import { useChapters } from '@/hooks/useChapters'
 import { useLiveViewCount } from '@/hooks/useLiveViewCount'
 import { getNovelById } from '@/lib/firebase/firestore'
 import { formatCount, formatDate, fromTimestamp, toTitleCase } from '@/lib/utils/formatters'
-import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import RatingControl from '@/components/reader/RatingControl'
 import AuthorCard from '@/components/social/AuthorCard'
@@ -219,7 +218,6 @@ export default function NovelDetailPage() {
                     <ChevronsRight size={14} aria-hidden="true" /> Latest
                   </Link>
                 )}
-                <LikeButton contentType="novel" contentId={id} initialCount={novel.likeCount ?? 0} authorId={novel.authorId} contentTitle={novel.title} />
                 <BookmarkButton contentId={id} contentType="novel" />
                 <RatingControl
                   contentType="novel"

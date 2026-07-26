@@ -387,49 +387,36 @@ export function CreateWebtoonModal({
           </Tooltip>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div className="px-6 py-5 space-y-5">
-            {/* Images */}
-            <div className="grid grid-cols-3 gap-4">
-              {/* Cover */}
-              <div className="space-y-2">
-                <UploadBox
-                  label="Cover Image *"
-                  aspect="aspect-[2/3]"
-                  value={coverURL}
-                  progress={coverProgress}
-                  onChange={handleCoverFile}
-                  onRemove={handleRemoveCover}
-                />
-                <button
-                  type="button"
-                  onClick={() => setAiPanel(aiPanel === 'cover' ? null : 'cover')}
-                  className="w-full flex items-center justify-center gap-1.5 text-[11px] text-white/50 hover:text-white border border-bg-border hover:border-white/30 rounded-lg py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
-                >
-                  <Sparkles size={10} aria-hidden="true" />
-                  AI Generate
-                </button>
-              </div>
+        {/* Content */}
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Left Col: Cover */}
+            <div className="space-y-4">
+              <UploadBox
+                label="Cover Art (2:3)"
+                aspect="aspect-[2/3] max-w-[200px] mx-auto"
+                value={coverURL}
+                progress={coverProgress}
+                onChange={handleCoverFile}
+              />
+              <button
+                type="button"
+                onClick={() => setAiPanel('cover')}
+                className="w-full btn-ghost border border-bg-border text-xs flex items-center justify-center gap-1.5 py-2 hover:border-accent/40"
+              >
+                <Sparkles size={13} className="text-accent" aria-hidden="true" />
+                Generate Cover with AI
+              </button>
 
-              {/* Banner */}
-              <div className="col-span-2 space-y-2">
-                <UploadBox
-                  label="Banner Image (optional)"
-                  aspect="aspect-[16/9]"
-                  value={bannerURL}
-                  progress={bannerProgress}
-                  onChange={handleBannerFile}
-                  onRemove={handleRemoveBanner}
-                />
-                <button
-                  type="button"
-                  onClick={() => setAiPanel(aiPanel === 'banner' ? null : 'banner')}
-                  className="w-full flex items-center justify-center gap-1.5 text-[11px] text-white/50 hover:text-white border border-bg-border hover:border-white/30 rounded-lg py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
-                >
-                  <Sparkles size={10} aria-hidden="true" />
-                  AI Generate
-                </button>
-              </div>
+              {aiPanel === 'cover' && (
+                <div className="mt-4 border border-bg-border rounded-xl p-3 bg-bg-elevated/40">
+                  <AIImageGenerator
+                    imageType="cover"
+                    onAccept={handleCoverFile}
+                    onClose={() => setAiPanel(null)}
+                  />
+                </div>
+              )}
             </div>
 
             {/* AI Image Generator panel */}

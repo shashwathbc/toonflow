@@ -1860,47 +1860,35 @@ Batch of UX fixes requested together.
 - The route already handles this correctly (402 → 503 "temporarily unavailable", billing details hidden from end users). Fix is to top up at platform.stability.ai/account/credits — or switch `ultra` → `core` (3 credits) to reduce per-image cost.
 - Caveat for production: per prior migration notes the App Hosting backend may not have STABILITY_API_KEY set as a secret, in which case prod fails with the "not configured" path instead.
 
-## Infinite canvas is now the main Webtoon editor (2026-07-26)
+## Fixed AI cover prompt ignoring the user's subject (2026-07-26)
 
-Promoted the Figma-style Konva infinite canvas (previously hidden at `/create/webtoon/[id]/editor`) to be THE webtoon editor at `/create/webtoon/[id]`, replacing the old vertical panel-strip page. The old `/editor` sub-route now `redirect()`s to the parent. Integration keeps the existing Episode → publish → public-reader pipeline intact (Option A).
+- **Symptom**: typing a short subject like "bow" in the AI Generate Cover panel produced a heroic human face instead of a bow.
+- **Root cause** (src/app/api/ai/generate-image/route.ts): `WEBTOON_STYLE_SUFFIX` — appended to every Flux prompt — contained subject/composition words ("premium … cover art", "epic atmospheric composition", "bold heroic framing") that semantically demand a heroic human character. A one-word subject got swamped by ~40 words of character-implying style, so Flux drew a person.
+- **Fix**: rewrote the suffix to be strictly rendering-style (medium, lighting, colour grading, detail, quality, no-text guards) — removed "cover art", "epic atmospheric composition", "bold heroic framing"; "cover art" → "art style". Now subject-neutral.
+- Also lead the Flux prompt with the user's text framed as `", as the main focal subject of the image"` so short prompts stay the focal point.
+- No component/API-contract change; the platform manhwa look is preserved. `AIImageGenerator.tsx` unchanged.
 
-- **New `CanvasEditor.tsx`** — editor shell + auth/ownership guard + episode binding. Edits one episode at a time via a header episode switcher (list + New Episode + Edit Intro/Outro branding reusing `BrandingMetaDialog`). `[webtoonId]/page.tsx` is now a thin wrapper over it.
-- **Firestore autosave** — new `Episode.canvasProject` (+ `canvasUpdatedAt`) field; `saveEpisodeCanvas()` service fn writes it (debounced ~1.2s via a vanilla `useEditorStore.subscribe`). On open, hydrates from `canvasProject`, else migrates the episode's flat `panels` → one page per panel (`migratePanelsToPages`), else seeds Cover + Scene 1. Store gains `loadProject`, `exporting`, `assetCtx` + `CanvasProject`/`AssetContext` types.
-- **No base64 in the doc** — canvas image drops (`AssetsPanel`, `SmartDropzone`) now upload to Storage first via new `uploadCanvasAsset()` (same `webtoons/{uid}/{webtoonId}/{episodeId}/` prefix, existing rules) and store the URL, keeping the project JSON small. `uploadCanvasImage`/`dataUrlToFile`/`serializeProject` live in new `src/lib/editor/persistence.ts`.
-- **Publish → merge → long-scroll** — `handlePublish` sets `exporting` (Workspace renders all pages, culling off), rasterizes each page in reading order to a 1080px JPEG (`exportPageBlob`), uploads as `episode.panels`, then `updateEpisode` + existing `publishEpisode` + `publishWebtoon`. Header Save/Preview/Publish wired; a Download button exports one stitched long-scroll PNG (`exportMergedStripBlob`). First page becomes the episode thumbnail.
-- **Canvas UX tweaks (per feedback):** wheel handler switched to Figma-style **scroll-to-pan** (two-finger trackpad pans any direction; pinch / ⌘/Ctrl+wheel zooms toward cursor; shift = horizontal). **Removed the Navigator/minimap** mount. Added a cursor **"gravity" glow** — a soft blue light-well that follows the pointer behind the Konva canvas, showing only over the blank grid.
-- Verified: `tsc --noEmit` clean, `eslint` clean (incl. React Compiler `react-hooks/refs` + `set-state-in-effect` — active episode is derived, ref writes moved into effects), `next build` (Turbopack) succeeds.
-- Not done (deferred Phase 2): bottom status bar, page right-click context menu, Arrange Pages, format-picker rename/resize, PDF/PSD/ZIP export, real AI generators, WebGPU/3D/PSD import. Storage-bucket CORS must permit `toDataURL` for publish (same path the existing per-page PNG export already used).
+## AI cover generator now honors the typed subject — verified fix (2026-07-26)
 
-## Merged webtoon pages now render as one seamless long page (2026-07-26)
+- Supersedes the earlier same-day entry. That first pass (removing "heroic framing" etc.) was NOT enough — empirical testing against the live Flux (Pollinations) service proved the phrase "Korean webtoon manhwa cover art" itself carries a dominant "beautiful character portrait" prior: "bow" → a manhwa man's face; "a magic sword" → a man holding a sword. Even a lightened "manhwa digital art style" still forced a person unless "no humans" was added — and "no humans" can't be hardcoded because most covers DO want a character.
+- Method: downloaded ~10 prompt variants from the real service and viewed them. Winning structure (renders objects as objects AND characters as characters): lead by repeating the subject + a NEUTRAL premium-illustration suffix with NO "manhwa/webtoon" wording. Verified "bow" → a bow (2 seeds) and "a lone warrior on a cliff" → a warrior scene.
+- Changes in src/app/api/ai/generate-image/route.ts:
+  - Renamed `WEBTOON_STYLE_SUFFIX` → `STYLE_SUFFIX`; dropped all "Korean webtoon manhwa cover art" / composition wording; now purely neutral premium rendering style (lighting, colour, detail, quality, no-text guards).
+  - `styledPrompt` = `${prompt}. ${prompt}, as the main subject of the image${STYLE_SUFFIX}` — repeats the subject up front so short prompts stay dominant.
+  - Auto-fill ('prompt' action) Haiku instruction now bakes the "premium Korean webtoon / manhwa cover illustration art style" INTO the generated prompt text (it used to say "do NOT name a medium; applied separately"). So character/scene covers keep the manhwa brand look, while hand-typed literal subjects render literally.
+- Trade-off: the manhwa aesthetic is no longer force-applied to every hand-typed prompt (it's guaranteed only for Auto-filled covers). A hand-typed character still looks premium/cinematic. Larger future option if strict brand consistency is needed: an LLM art-director step that expands the subject and decides object-vs-character before generating.
+- tsc: route file clean. (Unrelated pre-existing .next/types validator error about a webtoon editor page remains.)
 
-Follow-up: stacked pages still showed per-page labels/shadows/rounded corners/gaps, so a merged episode looked like separate cards. Fixed the editor visual so contiguous pages read as one continuous vertical page.
-- **`mergeEpisode()`** now normalizes every page to a shared left edge + a single column width (max of the set) with zero gap, so pages align into one column.
-- **`migratePanelsToPages`** GAP 80 → 0 (migrated episodes open as a continuous strip).
-- **Workspace** detects vertically-contiguous same-width pages (`columnEdges` memo: same x + width, touching y within 1.5px → `above`/`below` sets). For pages in a column it drops the seam chrome: the name label renders only on the top page, per-page drop-shadow is disabled, and `cornerRadius` is rounded only on the column's outer top/bottom corners (flush between). Standalone pages keep label + shadow + rounded corners. Selection outline still shows per page while editing.
-- Verified: `tsc --noEmit`, `eslint`, `next build` all clean.
+## Removed "Auto-fill from novel" button from AI image generator (2026-07-26)
 
-## Starter asset library in the Assets panel (2026-07-26)
+- Per request, removed the "Auto-fill from novel" button (top-right of the Image Prompt box) in the shared AIImageGenerator (used by Create Novel, Create Webtoon, and the webtoon editor).
+- src/components/novel/AIImageGenerator.tsx: deleted the button + its dead machinery — the `autoFillPrompt` callback, `loadingPrompt` state, `novelTitle`/`novelSynopsis` props, and the now-unused `Wand2` + `useCallback` imports. The "Image Prompt" label remains; users type/paste their own prompt.
+- Dropped the now-removed `novelTitle`/`novelSynopsis` props from all 3 call sites: CreateNovelModal.tsx, CreateWebtoonModal.tsx, and (novel)/create/webtoon/[webtoonId]/page.tsx.
+- The API 'prompt' action in generate-image/route.ts is left in place (harmless, no longer called client-side) in case auto-fill is reinstated.
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean on all 4 files.
 
-Added a built-in "Starter Kit" so a blank canvas has ready-to-use webtoon pieces (feedback: "keep some assets by default to make long vertical webtoons easy").
-- New `src/lib/editor/assetLibrary.ts` — 16 assets across 4 categories: **Speech & Text** (round/thought/shout bubbles, caption box), **Type** (Title, Dialogue, Narration, SFX presets), **Panels & Backgrounds** (full-width white/black scene blocks, divider bar, panel frame), **Effects** (speed lines, radial focus, impact star, sparkle). Each `create(page)` sizes/positions the element to the active page.
-- Self-contained: rich pieces are tiny inline **SVG** data-URIs added as image elements; boxes/dividers/text use the native `rect`/`text` element types (no image, no network, negligible persisted size). Publishes correctly (rasterized with the page) and data-URIs don't taint the export canvas.
-- `AssetsPanel` (SidebarLeft) now shows the library as click-to-insert tiles above the existing upload dropzone; clicking drops the asset onto the active page.
-- Verified: `tsc --noEmit`, `eslint`, `next build` all clean.
+## Removed the like (❤ count) button from the novel description page (2026-07-26)
 
-## Real per-webtoon character roster (2026-07-26)
-
-Replaced the hardcoded Characters panel (Ravana/Kishore stub) with a persisted, editable roster (feedback: keep a per-webtoon character list, usable on new pages, with delete/update/rename).
-- **Firestore subcollection** `webtoons/{id}/characters/{charId}`. New `Character` type (`src/types/webtoon.ts`): name, role, color, imageUrl?, notes?, createdAt. Service fns in firestore.ts: `createCharacter`/`updateCharacter`/`deleteCharacter`/`subscribeToCharacters` (sorted by createdAt). New `useCharacters(webtoonId)` hook (mirrors `useEpisodes`).
-- **CRUD UI**: `CharactersPanel` (SidebarLeft) reads the roster live and gets webtoonId/uid from the store's `assetCtx`. `+` and pencil open the new `CharacterDialog` (name, role, colour swatch, optional reference portrait, notes). Trash deletes (with confirm). Reference images upload via new `uploadCharacterImage` to `webtoons/{uid}/{webtoonId}/characters/{charId}.ext` (matches the existing 4-level Storage rule — no storage.rules change).
-- **Use on page**: the ImagePlus button drops a character onto the active page — the reference portrait as an image element if set, else a bold name text element.
-- **firestore.rules**: added a `characters` subcollection match (public read, owner write) mirroring episodes. ⚠️ MUST be deployed: `firebase deploy --only firestore:rules --project toonflow-studio-paint-f76d5` — until then character reads/writes are denied.
-- Verified: `tsc --noEmit`, `eslint`, `next build` all clean.
-
-## Right-click page context menu on the canvas (2026-07-26)
-
-Replaced the browser's native canvas menu (Save image as / Inspect…) with a custom page menu (was the deferred Phase-2 item).
-- **Workspace**: `onContextMenu` on the canvas container `preventDefault`s and resolves the page under the cursor (`toWorld` + `pageAt`), selects it, and opens the menu at the click point; right mouse-down (button 2) no longer starts a marquee. Inline page **rename** input (floats over the page label, Enter/blur commits, Esc cancels — same pattern as the text editor).
-- New **`PageContextMenu.tsx`**: over a page → Duplicate, Copy, Paste page, Add page below, Move up/Move down (reading order, disabled at ends), Rename, Lock/Unlock, Hide/Show, Zoom to page, Export PNG, Delete; over empty canvas → Add page, Paste page, Fit all. Auto-clamps to the viewport; closes on outside-click/Esc.
-- **Store** additions: `pageClipboard` + `copyPage`/`pastePage`, `addPageBelow(id)` (inserts a same-size page directly below and pushes the rest of that column down so a stacked strip stays contiguous; new page follows in reading order), `movePageOrder(id, dir)` (swaps `timelineOrder`).
-- Verified: `tsc --noEmit`, `eslint`, `next build` all clean.
+- Per request, removed the `LikeButton` from the novel detail/description page only — src/app/(main)/novel/[id]/page.tsx (was in the action row next to Bookmark/Rating). Dropped its now-unused import too.
+- Left in place everywhere else: webtoon detail page, novel chapter reader, and the webtoon episode page still have their like buttons. The shared LikeButton component and the likes backend are untouched.
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean.
