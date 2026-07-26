@@ -12,6 +12,7 @@ import {
   type TextElement,
 } from '@/store/useEditorStore'
 import { registerStage } from '@/lib/editor/exportProject'
+import { PageContextMenu } from '@/components/editor/PageContextMenu'
 
 const SELECT = '#4C9AFF'
 
@@ -53,6 +54,8 @@ export function Workspace() {
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [guides, setGuides] = useState<number[][]>([]) // world segments [x1,y1,x2,y2]
   const [editing, setEditing] = useState<{ pageId: string; el: EditorElement } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; pageId: string | null } | null>(null)
+  const [renaming, setRenaming] = useState<{ id: string; left: number; top: number; value: string } | null>(null)
   const startRef = useRef<{ x: number; y: number } | null>(null)
   const midPan = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null)
 
@@ -212,6 +215,8 @@ export function Workspace() {
     if (!stage) return
     const pointer = stage.getPointerPosition()
     if (!pointer) return
+    // Right-click is handled by the container's context menu, not selection.
+    if (e.evt.button === 2) return
     // Middle-mouse drag pans from anywhere, regardless of active tool.
     if (e.evt.button === 1) {
       e.evt.preventDefault()
@@ -338,6 +343,38 @@ export function Workspace() {
     const page = pageAt(w.x, w.y)
     if (page && e.target.name() !== 'element') fitPage(page.id)
     else if (!page) fitAll()
+  }
+
+  // Custom right-click menu on pages (replaces the browser default over canvas).
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const w = toWorld(e.clientX - rect.left, e.clientY - rect.top)
+    const page = pageAt(w.x, w.y)
+    if (page) selectPage(page.id)
+    setCtxMenu({ x: e.clientX, y: e.clientY, pageId: page ? page.id : null })
+  }
+
+  const startRename = (pageId: string) => {
+    const page = pages.find((p) => p.id === pageId)
+    if (!page) return
+    setRenaming({
+      id: pageId,
+      left: page.x * viewport.scale + viewport.x,
+      top: page.y * viewport.scale + viewport.y - 28,
+      value: page.name,
+    })
+  }
+
+  const commitRename = () => {
+    setRenaming((r) => {
+      if (r) {
+        const v = r.value.trim()
+        if (v) updatePage(r.id, { name: v }, true)
+      }
+      return null
+    })
   }
 
   // ------- element drag with edge snapping --------------------------------
@@ -554,6 +591,7 @@ export function Workspace() {
       ref={containerRef}
       className="flex-1 bg-[#0C0C0C] relative overflow-hidden"
       style={{ cursor: panning ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair' }}
+      onContextMenu={handleContextMenu}
     >
       {/* infinite grid background */}
       {gridBg && <div className="absolute inset-0 pointer-events-none" style={gridBg} />}
@@ -696,6 +734,35 @@ export function Workspace() {
             }
             e.stopPropagation()
           }}
+        />
+      )}
+
+      {/* page rename input */}
+      {renaming && (
+        <input
+          autoFocus
+          value={renaming.value}
+          onChange={(e) => setRenaming((r) => (r ? { ...r, value: e.target.value } : r))}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+            else if (e.key === 'Escape') setRenaming(null)
+            e.stopPropagation()
+          }}
+          style={{ left: renaming.left, top: renaming.top }}
+          className="absolute z-40 bg-[#1E1E1E] border border-[#4C9AFF] text-white text-xs px-1.5 py-0.5 rounded outline-none"
+          aria-label="Rename page"
+        />
+      )}
+
+      {/* right-click page menu */}
+      {ctxMenu && (
+        <PageContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          pageId={ctxMenu.pageId}
+          onClose={() => setCtxMenu(null)}
+          onRename={startRename}
         />
       )}
     </div>

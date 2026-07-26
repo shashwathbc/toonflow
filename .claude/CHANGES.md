@@ -1896,3 +1896,11 @@ Replaced the hardcoded Characters panel (Ravana/Kishore stub) with a persisted, 
 - **Use on page**: the ImagePlus button drops a character onto the active page — the reference portrait as an image element if set, else a bold name text element.
 - **firestore.rules**: added a `characters` subcollection match (public read, owner write) mirroring episodes. ⚠️ MUST be deployed: `firebase deploy --only firestore:rules --project toonflow-studio-paint-f76d5` — until then character reads/writes are denied.
 - Verified: `tsc --noEmit`, `eslint`, `next build` all clean.
+
+## Right-click page context menu on the canvas (2026-07-26)
+
+Replaced the browser's native canvas menu (Save image as / Inspect…) with a custom page menu (was the deferred Phase-2 item).
+- **Workspace**: `onContextMenu` on the canvas container `preventDefault`s and resolves the page under the cursor (`toWorld` + `pageAt`), selects it, and opens the menu at the click point; right mouse-down (button 2) no longer starts a marquee. Inline page **rename** input (floats over the page label, Enter/blur commits, Esc cancels — same pattern as the text editor).
+- New **`PageContextMenu.tsx`**: over a page → Duplicate, Copy, Paste page, Add page below, Move up/Move down (reading order, disabled at ends), Rename, Lock/Unlock, Hide/Show, Zoom to page, Export PNG, Delete; over empty canvas → Add page, Paste page, Fit all. Auto-clamps to the viewport; closes on outside-click/Esc.
+- **Store** additions: `pageClipboard` + `copyPage`/`pastePage`, `addPageBelow(id)` (inserts a same-size page directly below and pushes the rest of that column down so a stacked strip stays contiguous; new page follows in reading order), `movePageOrder(id, dir)` (swaps `timelineOrder`).
+- Verified: `tsc --noEmit`, `eslint`, `next build` all clean.

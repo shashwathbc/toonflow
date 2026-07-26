@@ -210,6 +210,12 @@ interface EditorState {
   duplicatePage: (id: string) => void
   reorderPages: (order: string[]) => void
   mergeEpisode: () => void
+  // Context-menu page ops
+  pageClipboard: Page | null
+  copyPage: (id: string) => void
+  pastePage: () => void
+  addPageBelow: (id: string) => void
+  movePageOrder: (id: string, dir: 'up' | 'down') => void
 
   // Elements
   addElement: (pageId: string, data: Partial<EditorElement> & { type: ElementType }) => string
@@ -344,6 +350,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   undoStack: [],
   redoStack: [],
+
+  pageClipboard: null,
 
   setViewport: (viewport) => {
     cancelViewportAnim()
@@ -596,6 +604,75 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedElementIds: [],
       selectedPageId: null,
     })
+  },
+
+  copyPage: (id) => {
+    const src = get().pages.find((p) => p.id === id)
+    if (src) set({ pageClipboard: structuredClone(src) })
+  },
+
+  pastePage: () => {
+    const clip = get().pageClipboard
+    if (!clip) return
+    get().pushHistory()
+    const pages = get().pages
+    const lastRight = pages.reduce((max, p) => Math.max(max, p.x + p.width), 0)
+    const clone: Page = {
+      ...structuredClone(clip),
+      id: uuid(),
+      name: `${clip.name} copy`,
+      x: pages.length ? lastRight + 120 : 0,
+      y: 0,
+      elements: clip.elements.map((e) => ({ ...e, id: uuid() })),
+    }
+    set((s) => ({
+      pages: [...s.pages, clone],
+      timelineOrder: [...s.timelineOrder, clone.id],
+      selectedPageId: clone.id,
+      selectedElementIds: [],
+    }))
+  },
+
+  // Insert a fresh same-size page directly below `id`, pushing the rest of that
+  // column down so a stacked strip stays contiguous. New page follows in order.
+  addPageBelow: (id) => {
+    get().pushHistory()
+    const pages = get().pages
+    const src = pages.find((p) => p.id === id)
+    if (!src) return
+    const h = src.height
+    const insertY = src.y + src.height
+    const shifted = pages.map((p) =>
+      p.id !== src.id && Math.abs(p.x - src.x) < 1.5 && p.y >= insertY - 1.5 ? { ...p, y: p.y + h } : p,
+    )
+    const preset = PAGE_PRESETS[src.type]
+    const newPage: Page = {
+      id: uuid(),
+      name: `${preset.label} ${pages.filter((p) => p.type === src.type).length + 1}`,
+      type: src.type,
+      x: src.x,
+      y: insertY,
+      width: src.width,
+      height: h,
+      backgroundColor: src.backgroundColor,
+      isLocked: false,
+      isHidden: false,
+      elements: [],
+    }
+    const order = [...get().timelineOrder]
+    const idx = order.indexOf(id)
+    order.splice(idx >= 0 ? idx + 1 : order.length, 0, newPage.id)
+    set({ pages: [...shifted, newPage], timelineOrder: order, selectedPageId: newPage.id, selectedElementIds: [] })
+  },
+
+  movePageOrder: (id, dir) => {
+    const order = [...get().timelineOrder]
+    const i = order.indexOf(id)
+    if (i < 0) return
+    const j = dir === 'up' ? i - 1 : i + 1
+    if (j < 0 || j >= order.length) return
+    ;[order[i], order[j]] = [order[j], order[i]]
+    get().reorderPages(order)
   },
 
   addElement: (pageId, data) => {
