@@ -1585,3 +1585,32 @@ Batch of UX fixes requested together.
 - Root cause: the Stability AI account is **out of credits** (balance = 1; the `ultra` model in /api/ai/generate-image costs 8/image). Live repro returned HTTP 402 `payment_required`. Both ANTHROPIC_API_KEY and STABILITY_API_KEY are present and valid in .env.local (Stability /v1/user/account returns 200).
 - The route already handles this correctly (402 → 503 "temporarily unavailable", billing details hidden from end users). Fix is to top up at platform.stability.ai/account/credits — or switch `ultra` → `core` (3 credits) to reduce per-image cost.
 - Caveat for production: per prior migration notes the App Hosting backend may not have STABILITY_API_KEY set as a secret, in which case prod fails with the "not configured" path instead.
+
+## Fixed AI cover prompt ignoring the user's subject (2026-07-26)
+- **Symptom**: typing a short subject like "bow" in the AI Generate Cover panel produced a heroic human face instead of a bow.
+- **Root cause** (src/app/api/ai/generate-image/route.ts): `WEBTOON_STYLE_SUFFIX` — appended to every Flux prompt — contained subject/composition words ("premium … cover art", "epic atmospheric composition", "bold heroic framing") that semantically demand a heroic human character. A one-word subject got swamped by ~40 words of character-implying style, so Flux drew a person.
+- **Fix**: rewrote the suffix to be strictly rendering-style (medium, lighting, colour grading, detail, quality, no-text guards) — removed "cover art", "epic atmospheric composition", "bold heroic framing"; "cover art" → "art style". Now subject-neutral.
+- Also lead the Flux prompt with the user's text framed as `", as the main focal subject of the image"` so short prompts stay the focal point.
+- No component/API-contract change; the platform manhwa look is preserved. `AIImageGenerator.tsx` unchanged.
+
+## AI cover generator now honors the typed subject — verified fix (2026-07-26)
+- Supersedes the earlier same-day entry. That first pass (removing "heroic framing" etc.) was NOT enough — empirical testing against the live Flux (Pollinations) service proved the phrase "Korean webtoon manhwa cover art" itself carries a dominant "beautiful character portrait" prior: "bow" → a manhwa man's face; "a magic sword" → a man holding a sword. Even a lightened "manhwa digital art style" still forced a person unless "no humans" was added — and "no humans" can't be hardcoded because most covers DO want a character.
+- Method: downloaded ~10 prompt variants from the real service and viewed them. Winning structure (renders objects as objects AND characters as characters): lead by repeating the subject + a NEUTRAL premium-illustration suffix with NO "manhwa/webtoon" wording. Verified "bow" → a bow (2 seeds) and "a lone warrior on a cliff" → a warrior scene.
+- Changes in src/app/api/ai/generate-image/route.ts:
+  - Renamed `WEBTOON_STYLE_SUFFIX` → `STYLE_SUFFIX`; dropped all "Korean webtoon manhwa cover art" / composition wording; now purely neutral premium rendering style (lighting, colour, detail, quality, no-text guards).
+  - `styledPrompt` = ``${prompt}. ${prompt}, as the main subject of the image${STYLE_SUFFIX}`` — repeats the subject up front so short prompts stay dominant.
+  - Auto-fill ('prompt' action) Haiku instruction now bakes the "premium Korean webtoon / manhwa cover illustration art style" INTO the generated prompt text (it used to say "do NOT name a medium; applied separately"). So character/scene covers keep the manhwa brand look, while hand-typed literal subjects render literally.
+- Trade-off: the manhwa aesthetic is no longer force-applied to every hand-typed prompt (it's guaranteed only for Auto-filled covers). A hand-typed character still looks premium/cinematic. Larger future option if strict brand consistency is needed: an LLM art-director step that expands the subject and decides object-vs-character before generating.
+- tsc: route file clean. (Unrelated pre-existing .next/types validator error about a webtoon editor page remains.)
+
+## Removed "Auto-fill from novel" button from AI image generator (2026-07-26)
+- Per request, removed the "Auto-fill from novel" button (top-right of the Image Prompt box) in the shared AIImageGenerator (used by Create Novel, Create Webtoon, and the webtoon editor).
+- src/components/novel/AIImageGenerator.tsx: deleted the button + its dead machinery — the `autoFillPrompt` callback, `loadingPrompt` state, `novelTitle`/`novelSynopsis` props, and the now-unused `Wand2` + `useCallback` imports. The "Image Prompt" label remains; users type/paste their own prompt.
+- Dropped the now-removed `novelTitle`/`novelSynopsis` props from all 3 call sites: CreateNovelModal.tsx, CreateWebtoonModal.tsx, and (novel)/create/webtoon/[webtoonId]/page.tsx.
+- The API 'prompt' action in generate-image/route.ts is left in place (harmless, no longer called client-side) in case auto-fill is reinstated.
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean on all 4 files.
+
+## Removed the like (❤ count) button from the novel description page (2026-07-26)
+- Per request, removed the `LikeButton` from the novel detail/description page only — src/app/(main)/novel/[id]/page.tsx (was in the action row next to Bookmark/Rating). Dropped its now-unused import too.
+- Left in place everywhere else: webtoon detail page, novel chapter reader, and the webtoon episode page still have their like buttons. The shared LikeButton component and the likes backend are untouched.
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean.

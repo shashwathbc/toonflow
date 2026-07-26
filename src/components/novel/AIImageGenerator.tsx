@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Wand2, Sparkles, X, Check, Loader2, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import { Sparkles, X, Check, Loader2, RotateCcw } from 'lucide-react'
 import { Tooltip } from '@/components/ui/Tooltip'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
@@ -17,8 +17,6 @@ const STYLES = [
 ]
 
 interface AIImageGeneratorProps {
-  novelTitle: string
-  novelSynopsis: string
   imageType: 'cover' | 'banner'
   onAccept: (file: File) => void
   onClose: () => void
@@ -26,8 +24,6 @@ interface AIImageGeneratorProps {
 }
 
 export function AIImageGenerator({
-  novelTitle,
-  novelSynopsis,
   imageType,
   onAccept,
   onClose,
@@ -35,41 +31,9 @@ export function AIImageGenerator({
 }: AIImageGeneratorProps) {
   const [prompt, setPrompt] = useState('')
   const [style, setStyle] = useState('cinematic')
-  const [loadingPrompt, setLoadingPrompt] = useState(false)
   const [loadingImage, setLoadingImage] = useState(false)
   const [imageBase64, setImageBase64] = useState<string | null>(null)
   const [imageMime, setImageMime] = useState('image/jpeg')
-
-  const autoFillPrompt = useCallback(async () => {
-    setLoadingPrompt(true)
-    try {
-      const res = await fetch('/api/ai/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'prompt',
-          novelTitle,
-          novelSynopsis,
-          imageType,
-          userId,
-        }),
-      })
-      const data = await res.json() as { prompt?: string; error?: string; insufficientTokens?: boolean }
-      if (!res.ok) {
-        if (data.insufficientTokens) {
-          toast.error(data.error ?? 'Not enough tokens', { duration: 6000 })
-          return
-        }
-        throw new Error(data.error)
-      }
-      if (data.prompt) setPrompt(data.prompt)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not generate prompt'
-      toast.error(msg)
-    } finally {
-      setLoadingPrompt(false)
-    }
-  }, [novelTitle, novelSynopsis, imageType, userId])
 
   async function generateImage() {
     const fullPrompt = `${prompt.trim()}, ${style}`
@@ -141,22 +105,7 @@ export function AIImageGenerator({
 
       {/* Prompt area */}
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-[11px] text-white/40 font-medium">Image Prompt</label>
-          <button
-            type="button"
-            onClick={autoFillPrompt}
-            disabled={loadingPrompt}
-            className="flex items-center gap-1 text-[10px] text-white/40 hover:text-white transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white rounded"
-          >
-            {loadingPrompt ? (
-              <Loader2 size={9} className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Wand2 size={9} aria-hidden="true" />
-            )}
-            Auto-fill from novel
-          </button>
-        </div>
+        <label className="block text-[11px] text-white/40 font-medium mb-1.5">Image Prompt</label>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}

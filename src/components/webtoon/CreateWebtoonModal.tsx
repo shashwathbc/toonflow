@@ -310,8 +310,6 @@ export function CreateWebtoonModal({
               {aiPanel === 'cover' && (
                 <div className="mt-4 border border-bg-border rounded-xl p-3 bg-bg-elevated/40">
                   <AIImageGenerator
-                    novelTitle={titleValue || 'Untitled Webtoon'}
-                    novelSynopsis={synopsisValue || ''}
                     imageType="cover"
                     onAccept={handleCoverFile}
                     onClose={() => setAiPanel(null)}

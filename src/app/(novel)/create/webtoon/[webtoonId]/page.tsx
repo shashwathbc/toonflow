@@ -741,8 +741,6 @@ export default function WebtoonEditorPage({ params }: PageProps) {
             </p>
 
             <AIImageGenerator
-              novelTitle={webtoon.title}
-              novelSynopsis={webtoon.synopsis}
               imageType="cover"
               onAccept={handleAIAccept}
               onClose={() => setAiCollapsed(true)}
