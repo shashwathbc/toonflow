@@ -12,13 +12,14 @@ import type { Webtoon, Episode } from '@/types'
 interface EpisodeIntroPageProps {
   webtoon: Webtoon
   episode: Episode
+  authorNameOverride?: string
 }
 
-export function EpisodeIntroPage({ webtoon, episode }: EpisodeIntroPageProps) {
+export function EpisodeIntroPage({ webtoon, episode, authorNameOverride }: EpisodeIntroPageProps) {
   const meta = episode.intro ?? {}
   const synopsis = webtoon.synopsis ?? ''
   const tagline = (meta.tagline?.trim() || synopsis.split(/[.!?]/)[0]?.trim() || '').slice(0, 140)
-  const creditLine = meta.creditLine?.trim() || webtoon.authorName
+  const creditLine = meta.creditLine?.trim() || authorNameOverride || webtoon.authorName
   const genre = webtoon.genres?.[0]
   const episodeNo = String(episode.episodeNumber ?? 1).padStart(2, '0')
 

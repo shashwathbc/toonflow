@@ -42,7 +42,7 @@ function HeroSliderSkeleton() {
   return (
     <div className="relative min-h-[440px] sm:min-h-[520px] lg:min-h-[580px] bg-bg-elevated overflow-hidden">
       <div className="absolute inset-0 shimmer" />
-      <div className="relative max-w-screen-xl mx-auto px-4 sm:px-6 pb-14 pt-8 flex items-end min-h-[440px] sm:min-h-[520px] lg:min-h-[580px]">
+      <div className="relative max-w-screen-xl mx-auto px-5 sm:px-8 lg:px-12 pb-14 pt-8 flex items-end min-h-[440px] sm:min-h-[520px] lg:min-h-[580px]">
         <div className="space-y-4 max-w-xl w-full">
           <div className="h-6 w-32 bg-bg-card rounded-full" />
           <div className="h-12 sm:h-14 w-full max-w-md bg-bg-card rounded-lg" />
@@ -131,7 +131,7 @@ export function HeroSlider() {
         aria-label="Featured content"
       >
         <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/70 to-transparent" />
-        <div className="relative max-w-screen-xl mx-auto px-4 sm:px-6 pb-12 space-y-4 w-full">
+        <div className="relative max-w-screen-xl mx-auto px-5 sm:px-8 lg:px-12 pb-12 space-y-4 w-full">
           <span className="eyebrow inline-block text-text-secondary bg-bg-elevated border border-bg-border rounded-full px-3 py-1.5">
             Trending Now
           </span>
@@ -214,7 +214,7 @@ export function HeroSlider() {
       {/* Live region: silent while rotating (announcing every 6s is noise), and
           polite once stopped, so manual navigation IS announced. */}
       <div
-        className="relative max-w-screen-xl mx-auto px-4 sm:px-6 pb-16 pt-10 flex items-end min-h-[440px] sm:min-h-[520px] lg:min-h-[580px] w-full"
+        className="relative max-w-screen-xl mx-auto px-5 sm:px-8 lg:px-12 pb-16 pt-10 flex items-end min-h-[440px] sm:min-h-[520px] lg:min-h-[580px] w-full"
         // spread instead of an inline expression: the static ARIA scanner can't
         // evaluate expressions and flags them (same workaround as the dots below)
         {...(isRotating ? { 'aria-live': 'off' as const } : { 'aria-live': 'polite' as const })}

@@ -1,0 +1,625 @@
+'use client'
+
+import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { Stage, Layer, Rect, Ellipse, Text, Group, Line, Transformer } from 'react-konva'
+import useImage from 'use-image'
+import Konva from 'konva'
+import {
+  useEditorStore,
+  type Page,
+  type EditorElement,
+  type ImageElement,
+  type TextElement,
+} from '@/store/useEditorStore'
+import { registerStage } from '@/lib/editor/exportProject'
+
+const SELECT = '#4C9AFF'
+
+// ---------------------------------------------------------------------------
+// Image node — loads its bitmap through use-image so Konva can paint it.
+// ---------------------------------------------------------------------------
+function ImageNode({ el, common }: { el: ImageElement; common: Record<string, unknown> }) {
+  const [img] = useImage(el.src, 'anonymous')
+  return (
+    <Rect
+      {...common}
+      width={el.width}
+      height={el.height}
+      fillPatternImage={img ?? undefined}
+      fillPatternScaleX={img ? el.width / img.width : 1}
+      fillPatternScaleY={img ? el.height / img.height : 1}
+      fill={img ? undefined : '#2A2A2A'}
+      cornerRadius={2}
+    />
+  )
+}
+
+interface Draft {
+  pageId: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export function Workspace() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<Konva.Stage>(null)
+  const trRef = useRef<Konva.Transformer>(null)
+  const [dims, setDims] = useState({ width: 0, height: 0 })
+  const [spaceDown, setSpaceDown] = useState(false)
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const [guides, setGuides] = useState<number[][]>([]) // world segments [x1,y1,x2,y2]
+  const [editing, setEditing] = useState<{ pageId: string; el: EditorElement } | null>(null)
+  const startRef = useRef<{ x: number; y: number } | null>(null)
+  const midPan = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null)
+
+  const pages = useEditorStore((s) => s.pages)
+  const viewport = useEditorStore((s) => s.viewport)
+  const setViewport = useEditorStore((s) => s.setViewport)
+  const setViewportSize = useEditorStore((s) => s.setViewportSize)
+  const activeTool = useEditorStore((s) => s.activeTool)
+  const setActiveTool = useEditorStore((s) => s.setActiveTool)
+  const selectedElementIds = useEditorStore((s) => s.selectedElementIds)
+  const selectedPageId = useEditorStore((s) => s.selectedPageId)
+  const selectElements = useEditorStore((s) => s.selectElements)
+  const selectPage = useEditorStore((s) => s.selectPage)
+  const clearSelection = useEditorStore((s) => s.clearSelection)
+  const addElement = useEditorStore((s) => s.addElement)
+  const updateElement = useEditorStore((s) => s.updateElement)
+  const updatePage = useEditorStore((s) => s.updatePage)
+  const pushHistory = useEditorStore((s) => s.pushHistory)
+  const snapEnabled = useEditorStore((s) => s.snapEnabled)
+  const gridStyle = useEditorStore((s) => s.gridStyle)
+  const showSafeZone = useEditorStore((s) => s.showSafeZone)
+  const fitAll = useEditorStore((s) => s.fitAll)
+  const fitPage = useEditorStore((s) => s.fitPage)
+
+  // ------- container measure ----------------------------------------------
+  useEffect(() => {
+    const obs = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        setDims({ width: e.contentRect.width, height: e.contentRect.height })
+        setViewportSize(e.contentRect.width, e.contentRect.height)
+      }
+    })
+    if (containerRef.current) obs.observe(containerRef.current)
+    return () => obs.disconnect()
+  }, [setViewportSize])
+
+  // ------- register stage for export/thumbnails ---------------------------
+  useEffect(() => {
+    registerStage(stageRef.current)
+    return () => registerStage(null)
+  }, [dims.width, dims.height])
+
+  // ------- space-to-pan ----------------------------------------------------
+  useEffect(() => {
+    const isTyping = (t: EventTarget | null) =>
+      t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+    const down = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isTyping(e.target) && !editing) {
+        e.preventDefault()
+        setSpaceDown(true)
+      }
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpaceDown(false)
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+    }
+  }, [editing])
+
+  // ------- attach transformer to selected nodes ---------------------------
+  useEffect(() => {
+    const stage = stageRef.current
+    const tr = trRef.current
+    if (!stage || !tr) return
+    const nodes = selectedElementIds
+      .map((id) => stage.findOne('#' + id))
+      .filter((n): n is Konva.Node => Boolean(n))
+    tr.nodes(nodes)
+    tr.getLayer()?.batchDraw()
+  }, [selectedElementIds, pages, editing])
+
+  // ------- coordinate helpers ---------------------------------------------
+  const toWorld = useCallback(
+    (px: number, py: number) => ({
+      x: (px - viewport.x) / viewport.scale,
+      y: (py - viewport.y) / viewport.scale,
+    }),
+    [viewport],
+  )
+
+  const pageAt = useCallback(
+    (wx: number, wy: number): Page | null => {
+      for (let i = pages.length - 1; i >= 0; i--) {
+        const p = pages[i]
+        if (wx >= p.x && wx <= p.x + p.width && wy >= p.y && wy <= p.y + p.height) return p
+      }
+      return null
+    },
+    [pages],
+  )
+
+  // ------- wheel zoom / pan -------------------------------------------------
+  // Wheel = cursor-centered zoom; Shift+wheel = horizontal pan; Ctrl/⌘ = precision.
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault()
+    const stage = stageRef.current
+    if (!stage) return
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+
+    if (e.evt.shiftKey && !e.evt.ctrlKey && !e.evt.metaKey) {
+      const d = e.evt.deltaX || e.evt.deltaY
+      setViewport({ x: viewport.x - d, y: viewport.y, scale: viewport.scale })
+      return
+    }
+
+    const oldScale = viewport.scale
+    const precision = e.evt.ctrlKey || e.evt.metaKey
+    const factor = Math.exp(-e.evt.deltaY * (precision ? 0.0008 : 0.0016))
+    const scale = Math.max(0.02, Math.min(oldScale * factor, 16))
+    const worldX = (pointer.x - viewport.x) / oldScale
+    const worldY = (pointer.y - viewport.y) / oldScale
+    setViewport({ x: pointer.x - worldX * scale, y: pointer.y - worldY * scale, scale })
+  }
+
+  const panning = spaceDown || activeTool === 'hand'
+
+  // ------- pointer down on stage ------------------------------------------
+  const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const stage = stageRef.current
+    if (!stage) return
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+    // Middle-mouse drag pans from anywhere, regardless of active tool.
+    if (e.evt.button === 1) {
+      e.evt.preventDefault()
+      midPan.current = { sx: pointer.x, sy: pointer.y, vx: viewport.x, vy: viewport.y }
+      return
+    }
+    if (panning) return
+    const w = toWorld(pointer.x, pointer.y)
+    const targetIsStage = e.target === stage
+    const onArtboard = e.target.name() === 'artboard'
+
+    // creation tools
+    if (activeTool === 'rect' || activeTool === 'ellipse') {
+      const page = pageAt(w.x, w.y)
+      if (page) {
+        startRef.current = w
+        setDraft({ pageId: page.id, x: w.x - page.x, y: w.y - page.y, w: 0, h: 0 })
+      }
+      return
+    }
+    if (activeTool === 'text') {
+      const page = pageAt(w.x, w.y)
+      if (page) {
+        const id = addElement(page.id, { type: 'text', x: w.x - page.x, y: w.y - page.y })
+        const created = useEditorStore.getState().pages.find((p) => p.id === page.id)?.elements.find((el) => el.id === id)
+        setActiveTool('select')
+        if (created) setEditing({ pageId: page.id, el: created })
+      }
+      return
+    }
+    if (activeTool === 'frame') {
+      useEditorStore.getState().addPage({ x: Math.round(w.x), y: Math.round(w.y) })
+      setActiveTool('select')
+      return
+    }
+
+    // select tool: marquee from empty space, page-select from artboard bg
+    if (activeTool === 'select') {
+      if (targetIsStage) {
+        clearSelection()
+        selectPage(null)
+        startRef.current = w
+        setMarquee({ x: w.x, y: w.y, w: 0, h: 0 })
+      } else if (onArtboard) {
+        const id = e.target.id()
+        selectPage(id)
+      }
+    }
+  }
+
+  const handleMouseMove = () => {
+    const stage = stageRef.current
+    if (!stage) return
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+    if (midPan.current) {
+      setViewport({
+        x: midPan.current.vx + (pointer.x - midPan.current.sx),
+        y: midPan.current.vy + (pointer.y - midPan.current.sy),
+        scale: viewport.scale,
+      })
+      return
+    }
+    if (!startRef.current) return
+    const w = toWorld(pointer.x, pointer.y)
+    const s = startRef.current
+    if (draft) {
+      const page = pages.find((p) => p.id === draft.pageId)
+      if (!page) return
+      const x = Math.min(w.x, s.x) - page.x
+      const y = Math.min(w.y, s.y) - page.y
+      setDraft({ pageId: draft.pageId, x, y, w: Math.abs(w.x - s.x), h: Math.abs(w.y - s.y) })
+    } else if (marquee) {
+      setMarquee({ x: Math.min(w.x, s.x), y: Math.min(w.y, s.y), w: Math.abs(w.x - s.x), h: Math.abs(w.y - s.y) })
+    }
+  }
+
+  const handleMouseUp = () => {
+    if (draft) {
+      if (draft.w > 4 && draft.h > 4) {
+        addElement(draft.pageId, {
+          type: activeTool === 'ellipse' ? 'ellipse' : 'rect',
+          x: draft.x,
+          y: draft.y,
+          width: draft.w,
+          height: draft.h,
+        })
+        setActiveTool('select')
+      }
+      setDraft(null)
+    }
+    if (marquee) {
+      if (marquee.w > 3 && marquee.h > 3) {
+        const hits: string[] = []
+        for (const p of pages) {
+          for (const el of p.elements) {
+            if (el.isHidden) continue
+            const ax = p.x + el.x
+            const ay = p.y + el.y
+            if (
+              ax < marquee.x + marquee.w &&
+              ax + el.width > marquee.x &&
+              ay < marquee.y + marquee.h &&
+              ay + el.height > marquee.y
+            )
+              hits.push(el.id)
+          }
+        }
+        if (hits.length) selectElements(hits)
+      }
+      setMarquee(null)
+    }
+    startRef.current = null
+    midPan.current = null
+  }
+
+  // Double-click empty canvas → fit all; on a page → zoom to that page.
+  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const stage = stageRef.current
+    if (!stage) return
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
+    const w = toWorld(pointer.x, pointer.y)
+    const page = pageAt(w.x, w.y)
+    if (page && e.target.name() !== 'element') fitPage(page.id)
+    else if (!page) fitAll()
+  }
+
+  // ------- element drag with edge snapping --------------------------------
+  const onElDragMove = (e: Konva.KonvaEventObject<DragEvent>, page: Page, el: EditorElement) => {
+    const node = e.target
+    const isEllipse = el.type === 'ellipse'
+    let left = isEllipse ? node.x() - el.width / 2 : node.x()
+    let top = isEllipse ? node.y() - el.height / 2 : node.y()
+    const segs: number[][] = []
+
+    if (snapEnabled) {
+      const T = 6 / viewport.scale
+      type Tgt = { pos: number; a: number; b: number }
+      // page edges + center, then every sibling's edges + center
+      const xT: Tgt[] = [
+        { pos: 0, a: 0, b: page.height },
+        { pos: page.width / 2, a: 0, b: page.height },
+        { pos: page.width, a: 0, b: page.height },
+      ]
+      const yT: Tgt[] = [
+        { pos: 0, a: 0, b: page.width },
+        { pos: page.height / 2, a: 0, b: page.width },
+        { pos: page.height, a: 0, b: page.width },
+      ]
+      for (const s of page.elements) {
+        if (s.id === el.id || s.isHidden) continue
+        xT.push({ pos: s.x, a: s.y, b: s.y + s.height }, { pos: s.x + s.width / 2, a: s.y, b: s.y + s.height }, { pos: s.x + s.width, a: s.y, b: s.y + s.height })
+        yT.push({ pos: s.y, a: s.x, b: s.x + s.width }, { pos: s.y + s.height / 2, a: s.x, b: s.x + s.width }, { pos: s.y + s.height, a: s.x, b: s.x + s.width })
+      }
+
+      let bestX: { d: number; t: Tgt } | null = null
+      for (const o of [0, el.width / 2, el.width])
+        for (const t of xT) {
+          const d = t.pos - (left + o)
+          if (Math.abs(d) <= T && (!bestX || Math.abs(d) < Math.abs(bestX.d))) bestX = { d, t }
+        }
+      if (bestX) {
+        left += bestX.d
+        segs.push([page.x + bestX.t.pos, page.y + Math.min(bestX.t.a, top), page.x + bestX.t.pos, page.y + Math.max(bestX.t.b, top + el.height)])
+      }
+
+      let bestY: { d: number; t: Tgt } | null = null
+      for (const o of [0, el.height / 2, el.height])
+        for (const t of yT) {
+          const d = t.pos - (top + o)
+          if (Math.abs(d) <= T && (!bestY || Math.abs(d) < Math.abs(bestY.d))) bestY = { d, t }
+        }
+      if (bestY) {
+        top += bestY.d
+        segs.push([page.x + Math.min(bestY.t.a, left), page.y + bestY.t.pos, page.x + Math.max(bestY.t.b, left + el.width), page.y + bestY.t.pos])
+      }
+    }
+
+    node.x(isEllipse ? left + el.width / 2 : left)
+    node.y(isEllipse ? top + el.height / 2 : top)
+    setGuides(segs)
+  }
+
+  const onElDragEnd = (e: Konva.KonvaEventObject<DragEvent>, page: Page, el: EditorElement) => {
+    const node = e.target
+    const isEllipse = el.type === 'ellipse'
+    updateElement(page.id, el.id, {
+      x: Math.round(isEllipse ? node.x() - el.width / 2 : node.x()),
+      y: Math.round(isEllipse ? node.y() - el.height / 2 : node.y()),
+    })
+    setGuides([])
+  }
+
+  const onElTransformEnd = (e: Konva.KonvaEventObject<Event>, page: Page, el: EditorElement) => {
+    const node = e.target
+    const sx = node.scaleX()
+    const sy = node.scaleY()
+    node.scaleX(1)
+    node.scaleY(1)
+    const width = Math.max(5, Math.round(node.width() * sx))
+    const height = Math.max(5, Math.round(node.height() * sy))
+    const isEllipse = el.type === 'ellipse'
+    const patch: Partial<EditorElement> = {
+      width,
+      height,
+      x: Math.round(isEllipse ? node.x() - width / 2 : node.x()),
+      y: Math.round(isEllipse ? node.y() - height / 2 : node.y()),
+      rotation: Math.round(node.rotation()),
+    }
+    if (el.type === 'text') (patch as Partial<TextElement>).fontSize = Math.max(6, Math.round(el.fontSize * sy))
+    updateElement(page.id, el.id, patch)
+  }
+
+  // ------- render one element ---------------------------------------------
+  const renderElement = (page: Page, el: EditorElement) => {
+    if (el.isHidden) return null
+    if (editing && editing.el.id === el.id) return null // hidden while inline-editing
+    const draggable = activeTool === 'select' && !el.isLocked && !panning
+    const common = {
+      id: el.id,
+      name: 'element',
+      opacity: el.opacity,
+      rotation: el.rotation,
+      draggable,
+      onMouseDown: (ev: Konva.KonvaEventObject<MouseEvent>) => {
+        if (activeTool !== 'select' || panning) return
+        ev.cancelBubble = true
+        if (!selectedElementIds.includes(el.id)) selectElements([el.id], ev.evt.shiftKey)
+        else if (ev.evt.shiftKey) selectElements([el.id], true)
+      },
+      onDragStart: () => {
+        pushHistory()
+        if (!selectedElementIds.includes(el.id)) selectElements([el.id])
+      },
+      onDragMove: (ev: Konva.KonvaEventObject<DragEvent>) => onElDragMove(ev, page, el),
+      onDragEnd: (ev: Konva.KonvaEventObject<DragEvent>) => onElDragEnd(ev, page, el),
+      onTransformStart: () => pushHistory(),
+      onTransformEnd: (ev: Konva.KonvaEventObject<Event>) => onElTransformEnd(ev, page, el),
+    }
+
+    if (el.type === 'rect') {
+      return <Rect key={el.id} {...common} x={el.x} y={el.y} width={el.width} height={el.height} fill={el.fill} stroke={el.strokeWidth ? el.stroke : undefined} strokeWidth={el.strokeWidth} cornerRadius={el.cornerRadius} />
+    }
+    if (el.type === 'ellipse') {
+      return <Ellipse key={el.id} {...common} x={el.x + el.width / 2} y={el.y + el.height / 2} radiusX={el.width / 2} radiusY={el.height / 2} fill={el.fill} stroke={el.strokeWidth ? el.stroke : undefined} strokeWidth={el.strokeWidth} />
+    }
+    if (el.type === 'text') {
+      return (
+        <Text
+          key={el.id}
+          {...common}
+          x={el.x}
+          y={el.y}
+          width={el.width}
+          text={el.text}
+          fontSize={el.fontSize}
+          fontFamily={el.fontFamily}
+          fontStyle={el.fontStyle}
+          fill={el.fill}
+          align={el.align}
+          lineHeight={el.lineHeight}
+          onDblClick={(ev) => { ev.cancelBubble = true; setEditing({ pageId: page.id, el }) }}
+        />
+      )
+    }
+    if (el.type === 'image') {
+      return <ImageNode key={el.id} el={el} common={{ ...common, x: el.x, y: el.y }} />
+    }
+    return null
+  }
+
+  // ------- inline text editor overlay -------------------------------------
+  const editorBox = editing
+    ? (() => {
+        const page = pages.find((p) => p.id === editing.pageId)
+        const el = page?.elements.find((e) => e.id === editing.el.id)
+        if (!page || !el || el.type !== 'text') return null
+        const screenX = (page.x + el.x) * viewport.scale + viewport.x
+        const screenY = (page.y + el.y) * viewport.scale + viewport.y
+        return { page, el, screenX, screenY }
+      })()
+    : null
+
+  // ------- viewport culling: only mount pages intersecting the view ---------
+  const M = 300
+  const view = {
+    minX: -viewport.x / viewport.scale - M,
+    minY: -viewport.y / viewport.scale - M,
+    maxX: (dims.width - viewport.x) / viewport.scale + M,
+    maxY: (dims.height - viewport.y) / viewport.scale + M,
+  }
+  const visiblePages = pages.filter(
+    (p) => p.x < view.maxX && p.x + p.width > view.minX && p.y < view.maxY && p.y + p.height > view.minY,
+  )
+
+  // ------- grid background --------------------------------------------------
+  const g = 24 * viewport.scale
+  const gridBg: React.CSSProperties | undefined =
+    gridStyle === 'none'
+      ? undefined
+      : gridStyle === 'lines'
+        ? {
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
+            backgroundSize: `${g}px ${g}px, ${g}px ${g}px`,
+            backgroundPosition: `${viewport.x}px ${viewport.y}px`,
+          }
+        : {
+            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.10) 1px, transparent 1px)',
+            backgroundSize: `${g}px ${g}px`,
+            backgroundPosition: `${viewport.x}px ${viewport.y}px`,
+          }
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex-1 bg-[#0C0C0C] relative overflow-hidden"
+      style={{ cursor: panning ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair' }}
+    >
+      {/* infinite grid background */}
+      {gridBg && <div className="absolute inset-0 pointer-events-none" style={gridBg} />}
+
+      {dims.width > 0 && (
+        <Stage
+          ref={stageRef}
+          width={dims.width}
+          height={dims.height}
+          x={viewport.x}
+          y={viewport.y}
+          scaleX={viewport.scale}
+          scaleY={viewport.scale}
+          onWheel={handleWheel}
+          draggable={panning}
+          onDragEnd={(e) => {
+            if (e.target === stageRef.current)
+              setViewport({ x: e.target.x(), y: e.target.y(), scale: viewport.scale })
+          }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onDblClick={handleDblClick}
+        >
+          <Layer>
+            {visiblePages.map((page) => {
+              const selPage = selectedPageId === page.id
+              const movable = activeTool === 'select' && selPage && !page.isLocked && !panning
+              return (
+                <Group
+                  key={page.id}
+                  id={'page-' + page.id}
+                  x={page.x}
+                  y={page.y}
+                  draggable={movable}
+                  onDragStart={() => pushHistory()}
+                  onDragEnd={(e) => {
+                    if (e.target === e.currentTarget)
+                      updatePage(page.id, { x: Math.round(e.target.x()), y: Math.round(e.target.y()) }, false)
+                  }}
+                >
+                  <Text text={page.name} x={0} y={-26 / viewport.scale} fontSize={13 / viewport.scale} fill={selPage ? SELECT : '#8B8B8B'} fontFamily="Inter" listening={false} />
+                  <Rect name="artboard" id={page.id} x={0} y={0} width={page.width} height={page.height} fill={page.backgroundColor} cornerRadius={2} shadowColor="black" shadowBlur={24} shadowOpacity={0.55} shadowOffset={{ x: 0, y: 12 }} stroke={selPage ? SELECT : undefined} strokeWidth={selPage ? 1.5 / viewport.scale : 0} />
+                  <Group clipX={0} clipY={0} clipWidth={page.width} clipHeight={page.height}>
+                    {page.elements.map((el) => renderElement(page, el))}
+                  </Group>
+                  {showSafeZone && (
+                    <Rect
+                      x={page.width * 0.05}
+                      y={page.height * 0.04}
+                      width={page.width * 0.9}
+                      height={page.height * 0.92}
+                      stroke="#22C55E"
+                      strokeWidth={1 / viewport.scale}
+                      dash={[8 / viewport.scale, 6 / viewport.scale]}
+                      listening={false}
+                    />
+                  )}
+                </Group>
+              )
+            })}
+
+            {/* smart guides (pink) */}
+            {guides.map((seg, i) => (
+              <Line key={'g' + i} points={seg} stroke="#FF3B6B" strokeWidth={1 / viewport.scale} listening={false} />
+            ))}
+
+            {/* creation preview */}
+            {draft && (() => {
+              const page = pages.find((p) => p.id === draft.pageId)
+              if (!page) return null
+              return <Rect x={page.x + draft.x} y={page.y + draft.y} width={draft.w} height={draft.h} fill={`${SELECT}22`} stroke={SELECT} strokeWidth={1 / viewport.scale} listening={false} />
+            })()}
+
+            {/* marquee */}
+            {marquee && <Rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill={`${SELECT}18`} stroke={SELECT} strokeWidth={1 / viewport.scale} listening={false} />}
+
+            <Transformer
+              ref={trRef}
+              rotateEnabled
+              borderStroke={SELECT}
+              borderStrokeWidth={1.5 / viewport.scale}
+              anchorStroke={SELECT}
+              anchorFill="#fff"
+              anchorSize={8 / viewport.scale}
+              anchorCornerRadius={2}
+              rotateAnchorOffset={22 / viewport.scale}
+              ignoreStroke
+              boundBoxFunc={(oldBox, newBox) => (newBox.width < 5 || newBox.height < 5 ? oldBox : newBox)}
+            />
+          </Layer>
+        </Stage>
+      )}
+
+      {/* inline text editor */}
+      {editorBox && (
+        <textarea
+          autoFocus
+          className="absolute z-40 resize-none bg-transparent outline outline-2 outline-[#4C9AFF] p-0 leading-tight"
+          style={{
+            left: editorBox.screenX,
+            top: editorBox.screenY,
+            width: editorBox.el.width * viewport.scale,
+            minHeight: (editorBox.el as TextElement).fontSize * viewport.scale,
+            fontSize: (editorBox.el as TextElement).fontSize * viewport.scale,
+            fontFamily: (editorBox.el as TextElement).fontFamily,
+            color: (editorBox.el as TextElement).fill,
+            lineHeight: (editorBox.el as TextElement).lineHeight,
+          }}
+          defaultValue={(editorBox.el as TextElement).text}
+          onBlur={(e) => {
+            updateElement(editorBox.page.id, editorBox.el.id, { text: e.target.value }, true)
+            setEditing(null)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.currentTarget.blur()
+            }
+            e.stopPropagation()
+          }}
+        />
+      )}
+    </div>
+  )
+}

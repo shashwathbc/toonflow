@@ -22,6 +22,7 @@ export interface Webtoon {
   slug: string
   synopsis: string
   coverURL: string | null
+  bannerURL?: string | null
   status: ContentStatus
   visibility: 'public' | 'unlisted' | 'private'
   genres: ContentGenre[]

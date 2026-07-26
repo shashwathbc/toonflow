@@ -69,7 +69,18 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const ua = req.headers.get('user-agent') ?? ''
 
-  if (!isSameOrigin(req)) return notCounted()
+  if (!isSameOrigin(req)) {
+    // Real views should always be same-origin; a rejection here means either a
+    // cross-site attempt or a host/proxy misconfig. Logged (not silent) so a
+    // legitimate deployment issue is visible in Cloud Run logs instead of
+    // manifesting only as "views never count".
+    console.warn('[views] rejected: not same-origin', {
+      origin: req.headers.get('origin'),
+      forwardedHost: req.headers.get('x-forwarded-host'),
+      nextUrlHost: req.nextUrl.host,
+    })
+    return notCounted()
+  }
 
   let body: unknown
   try {

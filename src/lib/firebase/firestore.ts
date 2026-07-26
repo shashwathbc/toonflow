@@ -297,6 +297,7 @@ export async function createWebtoon(
     slug: '',
     synopsis: '',
     coverURL: null,
+    bannerURL: null,
     status: 'draft',
     visibility: 'public',
     genres: [],

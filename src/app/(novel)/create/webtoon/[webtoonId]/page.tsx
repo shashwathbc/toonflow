@@ -48,7 +48,7 @@ interface PageProps {
 
 export default function WebtoonEditorPage({ params }: PageProps) {
   const { webtoonId } = use(params)
-  const { firebaseUser, loading: authLoading } = useAuth()
+  const { firebaseUser, userProfile, loading: authLoading } = useAuth()
   const router = useRouter()
   const { episodes, loading: episodesLoading } = useEpisodes(webtoonId)
 
@@ -248,6 +248,77 @@ export default function WebtoonEditorPage({ params }: PageProps) {
     } catch {
       setSaveState('error')
     }
+  }
+
+  const handleAddBlankPage = (index?: number) => {
+    if (!activeEpisode || !webtoon) return
+    setSaveState('saving')
+    const currentPanels = activeEpisode.panels ?? []
+    const updatedPanels = [...currentPanels]
+    const order = index !== undefined ? index : currentPanels.length
+
+    const canvas = document.createElement('canvas')
+    canvas.width = 800
+    canvas.height = 1200
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.fillStyle = '#FFFFFF'
+      ctx.fillRect(0, 0, 800, 1200)
+    }
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        setSaveState('error')
+        return
+      }
+      
+      const file = new File([blob], 'blank-page.jpg', { type: 'image/jpeg' })
+      const tempKey = `blank-${order}`
+      setUploadingProgress((prev) => ({ ...prev, [tempKey]: 1 }))
+      
+      try {
+        const url = await uploadEpisodePanel(
+          firebaseUser!.uid,
+          webtoonId,
+          activeEpisode.id,
+          file,
+          order,
+          ({ progress }) => {
+            setUploadingProgress((prev) => ({ ...prev, [tempKey]: progress }))
+          }
+        )
+
+        const newPanel = {
+          url,
+          width: 800,
+          height: 1200,
+          order,
+          altText: 'Blank Page',
+        }
+
+        if (index !== undefined) {
+          updatedPanels.splice(index, 0, newPanel)
+          updatedPanels.forEach((p, idx) => { p.order = idx })
+        } else {
+          updatedPanels.push(newPanel)
+        }
+
+        setUploadingProgress((prev) => {
+          const next = { ...prev }
+          delete next[tempKey]
+          return next
+        })
+
+        await updateEpisode(webtoonId, activeEpisode.id, { panels: updatedPanels })
+        setActiveEpisode((prev) => prev ? { ...prev, panels: updatedPanels } : prev)
+        setSaveState('saved', 2000)
+        toast.success('Blank page added')
+      } catch (err) {
+        console.error(err)
+        setSaveState('error')
+        toast.error('Failed to add blank page')
+      }
+    }, 'image/jpeg', 0.9)
   }
 
   const setPanelSpan = async (index: number, span: PanelSpan) => {
@@ -501,7 +572,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                     {/* Mandatory intro page — structural, not a panel: no panel
                         operation can delete, move or duplicate it */}
                     <div className="group/intro relative w-full">
-                      <EpisodeIntroPage webtoon={webtoon} episode={activeEpisode} />
+                      <EpisodeIntroPage webtoon={webtoon} episode={activeEpisode} authorNameOverride={userProfile?.displayName} />
                       <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2 opacity-0 group-hover/intro:opacity-100 focus-within:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
                         <span className="flex items-center gap-1 text-[10px] bg-black/70 backdrop-blur-sm text-warning font-semibold px-2 py-0.5 rounded-full mt-0.5">
                           <Lock size={9} aria-hidden="true" />
@@ -635,14 +706,17 @@ export default function WebtoonEditorPage({ params }: PageProps) {
                     })}
 
                     {(activeEpisode.panels ?? []).length === 0 && !isUploading && (
-                      <div className="w-full flex flex-col items-center gap-1.5 py-10 border-t border-dashed border-white/10 text-center px-6">
-                        <Upload size={22} className="text-white/20" aria-hidden="true" />
-                        <p className="text-xs font-semibold text-white/50">No story panels yet</p>
-                        <p className="text-[11px] text-white/30 leading-relaxed max-w-xs">
-                          Your story lives between the locked Intro and Outro pages.
-                          Upload vertical panel strips below or generate them with AI.
-                        </p>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAddBlankPage()}
+                        className="w-full flex flex-col items-center justify-center py-20 border-t border-dashed border-white/10 hover:bg-white/5 hover:border-white/20 transition-all cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        aria-label="Add blank white page"
+                      >
+                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 group-hover:scale-110 transition-all mb-3">
+                          <Plus size={32} className="text-white/40 group-hover:text-white" aria-hidden="true" />
+                        </div>
+                        <p className="text-xs font-semibold text-white/50 group-hover:text-white transition-colors">Add blank page</p>
+                      </button>
                     )}
 
                     {/* End-of-strip append zone — always inserts before the outro */}
@@ -660,7 +734,7 @@ export default function WebtoonEditorPage({ params }: PageProps) {
 
                     {/* Mandatory outro page — structural twin of the intro */}
                     <div className="group/outro relative w-full">
-                      <EpisodeOutroPage webtoon={webtoon} episode={activeEpisode} interactive={false} />
+                      <EpisodeOutroPage webtoon={webtoon} episode={activeEpisode} interactive={false} authorNameOverride={userProfile?.displayName} />
                       <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2 opacity-0 group-hover/outro:opacity-100 focus-within:opacity-100 transition-opacity duration-200 bg-gradient-to-b from-black/60 to-transparent pb-8 pointer-events-none">
                         <span className="flex items-center gap-1 text-[10px] bg-black/70 backdrop-blur-sm text-warning font-semibold px-2 py-0.5 rounded-full mt-0.5">
                           <Lock size={9} aria-hidden="true" />

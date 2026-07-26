@@ -1,145 +1,99 @@
 'use client'
 
 import Link from 'next/link'
-import { PenLine, BookOpen, ArrowLeft } from 'lucide-react'
-import type { Novel } from '@/types'
+import { Heart, MessageCircle, Star, Share2, UserPlus } from 'lucide-react'
+import { APP_URL } from '@/lib/utils/constants'
+import type { Novel, Chapter } from '@/types'
 
-// Ending / outro credits page — the closing "page" after the last chapter.
-// Mirrors the scanlation-style ending card (misty hero, title logo, production
-// credits, studio mark, copyright line) but branded Toonflow and data-driven,
-// staying visually cohesive with the intro CreditsPoster (purple accent,
-// #8B5CF6 = Tailwind violet-500, kept in arbitrary-value classes).
+const SITE_HOST = APP_URL.includes('localhost') ? 'TOONFLOWSTUDIOPAINT.COM' : APP_URL.replace(/^https?:\/\//, '')
 
-// Per-particle placement/timing as literal Tailwind classes (position, base
-// opacity, and the --p-* vars the shared animate-[…] class + the
-// reader-particle-float keyframes consume). Literal strings so the JIT sees
-// them — values match the old `(i * k + c) % m` generation formulas.
-const PARTICLES = [
-  'left-[17%] top-[11%] opacity-[0.12] [--p-opacity:0.12] [--p-dur:6.0s] [--p-delay:0.0s]',
-  'left-[60%] top-[70%] opacity-[0.29] [--p-opacity:0.29] [--p-dur:8.7s] [--p-delay:1.9s]',
-  'left-[6%] top-[36%] opacity-[0.46] [--p-opacity:0.46] [--p-dur:6.4s] [--p-delay:3.8s]',
-  'left-[49%] top-[2%] opacity-[0.23] [--p-opacity:0.23] [--p-dur:9.1s] [--p-delay:5.7s]',
-  'left-[92%] top-[61%] opacity-[0.4] [--p-opacity:0.4] [--p-dur:6.8s] [--p-delay:0.6s]',
-  'left-[38%] top-[27%] opacity-[0.17] [--p-opacity:0.17] [--p-dur:9.5s] [--p-delay:2.5s]',
-  'left-[81%] top-[86%] opacity-[0.34] [--p-opacity:0.34] [--p-dur:7.2s] [--p-delay:4.4s]',
-  'left-[27%] top-[52%] opacity-[0.51] [--p-opacity:0.51] [--p-dur:9.9s] [--p-delay:6.3s]',
-  'left-[70%] top-[18%] opacity-[0.28] [--p-opacity:0.28] [--p-dur:7.6s] [--p-delay:1.2s]',
-  'left-[16%] top-[77%] opacity-[0.45] [--p-opacity:0.45] [--p-dur:10.3s] [--p-delay:3.1s]',
-  'left-[59%] top-[43%] opacity-[0.22] [--p-opacity:0.22] [--p-dur:8.0s] [--p-delay:5.0s]',
-  'left-[5%] top-[9%] opacity-[0.39] [--p-opacity:0.39] [--p-dur:10.7s] [--p-delay:6.9s]',
-  'left-[48%] top-[68%] opacity-[0.16] [--p-opacity:0.16] [--p-dur:8.4s] [--p-delay:1.8s]',
-  'left-[91%] top-[34%] opacity-[0.33] [--p-opacity:0.33] [--p-dur:6.1s] [--p-delay:3.7s]',
-  'left-[37%] top-[0%] opacity-[0.5] [--p-opacity:0.5] [--p-dur:8.8s] [--p-delay:5.6s]',
-  'left-[80%] top-[59%] opacity-[0.27] [--p-opacity:0.27] [--p-dur:6.5s] [--p-delay:0.5s]',
-  'left-[26%] top-[25%] opacity-[0.44] [--p-opacity:0.44] [--p-dur:9.2s] [--p-delay:2.4s]',
-  'left-[69%] top-[84%] opacity-[0.21] [--p-opacity:0.21] [--p-dur:6.9s] [--p-delay:4.3s]',
-  'left-[15%] top-[50%] opacity-[0.38] [--p-opacity:0.38] [--p-dur:9.6s] [--p-delay:6.2s]',
-  'left-[58%] top-[16%] opacity-[0.15] [--p-opacity:0.15] [--p-dur:7.3s] [--p-delay:1.1s]',
-]
+const ENGAGEMENT_CUES = [
+  { icon: Heart, label: 'Like' },
+  { icon: MessageCircle, label: 'Comment' },
+  { icon: Star, label: 'Subscribe' },
+  { icon: Share2, label: 'Share' },
+] as const
 
 interface EndingPosterProps {
   novel: Novel
+  chapter?: Chapter // Make it optional for backwards compatibility
 }
 
-// Production-credit line — "ROLE  ·  value", like the ending card's staff list.
-function CreditLine({ role, value }: { role: string; value: string }) {
-  return (
-    <p className="text-sm text-white/45">
-      <span className="tracking-[0.3em] text-white/30 uppercase text-[11px] mr-2">{role}</span>
-      <span className="font-semibold text-white/70">{value}</span>
-    </p>
-  )
-}
-
-export function EndingPoster({ novel }: EndingPosterProps) {
+export function EndingPoster({ novel, chapter }: EndingPosterProps) {
+  const message = 'Thank You for Reading'
+  const teaser = 'Next chapter coming soon'
   const year = new Date().getFullYear()
-  const genre = novel.genres?.[0] ? novel.genres[0].replace(/\b\w/g, (c) => c.toUpperCase()) : 'Story'
+  const authorDisplay = novel.authorName
 
   return (
     <section
-      className="relative min-h-screen flex flex-col items-center justify-center bg-black overflow-hidden px-4 py-20"
-      aria-label="Story ending"
+      className="relative w-full overflow-hidden bg-black select-none"
+      aria-label={`${novel.title} — Chapter ${chapter?.chapterNumber ?? ''} closing page`}
     >
-      {/* Particles */}
-      {PARTICLES.map((p) => (
-        <span
-          key={p}
-          className={`absolute w-[3px] h-[3px] rounded-full bg-violet-300 pointer-events-none will-change-transform animate-[reader-particle-float_var(--p-dur)_ease-in-out_var(--p-delay)_infinite] ${p}`}
-          aria-hidden="true"
-        />
-      ))}
+      {/* Ambient stage glows */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 h-2/3 pointer-events-none bg-[radial-gradient(ellipse_90%_100%_at_50%_100%,rgba(255,255,255,0.04)_0%,transparent_60%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute -top-1/4 left-1/2 -translate-x-1/2 w-3/4 aspect-square rounded-full pointer-events-none bg-accent/[0.05] blur-3xl"
+      />
 
-      {/* Misty purple veils */}
-      <div className="absolute inset-x-0 top-0 h-1/2 pointer-events-none bg-[radial-gradient(ellipse_80%_100%_at_50%_0%,#8B5CF622_0%,transparent_65%)]" aria-hidden="true" />
-      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_70%_60%_at_50%_45%,rgba(255,255,255,0.03)_0%,transparent_70%)]" aria-hidden="true" />
-
-      <div className="relative z-10 text-center px-2 max-w-xl mx-auto flex flex-col items-center gap-9 animate-[reader-fade-in_1s_both]">
-        {/* Fin divider */}
-        <div className="flex items-center justify-center gap-5">
-          <div className="h-px w-16 bg-[linear-gradient(to_right,transparent,#8B5CF688)]" />
-          <span className="text-[9px] tracking-[0.6em] uppercase text-violet-500">The End</span>
-          <div className="h-px w-16 bg-[linear-gradient(to_left,transparent,#8B5CF688)]" />
-        </div>
-
-        {/* Title logo — the story's mark, centered and dramatic */}
-        <div className="space-y-3">
-          <h2 className="font-black text-white leading-[1.05] text-[length:clamp(2.4rem,8vw,4.5rem)] [font-family:Georgia,'Times_New_Roman',serif] [text-shadow:0_0_40px_#8B5CF655,0_2px_6px_rgba(0,0,0,0.8)]">
-            {novel.title || 'Untitled'}
-          </h2>
-          <p className="text-[10px] tracking-[0.45em] text-white/35 uppercase">
-            {genre} · {novel.status}
+      <div className="relative z-10 flex flex-col items-center gap-7 px-6 py-14 text-center">
+        {/* End divider */}
+        <div className="flex items-center gap-4">
+          <span aria-hidden="true" className="h-px w-12 bg-gradient-to-r from-transparent to-white/60" />
+          <p className="text-[9px] tracking-[0.6em] uppercase text-white font-semibold">
+            {chapter ? `End of Chapter ${chapter.chapterNumber}` : 'The End'}
           </p>
+          <span aria-hidden="true" className="h-px w-12 bg-gradient-to-l from-transparent to-white/60" />
         </div>
 
-        {/* Production credits */}
-        <div className="space-y-2 pt-1">
-          <CreditLine role="Written by" value={novel.authorName} />
-          <CreditLine role="Genre" value={genre} />
-          <CreditLine role="Chapters" value={String(novel.chapterCount || 1)} />
-          <CreditLine role="Language" value={(novel.language || 'EN').toUpperCase()} />
+        {/* Farewell headline */}
+        <h2 className="font-black text-white leading-[1.1] text-[length:clamp(1.7rem,5.5vw,3rem)] [font-family:Georgia,'Times_New_Roman',serif] [text-shadow:0_0_40px_rgba(255,255,255,0.1),0_2px_4px_rgba(0,0,0,0.8)]">
+          {message}
+        </h2>
+
+        {/* Teaser */}
+        <p className="text-sm font-light italic text-white/55 [font-family:Georgia,serif]">{teaser}</p>
+
+        {/* Engagement cues */}
+        <ul className="flex flex-wrap items-center justify-center gap-2.5" aria-label="Ways to support this series">
+          {ENGAGEMENT_CUES.map(({ icon: Icon, label }) => (
+            <li
+              key={label}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-semibold text-white/60 hover:bg-white/10 cursor-pointer transition-colors"
+            >
+              <Icon size={12} className="text-white/80" aria-hidden="true" />
+              {label}
+            </li>
+          ))}
+        </ul>
+
+        {/* Follow the creator */}
+        <div className="flex flex-col items-center gap-1.5">
+          <Link
+            href={`/profile/${novel.authorId}`}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          >
+            <UserPlus size={16} aria-hidden="true" />
+            Follow {authorDisplay}
+          </Link>
         </div>
 
-        {/* Studio mark — like the ending card's publisher logo */}
+        {/* Studio mark */}
         <div className="flex flex-col items-center gap-1.5 pt-2">
-          <p className="font-black tracking-[0.15em] text-lg">
-            <span className="text-white">TOONFLOW</span>{' '}
-            <span className="text-violet-300">STUDIO&nbsp;PAINT</span>
+          <p className="font-black tracking-[0.15em] text-base">
+            <span className="text-white">TOONFLOW STUDIO&nbsp;PAINT</span>
           </p>
-          <div className="h-px w-24 bg-[linear-gradient(to_right,transparent,#8B5CF6,transparent)]" />
+          <span aria-hidden="true" className="h-px w-24 bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+          <p className="text-[10px] tracking-[0.25em] text-white/30 uppercase">{SITE_HOST}</p>
         </div>
 
-        {/* Creator CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/create/novel"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white text-black font-bold text-sm hover:bg-white/90 transition-all hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-          >
-            <PenLine size={14} aria-hidden="true" />
-            Start Creating
-          </Link>
-          <Link
-            href="/browse"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl border border-white/15 text-white/60 text-sm font-medium hover:text-white hover:border-white/30 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
-          >
-            <BookOpen size={14} aria-hidden="true" />
-            Discover More
-          </Link>
-        </div>
-
-        {/* Back link */}
-        <Link
-          href={`/novel/${novel.id}`}
-          className="inline-flex items-center gap-1.5 text-xs text-white/25 hover:text-white/60 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none rounded"
-        >
-          <ArrowLeft size={11} aria-hidden="true" />
-          Back to {novel.title}
-        </Link>
-
-        {/* Copyright notice */}
-        <p className="text-[10px] leading-relaxed text-white/20 max-w-sm pt-2">
-          © {year} {novel.authorName} · Toonflow Studio Paint.<br />
-          This work is protected by copyright. Unauthorized reproduction or
-          distribution is prohibited.
+        {/* Copyright footer */}
+        <p className="text-[9px] text-white/25 tracking-wider">
+          © {year} {authorDisplay} · All rights reserved · Published on Toonflow Studio Paint
         </p>
       </div>
     </section>

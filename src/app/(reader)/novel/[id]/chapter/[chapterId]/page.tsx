@@ -428,7 +428,7 @@ export default function ChapterReaderPage() {
       </main>
 
       {/* ── Cinematic ending — shown after every chapter ─── */}
-      <EndingPoster novel={novel} />
+      <EndingPoster novel={novel} chapter={chapter ?? undefined} />
 
       {/* ── Floating chapter nav (mobile) ────────────────── */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50">
