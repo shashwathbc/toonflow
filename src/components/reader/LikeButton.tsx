@@ -65,7 +65,14 @@ export default function LikeButton({
     if (loading) return
     setLoading(true)
     const prev = liked
-    setLiked(!prev) // optimistic heart; the count follows from the live listener
+    const willLike = !prev
+    // Optimistic UI: flip the heart AND move the count in the same tick, so the
+    // number reacts the instant it's clicked instead of lagging a full Firestore
+    // roundtrip behind the heart. The live listener reconciles to the
+    // authoritative value moments later — they agree once the transaction
+    // commits, so there's no visible correction.
+    setLiked(willLike)
+    setCount((c) => Math.max(0, c + (willLike ? 1 : -1)))
     try {
       const nowLiked = await toggleLike(firebaseUser.uid, contentType, contentId, parentId)
       // Notify the creator on a NEW like (not an unlike), best-effort.
@@ -85,6 +92,7 @@ export default function LikeButton({
       }
     } catch {
       setLiked(prev)
+      setCount((c) => Math.max(0, c + (willLike ? -1 : 1))) // undo the optimistic bump
       toast.error('Failed to update like')
     } finally {
       setLoading(false)

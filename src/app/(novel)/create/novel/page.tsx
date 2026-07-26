@@ -179,7 +179,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="w-7 h-7 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white"
+              className="w-7 h-7 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center transition-colors hover:bg-black/70 focus-visible:ring-2 focus-visible:ring-white"
               aria-label="Novel actions"
               aria-haspopup="menu"
               {...(menuOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}

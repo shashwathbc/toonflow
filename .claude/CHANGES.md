@@ -1,5 +1,32 @@
 # Toonflow Studio Paint — Change Log
 
+## 2026-07-26 — Reader: Prev/Next chapter buttons are fixed + disabled at boundaries
+Previously the bottom chapter nav swapped the Previous button for a "Novel Page" link on the first chapter, and Next for an "All Chapters" link on the last — so the buttons moved around and there was no clear disabled Prev/Next. Now both are always present and simply disable at the ends, reflecting chapter order.
+- **src/app/(reader)/novel/[id]/chapter/[chapterId]/page.tsx**:
+  - Inline grid nav: the `!prevChapter` / `!nextChapter` branches now render a disabled `<div aria-disabled="true">` (opacity-40, cursor-not-allowed, "No previous chapter" / "No next chapter") in the same slot/position instead of a novel-page `<Link>`. Enabled buttons are unchanged (bordered Prev, white Next).
+  - Floating mobile pill nav: `prevChapter && (…)` / `nextChapter && (…)` became `? … : <button disabled>` so both arrows are always shown, the boundary one disabled (opacity-40, cursor-not-allowed, aria-label "No previous/next chapter") — keeps the pill symmetric.
+  - Removed the now-unused `Home` icon import (`List` retained — still used by the header chapter-list toggle). Novel-page access remains via the header "Back to novel" link and the chapter-list dropdown.
+- Verified: `tsc --noEmit` clean for this file.
+
+## 2026-07-26 — Create/Edit Novel: cover image is now a validated required field
+The cover was labelled "Cover Image *" but nothing enforced it — the cover lives in component state (`coverURL`), not the zod schema, so a novel could be created/saved with no cover.
+- **src/components/novel/CreateNovelModal.tsx**: added a `coverError` state + `validateCover()` guard. `onSubmit` now returns early (inline error + toast "Add a cover image before continuing") when `coverURL` is empty. The form's `handleSubmit` gets an `onInvalid` callback that also runs `validateCover()`, so a missing cover is flagged in the **same** submit as any missing text fields rather than one attempt later. The error renders under the cover box as `<p role="alert" class="text-danger">Cover image is required</p>` (matching the title/synopsis error style) and clears the instant a cover is chosen via any path (upload / AI Generate both funnel through `handleCoverFile`, which now `setCoverError(null)`). Applies to create and edit; an existing cover satisfies it, removing it re-triggers the requirement.
+
+## 2026-07-26 — Novel Studio card "More options" button always visible
+On /create/novel the per-card three-dot actions menu was `opacity-0 group-hover:opacity-100`, so it only appeared on hover — invisible at rest and completely unreachable on touch devices (no hover state), across every filter tab.
+- **src/app/(novel)/create/novel/page.tsx** (`NovelCard`): removed `opacity-0 group-hover:opacity-100` and the redundant `focus-visible:opacity-100`, and swapped `transition-opacity` → `transition-colors` on the actions button. It now renders at full opacity on every card in all sections (All/Draft/Live/Ongoing/Completed/Hiatus); the focus ring and hover-darken background are retained.
+
+## 2026-07-26 — Home "New Releases" now leads with the latest release
+The New Releases row wasn't ordered by recency: HomeFeed merged the two source lists as `[...allNovels, ...allWebtoons].slice(0,6)` (every novel before every webtoon, no cross-list sort), and the per-list sort in `getNewReleases` keyed on `publishedAt` alone — which is empty for works that never went through an explicit publish step, collapsing to 0 and scrambling the order.
+- **src/lib/firebase/firestore.ts** (`getNewReleases`): both the novel and webtoon sorts now key on `publishedAt ?? createdAt` (createdAt is always set), so the newest N are selected/ordered correctly even when publishedAt is null.
+- **src/app/(main)/HomeFeed.tsx**: the merged `newReleases` memo now `.sort((a,b) => compareTimestampsDesc(a.item.publishedAt ?? a.item.createdAt, …))` before `.slice(0,6)`, so the single most-recent release (novel or webtoon) leads the row. Imported `compareTimestampsDesc` from `@/lib/utils/timestamps`.
+- Verified: `tsc --noEmit` clean for these files (only pre-existing unrelated error is the generated `.next/types` validator pointing at the in-progress `create/webtoon/[webtoonId]/editor/page`).
+
+## 2026-07-26 — Like count now updates instantly on click + HeroSlider title descender clipping
+Two UI-immediacy fixes.
+- **src/components/reader/LikeButton.tsx**: the like **count** now moves optimistically in the same tick as the heart, instead of lagging a full Firestore roundtrip behind it. `handleToggle` derives `willLike` and does `setCount((c) => Math.max(0, c + (willLike ? 1 : -1)))` right next to `setLiked(willLike)`; the live `onSnapshot` listener still reconciles to the authoritative value a moment later (they agree once the transaction commits, so no visible correction). On error we now revert **both** the heart and the optimistic count bump. This is the shared like button, so it fixes the count immediacy on every surface — novel/webtoon detail pages, the chapter reader header + actions bar, and episode pages — at once. Views were already immediate (a chapter/episode open increments both content + parent `viewCount` server-side on token arrival, and detail pages reflect it live via `useLiveViewCount`); grid cards are display-only and navigate away on click, so no per-card listeners were added (deliberate — see `useLiveViewCount` doc).
+- **src/components/home/HeroSlider.tsx**: added `pb-2` to the active-slide `<h1>`. `display-2xl`'s tight `leading-[1.02]` combined with `line-clamp-2`'s `overflow:hidden` was clipping descenders (the `g`/`y` in titles like "Karna The Tragedy Of A Hero") on the last line; the padding gives them room inside the clipped box.
+
 ## 2026-07-25 — AI images always render as cinematic webtoon/manhwa poster art
 Every AI-generated cover/banner should share the platform's signature look (the Ravana / Karna / Shadow Island poster style) instead of generic stock imagery. Enforced server-side so it applies no matter how the prompt was produced.
 - **src/app/api/ai/generate-image/route.ts**:

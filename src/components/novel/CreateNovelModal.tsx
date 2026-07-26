@@ -177,6 +177,9 @@ export function CreateNovelModal({
   const [bannerProgress, setBannerProgress] = useState(0)
   const [newTag, setNewTag] = useState('')
   const [genreOpen, setGenreOpen] = useState(false)
+  // The cover lives in component state (not the zod schema), so its required-ness
+  // is enforced here. Non-null message = show the inline error under the box.
+  const [coverError, setCoverError] = useState<string | null>(null)
 
   const tags = useWatch({ control, name: 'tags' })
   const titleValue = useWatch({ control, name: 'title' })
@@ -225,6 +228,7 @@ export function CreateNovelModal({
     coverObjectURL.current = url
     setPendingCover(file)
     setCoverURL(url)
+    setCoverError(null) // clear the required-cover error once one is chosen
   }
 
   function handleBannerFile(file: File) {
@@ -306,7 +310,21 @@ export function CreateNovelModal({
     }
   }
 
+  /** A cover is mandatory. Returns true when present; flags the field otherwise. */
+  function validateCover(): boolean {
+    if (!coverURL) {
+      setCoverError('Cover image is required')
+      return false
+    }
+    setCoverError(null)
+    return true
+  }
+
   async function onSubmit(data: FormData) {
+    if (!validateCover()) {
+      toast.error('Add a cover image before continuing')
+      return
+    }
     try {
       // Base on current state so an explicit removal (null) persists on save,
       // not just a swap. Pending files overwrite these via upload below.
@@ -387,7 +405,9 @@ export function CreateNovelModal({
           </Tooltip>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        {/* onInvalid also runs the cover check, so a missing cover is flagged in
+            the same submit as any missing text fields — not one attempt later. */}
+        <form onSubmit={handleSubmit(onSubmit, () => { validateCover() })} noValidate>
           <div className="px-6 py-5 space-y-5">
             {/* Images */}
             <div className="grid grid-cols-3 gap-4">
@@ -409,6 +429,11 @@ export function CreateNovelModal({
                   <Sparkles size={10} aria-hidden="true" />
                   AI Generate
                 </button>
+                {coverError && (
+                  <p className="text-xs text-danger" role="alert">
+                    {coverError}
+                  </p>
+                )}
               </div>
 
               {/* Banner */}

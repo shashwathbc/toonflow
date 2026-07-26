@@ -1089,15 +1089,19 @@ export async function getNewReleases(limitCount = 6): Promise<{ novels: Novel[];
     getDocs(query(collection(db, 'novels'), where('visibility', '==', 'public'), limit(limitCount * 4))),
     getDocs(query(collection(db, 'webtoons'), where('visibility', '==', 'public'), limit(limitCount * 4))),
   ])
+  // Sort by publishedAt, falling back to createdAt: items published straight
+  // from creation (e.g. ongoing works that never went through a publish step)
+  // can have an empty publishedAt, which would collapse to 0 and scramble the
+  // "newest first" order. createdAt is always set, so it keeps recency correct.
   const novels = novelSnaps.docs
     .map((d) => fromDoc<Novel>(d))
     .filter((n) => LIVE.includes(n.status))
-    .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
+    .sort((a, b) => compareTimestamps(a.publishedAt ?? a.createdAt, b.publishedAt ?? b.createdAt))
     .slice(0, limitCount)
   const webtoons = webtoonSnaps.docs
     .map((d) => fromDoc<Webtoon>(d))
     .filter((w) => LIVE.includes(w.status))
-    .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
+    .sort((a, b) => compareTimestamps(a.publishedAt ?? a.createdAt, b.publishedAt ?? b.createdAt))
     .slice(0, limitCount)
   return { novels, webtoons }
 }
