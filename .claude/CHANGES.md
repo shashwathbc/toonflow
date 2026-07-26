@@ -1871,3 +1871,28 @@ Promoted the Figma-style Konva infinite canvas (previously hidden at `/create/we
 - **Canvas UX tweaks (per feedback):** wheel handler switched to Figma-style **scroll-to-pan** (two-finger trackpad pans any direction; pinch / ⌘/Ctrl+wheel zooms toward cursor; shift = horizontal). **Removed the Navigator/minimap** mount. Added a cursor **"gravity" glow** — a soft blue light-well that follows the pointer behind the Konva canvas, showing only over the blank grid.
 - Verified: `tsc --noEmit` clean, `eslint` clean (incl. React Compiler `react-hooks/refs` + `set-state-in-effect` — active episode is derived, ref writes moved into effects), `next build` (Turbopack) succeeds.
 - Not done (deferred Phase 2): bottom status bar, page right-click context menu, Arrange Pages, format-picker rename/resize, PDF/PSD/ZIP export, real AI generators, WebGPU/3D/PSD import. Storage-bucket CORS must permit `toDataURL` for publish (same path the existing per-page PNG export already used).
+
+## Merged webtoon pages now render as one seamless long page (2026-07-26)
+
+Follow-up: stacked pages still showed per-page labels/shadows/rounded corners/gaps, so a merged episode looked like separate cards. Fixed the editor visual so contiguous pages read as one continuous vertical page.
+- **`mergeEpisode()`** now normalizes every page to a shared left edge + a single column width (max of the set) with zero gap, so pages align into one column.
+- **`migratePanelsToPages`** GAP 80 → 0 (migrated episodes open as a continuous strip).
+- **Workspace** detects vertically-contiguous same-width pages (`columnEdges` memo: same x + width, touching y within 1.5px → `above`/`below` sets). For pages in a column it drops the seam chrome: the name label renders only on the top page, per-page drop-shadow is disabled, and `cornerRadius` is rounded only on the column's outer top/bottom corners (flush between). Standalone pages keep label + shadow + rounded corners. Selection outline still shows per page while editing.
+- Verified: `tsc --noEmit`, `eslint`, `next build` all clean.
+
+## Starter asset library in the Assets panel (2026-07-26)
+
+Added a built-in "Starter Kit" so a blank canvas has ready-to-use webtoon pieces (feedback: "keep some assets by default to make long vertical webtoons easy").
+- New `src/lib/editor/assetLibrary.ts` — 16 assets across 4 categories: **Speech & Text** (round/thought/shout bubbles, caption box), **Type** (Title, Dialogue, Narration, SFX presets), **Panels & Backgrounds** (full-width white/black scene blocks, divider bar, panel frame), **Effects** (speed lines, radial focus, impact star, sparkle). Each `create(page)` sizes/positions the element to the active page.
+- Self-contained: rich pieces are tiny inline **SVG** data-URIs added as image elements; boxes/dividers/text use the native `rect`/`text` element types (no image, no network, negligible persisted size). Publishes correctly (rasterized with the page) and data-URIs don't taint the export canvas.
+- `AssetsPanel` (SidebarLeft) now shows the library as click-to-insert tiles above the existing upload dropzone; clicking drops the asset onto the active page.
+- Verified: `tsc --noEmit`, `eslint`, `next build` all clean.
+
+## Real per-webtoon character roster (2026-07-26)
+
+Replaced the hardcoded Characters panel (Ravana/Kishore stub) with a persisted, editable roster (feedback: keep a per-webtoon character list, usable on new pages, with delete/update/rename).
+- **Firestore subcollection** `webtoons/{id}/characters/{charId}`. New `Character` type (`src/types/webtoon.ts`): name, role, color, imageUrl?, notes?, createdAt. Service fns in firestore.ts: `createCharacter`/`updateCharacter`/`deleteCharacter`/`subscribeToCharacters` (sorted by createdAt). New `useCharacters(webtoonId)` hook (mirrors `useEpisodes`).
+- **CRUD UI**: `CharactersPanel` (SidebarLeft) reads the roster live and gets webtoonId/uid from the store's `assetCtx`. `+` and pencil open the new `CharacterDialog` (name, role, colour swatch, optional reference portrait, notes). Trash deletes (with confirm). Reference images upload via new `uploadCharacterImage` to `webtoons/{uid}/{webtoonId}/characters/{charId}.ext` (matches the existing 4-level Storage rule — no storage.rules change).
+- **Use on page**: the ImagePlus button drops a character onto the active page — the reference portrait as an image element if set, else a bold name text element.
+- **firestore.rules**: added a `characters` subcollection match (public read, owner write) mirroring episodes. ⚠️ MUST be deployed: `firebase deploy --only firestore:rules --project toonflow-studio-paint-f76d5` — until then character reads/writes are denied.
+- Verified: `tsc --noEmit`, `eslint`, `next build` all clean.

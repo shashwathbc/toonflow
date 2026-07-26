@@ -31,7 +31,9 @@ export function projectHasContent(project: CanvasProject | null | undefined): bo
  * created with the old strip editor open seamlessly in the infinite canvas.
  */
 export function migratePanelsToPages(panels: PanelImage[]): CanvasProject {
-  const GAP = 80
+  // No gap: the panels form one continuous column so the canvas reads as a
+  // single long vertical page (matching the merged/published output).
+  const GAP = 0
   let cursorY = 0
   const pages: Page[] = []
   const timelineOrder: string[] = []

@@ -19,7 +19,11 @@ import {
   Circle,
   Image as ImageIcon,
   UploadCloud,
+  Pencil,
+  User,
+  ImagePlus,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import {
   useEditorStore,
   PAGE_PRESETS,
@@ -29,7 +33,12 @@ import {
 } from '@/store/useEditorStore'
 import { processWebtoonImage } from '@/lib/utils/imageProcessing'
 import { uploadCanvasImage } from '@/lib/editor/persistence'
+import { ASSET_LIBRARY, svgToDataUri, type AssetItem } from '@/lib/editor/assetLibrary'
+import { useCharacters } from '@/hooks/useCharacters'
+import { deleteCharacter } from '@/lib/firebase/firestore'
+import { CharacterDialog } from '@/components/editor/CharacterDialog'
 import { cn } from '@/lib/utils/cn'
+import type { Character } from '@/types'
 
 const TABS: { id: LeftTab; icon: typeof Layers; label: string }[] = [
   { id: 'pages', icon: FileStack, label: 'Pages' },
@@ -276,36 +285,72 @@ function AssetsPanel() {
     }
   }
 
+  const addAsset = (item: AssetItem) => {
+    const s = useEditorStore.getState()
+    const pageId = s.activePageId()
+    if (!pageId) return
+    const page = s.pages.find((p) => p.id === pageId)
+    if (!page) return
+    s.addElement(pageId, item.create(page))
+  }
+
   return (
     <>
       <PanelHeader title="Assets" />
-      <div className="p-3">
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="w-full h-24 rounded-xl border-2 border-dashed border-[#333] hover:border-[#4C9AFF] hover:bg-[#4C9AFF]/5 flex flex-col items-center justify-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
-        >
-          {busy ? (
-            <span className="text-xs text-white/60">Processing…</span>
-          ) : (
-            <>
-              <UploadCloud size={22} className="text-white/50" />
-              <span className="text-xs text-white/60 font-medium">Upload artwork</span>
-              <span className="text-[10px] text-white/30">Added to the active page</span>
-            </>
-          )}
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => { onFiles(e.target.files); e.target.value = '' }}
-        />
-        <p className="mt-4 text-[11px] text-white/40 leading-relaxed">
-          Supports PNG · JPG · WEBP · AVIF today. PSD / CLIP / layered import lands in the pipeline next — files are
-          auto-fit to Webtoon width and long strips are sliced.
-        </p>
+      <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin scrollbar-thumb-[#333]">
+        {/* Starter library — click to drop onto the active page */}
+        <div className="space-y-3">
+          <p className="text-[10px] font-semibold text-white/45 uppercase tracking-widest">Starter Kit</p>
+          {ASSET_LIBRARY.map((cat) => (
+            <div key={cat.id} className="space-y-1.5">
+              <p className="text-[10px] text-white/35 font-medium">{cat.label}</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {cat.items.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => addAsset(item)}
+                    title={`Add ${item.label}`}
+                    aria-label={`Add ${item.label}`}
+                    className="group aspect-square rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] hover:border-[#4C9AFF] hover:bg-[#4C9AFF]/5 flex items-center justify-center p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={svgToDataUri(item.thumb)} alt="" className="max-w-full max-h-full object-contain opacity-80 group-hover:opacity-100" draggable={false} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Upload */}
+        <div className="pt-1 border-t border-[#242424]">
+          <button
+            onClick={() => inputRef.current?.click()}
+            className="mt-3 w-full h-20 rounded-xl border-2 border-dashed border-[#333] hover:border-[#4C9AFF] hover:bg-[#4C9AFF]/5 flex flex-col items-center justify-center gap-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+          >
+            {busy ? (
+              <span className="text-xs text-white/60">Processing…</span>
+            ) : (
+              <>
+                <UploadCloud size={20} className="text-white/50" />
+                <span className="text-xs text-white/60 font-medium">Upload artwork</span>
+                <span className="text-[10px] text-white/30">Added to the active page</span>
+              </>
+            )}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => { onFiles(e.target.files); e.target.value = '' }}
+          />
+          <p className="mt-3 text-[11px] text-white/40 leading-relaxed">
+            Supports PNG · JPG · WEBP · AVIF today. PSD / CLIP / layered import lands in the pipeline next — files are
+            auto-fit to Webtoon width and long strips are sliced.
+          </p>
+        </div>
       </div>
     </>
   )
@@ -313,35 +358,113 @@ function AssetsPanel() {
 
 // ---------------------------------------------------------------------------
 function CharactersPanel() {
-  const chars = [
-    { name: 'Ravana', role: 'Protagonist', score: 98, color: '#A855F7' },
-    { name: 'Kishore', role: 'Mentor', score: 94, color: '#4C9AFF' },
-  ]
+  const assetCtx = useEditorStore((s) => s.assetCtx)
+  const webtoonId = assetCtx?.webtoonId
+  const uid = assetCtx?.uid
+  const { characters, loading } = useCharacters(webtoonId)
+  // 'new' opens a blank dialog; a Character opens it prefilled for editing.
+  const [dialog, setDialog] = useState<Character | 'new' | null>(null)
+
+  const ready = !!webtoonId && !!uid
+
+  const insertOnPage = (c: Character) => {
+    const s = useEditorStore.getState()
+    const pageId = s.activePageId()
+    const page = pageId ? s.pages.find((p) => p.id === pageId) : null
+    if (!page) {
+      toast.error('Add or select a page first')
+      return
+    }
+    if (c.imageUrl) {
+      const w = Math.round(Math.min(page.width * 0.5, 520))
+      const h = Math.round(w * 1.3)
+      s.addElement(page.id, { type: 'image', src: c.imageUrl, x: Math.round((page.width - w) / 2), y: Math.round(page.height * 0.12), width: w, height: h, name: c.name })
+    } else {
+      s.addElement(page.id, { type: 'text', text: c.name, x: Math.round(page.width * 0.1), y: Math.round(page.height * 0.1), width: Math.round(page.width * 0.8), fontSize: Math.round(page.width * 0.07), fontStyle: 'bold', align: 'center', fill: '#111111', name: c.name })
+    }
+    toast.success(`${c.name} added to page`)
+  }
+
+  const remove = async (c: Character) => {
+    if (!webtoonId) return
+    if (!window.confirm(`Delete "${c.name}"? This can't be undone.`)) return
+    try {
+      await deleteCharacter(webtoonId, c.id)
+      toast.success('Character deleted')
+    } catch {
+      toast.error('Could not delete character')
+    }
+  }
+
   return (
     <>
       <PanelHeader title="Characters">
-        <button aria-label="New character" className="w-7 h-7 flex items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10">
-          <Plus size={16} />
+        <button
+          onClick={() => setDialog('new')}
+          disabled={!ready}
+          aria-label="New character"
+          className="w-7 h-7 flex items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+        >
+          <Plus size={16} aria-hidden="true" />
         </button>
       </PanelHeader>
+
       <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-[#333]">
-        {chars.map((c) => (
-          <div key={c.name} className="flex items-center gap-3 p-2.5 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors">
-            <div className="w-10 h-10 rounded-lg shrink-0" style={{ background: `linear-gradient(135deg, ${c.color}, #1a1a1a)` }} />
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-white">{c.name}</div>
-              <div className="text-[10px] text-white/40">{c.role}</div>
+        {loading && ready && <p className="text-[11px] text-white/35 p-1">Loading roster…</p>}
+
+        {ready && !loading && characters.length === 0 && (
+          <button
+            onClick={() => setDialog('new')}
+            className="w-full rounded-xl border-2 border-dashed border-[#333] hover:border-[#4C9AFF] hover:bg-[#4C9AFF]/5 py-8 flex flex-col items-center gap-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+          >
+            <Users size={22} className="text-white/40" aria-hidden="true" />
+            <span className="text-xs text-white/60 font-medium">Add your first character</span>
+            <span className="text-[10px] text-white/30">Reuse them on any page</span>
+          </button>
+        )}
+
+        {characters.map((c) => (
+          <div key={c.id} className="group flex items-center gap-3 p-2.5 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors">
+            <div className="w-10 h-10 rounded-lg shrink-0 overflow-hidden flex items-center justify-center" style={{ background: c.imageUrl ? undefined : `linear-gradient(135deg, ${c.color}, #1a1a1a)` }}>
+              {c.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={c.imageUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <User size={16} className="text-white/70" aria-hidden="true" />
+              )}
             </div>
-            <div className="text-right">
-              <div className="text-[10px] text-white/40">consistency</div>
-              <div className="text-xs font-semibold text-[#22C55E]">{c.score}%</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-white truncate">{c.name}</div>
+              <div className="text-[10px] text-white/40 truncate">{c.role || 'Character'}</div>
+            </div>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => insertOnPage(c)} aria-label={`Use ${c.name} on page`} title="Add to page" className="w-7 h-7 flex items-center justify-center rounded-md text-white/55 hover:text-[#4C9AFF] hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
+                <ImagePlus size={14} aria-hidden="true" />
+              </button>
+              <button onClick={() => setDialog(c)} aria-label={`Edit ${c.name}`} title="Edit" className="w-7 h-7 flex items-center justify-center rounded-md text-white/55 hover:text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
+                <Pencil size={13} aria-hidden="true" />
+              </button>
+              <button onClick={() => remove(c)} aria-label={`Delete ${c.name}`} title="Delete" className="w-7 h-7 flex items-center justify-center rounded-md text-white/55 hover:text-danger hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
+                <Trash2 size={13} aria-hidden="true" />
+              </button>
             </div>
           </div>
         ))}
+
         <p className="text-[11px] text-white/35 leading-relaxed pt-2">
-          Character memory keeps faces, outfits and palettes consistent across every AI-generated panel.
+          Build a cast once, then drop any character straight onto a page. Add a reference portrait to keep faces,
+          outfits and palettes consistent.
         </p>
       </div>
+
+      {dialog && ready && (
+        <CharacterDialog
+          uid={uid!}
+          webtoonId={webtoonId!}
+          character={dialog === 'new' ? null : dialog}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </>
   )
 }

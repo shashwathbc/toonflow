@@ -168,6 +168,27 @@ export async function uploadCanvasAsset(
   return promise
 }
 
+/**
+ * Uploads a character reference portrait. Path `webtoons/{uid}/{webtoonId}/
+ * characters/{charId}.ext` matches the existing 4-level webtoon Storage rule
+ * (owner write, public read), so no rules change is needed.
+ */
+export async function uploadCharacterImage(
+  uid: string,
+  webtoonId: string,
+  characterId: string,
+  file: File,
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+  const { promise } = uploadFile(
+    `webtoons/${uid}/${webtoonId}/characters/${characterId}.${ext}`,
+    file,
+    onProgress
+  )
+  return promise
+}
+
 export async function uploadMessageImage(
   conversationId: string,
   senderId: string,

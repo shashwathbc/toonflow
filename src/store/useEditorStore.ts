@@ -575,21 +575,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ timelineOrder: order })
   },
 
-  // Stack every page vertically in reading order — the "Merge Episode" preview.
+  // Stack every page into ONE seamless column in reading order — shared left
+  // edge + width, no gaps — so the merged episode reads as a single continuous
+  // long vertical page (the Workspace then drops the seams between them).
   mergeEpisode: () => {
     get().pushHistory()
     const { pages, timelineOrder } = get()
+    const ordered = timelineOrder
+      .map((pid) => pages.find((pg) => pg.id === pid))
+      .filter((p): p is Page => Boolean(p))
+    const colWidth = ordered.length ? Math.max(...ordered.map((p) => p.width)) : 0
     let cursorY = 0
-    const positioned = new Map<string, { x: number; y: number }>()
-    timelineOrder.forEach((pid) => {
-      const p = pages.find((pg) => pg.id === pid)
-      if (!p) return
-      positioned.set(pid, { x: 0, y: cursorY })
+    const positioned = new Map<string, { x: number; y: number; width: number }>()
+    for (const p of ordered) {
+      positioned.set(p.id, { x: 0, y: cursorY, width: colWidth })
       cursorY += p.height
-    })
+    }
     set({
       pages: pages.map((p) => (positioned.has(p.id) ? { ...p, ...positioned.get(p.id)! } : p)),
       selectedElementIds: [],
+      selectedPageId: null,
     })
   },
 

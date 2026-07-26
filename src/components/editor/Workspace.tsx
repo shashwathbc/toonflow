@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Stage, Layer, Rect, Ellipse, Text, Group, Line, Transformer } from 'react-konva'
 import useImage from 'use-image'
 import Konva from 'konva'
@@ -512,6 +512,25 @@ export function Workspace() {
         (p) => p.x < view.maxX && p.x + p.width > view.minX && p.y < view.maxY && p.y + p.height > view.minY,
       )
 
+  // ------- seamless column detection ---------------------------------------
+  // Pages sharing a left edge + width and stacked with no gap are drawn as one
+  // continuous strip: the touching edges lose their label, shadow and rounded
+  // corners so a merged episode reads as a single long vertical page.
+  const columnEdges = useMemo(() => {
+    const EPS = 1.5
+    const above = new Set<string>() // has a contiguous page directly above
+    const below = new Set<string>() // has a contiguous page directly below
+    for (const p of pages) {
+      for (const o of pages) {
+        if (o.id === p.id) continue
+        if (Math.abs(o.x - p.x) > EPS || Math.abs(o.width - p.width) > EPS) continue
+        if (Math.abs(o.y + o.height - p.y) < EPS) above.add(p.id)
+        if (Math.abs(p.y + p.height - o.y) < EPS) below.add(p.id)
+      }
+    }
+    return { above, below }
+  }, [pages])
+
   // ------- grid background --------------------------------------------------
   const g = 24 * viewport.scale
   const gridBg: React.CSSProperties | undefined =
@@ -574,6 +593,13 @@ export function Workspace() {
             {visiblePages.map((page) => {
               const selPage = selectedPageId === page.id
               const movable = activeTool === 'select' && selPage && !page.isLocked && !panning
+              const hasAbove = columnEdges.above.has(page.id)
+              const hasBelow = columnEdges.below.has(page.id)
+              const inColumn = hasAbove || hasBelow
+              // Corner order: [topLeft, topRight, bottomRight, bottomLeft].
+              const radius: number | number[] = inColumn
+                ? [hasAbove ? 0 : 2, hasAbove ? 0 : 2, hasBelow ? 0 : 2, hasBelow ? 0 : 2]
+                : 2
               return (
                 <Group
                   key={page.id}
@@ -587,8 +613,12 @@ export function Workspace() {
                       updatePage(page.id, { x: Math.round(e.target.x()), y: Math.round(e.target.y()) }, false)
                   }}
                 >
-                  <Text text={page.name} x={0} y={-26 / viewport.scale} fontSize={13 / viewport.scale} fill={selPage ? SELECT : '#8B8B8B'} fontFamily="Inter" listening={false} />
-                  <Rect name="artboard" id={page.id} x={0} y={0} width={page.width} height={page.height} fill={page.backgroundColor} cornerRadius={2} shadowColor="black" shadowBlur={24} shadowOpacity={0.55} shadowOffset={{ x: 0, y: 12 }} stroke={selPage ? SELECT : undefined} strokeWidth={selPage ? 1.5 / viewport.scale : 0} />
+                  {/* Only the top page of a contiguous column keeps a label, so
+                      the merged strip reads as one page rather than many. */}
+                  {!hasAbove && (
+                    <Text text={page.name} x={0} y={-26 / viewport.scale} fontSize={13 / viewport.scale} fill={selPage ? SELECT : '#8B8B8B'} fontFamily="Inter" listening={false} />
+                  )}
+                  <Rect name="artboard" id={page.id} x={0} y={0} width={page.width} height={page.height} fill={page.backgroundColor} cornerRadius={radius} shadowColor="black" shadowBlur={inColumn ? 0 : 24} shadowOpacity={inColumn ? 0 : 0.55} shadowOffset={{ x: 0, y: inColumn ? 0 : 12 }} stroke={selPage ? SELECT : undefined} strokeWidth={selPage ? 1.5 / viewport.scale : 0} />
                   <Group clipX={0} clipY={0} clipWidth={page.width} clipHeight={page.height}>
                     {page.elements.map((el) => renderElement(page, el))}
                   </Group>

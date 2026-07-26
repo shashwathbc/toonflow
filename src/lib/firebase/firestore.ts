@@ -39,6 +39,7 @@ import type {
   Transaction,
   FirestoreTimestamp,
   CanvasProject,
+  Character,
 } from '@/types'
 import { SUPER_ADMIN_EMAIL, TRENDING_LIMIT, BROWSE_LIMIT } from '@/lib/utils/constants'
 // compareTimestamps here sorts NEWEST first — preserve that by aliasing the
@@ -856,6 +857,53 @@ export async function saveEpisodeCanvas(
     canvasUpdatedAt: serverTimestamp(),
   })
   await updateDoc(doc(db, 'webtoons', webtoonId), { updatedAt: serverTimestamp() })
+}
+
+// ── Characters (per-webtoon roster) ─────────────────────────
+
+export async function createCharacter(webtoonId: string, data: Partial<Character>): Promise<string> {
+  const ref = await addDoc(collection(db, 'webtoons', webtoonId, 'characters'), {
+    name: 'New Character',
+    role: '',
+    color: '#4C9AFF',
+    imageUrl: null,
+    ...data,
+    createdAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function updateCharacter(
+  webtoonId: string,
+  characterId: string,
+  data: Partial<Character>
+): Promise<void> {
+  await updateDoc(doc(db, 'webtoons', webtoonId, 'characters', characterId), data)
+}
+
+export async function deleteCharacter(webtoonId: string, characterId: string): Promise<void> {
+  await deleteDoc(doc(db, 'webtoons', webtoonId, 'characters', characterId))
+}
+
+export function subscribeToCharacters(
+  webtoonId: string,
+  callback: (characters: Character[]) => void,
+  onError?: (error: FirestoreError) => void
+): () => void {
+  const q = query(collection(db, 'webtoons', webtoonId, 'characters'))
+  return onSnapshot(
+    q,
+    (snap) => {
+      const characters = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Character))
+      characters.sort(
+        (a, b) =>
+          (a.createdAt?.seconds ?? Number.MAX_SAFE_INTEGER) -
+          (b.createdAt?.seconds ?? Number.MAX_SAFE_INTEGER)
+      )
+      callback(characters)
+    },
+    onError
+  )
 }
 
 export async function deleteEpisode(webtoonId: string, episodeId: string): Promise<void> {

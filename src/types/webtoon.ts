@@ -89,6 +89,22 @@ export interface Episode {
   publishedAt: FirestoreTimestamp | null
 }
 
+/**
+ * A recurring character in a webtoon's roster (`webtoons/{id}/characters`).
+ * Kept per-series so pages can reuse consistent names/looks; `imageUrl` is an
+ * optional reference portrait creators can drop straight onto a page.
+ */
+export interface Character {
+  id: string
+  webtoonId: string
+  name: string
+  role: string
+  color: string
+  imageUrl?: string | null
+  notes?: string
+  createdAt: FirestoreTimestamp
+}
+
 export type WebtoonCreateInput = Omit<
   Webtoon,
   'id' | 'authorId' | 'authorName' | 'authorPhotoURL' | 'viewCount' | 'likeCount' |
