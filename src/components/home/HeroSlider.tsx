@@ -241,7 +241,9 @@ export function HeroSlider() {
 
           {/* Title — 2 lines max. At 3 the headline swallowed the whole hero and
               pushed the CTA off the fold on short viewports. */}
-          <h1 className="display-2xl text-white line-clamp-2">
+          {/* pb-2: display-2xl's tight leading-[1.02] + line-clamp's overflow:hidden
+              clip descenders (g/y/p) on the last line — the padding gives them room. */}
+          <h1 className="display-2xl text-white line-clamp-2 pb-2">
             {toTitleCase(active.item.title)}
           </h1>
 

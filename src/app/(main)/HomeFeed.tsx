@@ -7,6 +7,7 @@ import { BookOpen, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'l
 import { getTrendingNovels, getTrendingWebtoons, getNewReleases } from '@/lib/firebase/firestore'
 import { cachedRequest } from '@/lib/utils/requestCache'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
+import { compareTimestampsDesc } from '@/lib/utils/timestamps'
 import { Stat } from '@/components/ui/Stat'
 import { HorizontalScroller } from '@/components/ui/HorizontalScroller'
 import type { Novel, Webtoon } from '@/types'
@@ -164,10 +165,16 @@ export function HomeFeed() {
     ...webtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
   ].sort((a, b) => b.item.viewCount - a.item.viewCount).slice(0, 12), [novels, webtoons])
 
+  // Sort the MERGED list newest-first so the single latest release leads,
+  // instead of listing every novel before every webtoon. publishedAt falls back
+  // to createdAt for items that were never through a publish step (empty
+  // publishedAt would otherwise sort to the bottom). Mirrors getNewReleases.
   const newReleases = useMemo(() => [
     ...newNovels.map((n) => ({ item: n, type: 'novel' as const })),
     ...newWebtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
-  ].slice(0, 6), [newNovels, newWebtoons])
+  ]
+    .sort((a, b) => compareTimestampsDesc(a.item.publishedAt ?? a.item.createdAt, b.item.publishedAt ?? b.item.createdAt))
+    .slice(0, 6), [newNovels, newWebtoons])
 
   if (loading) {
     return (

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   ChevronLeft, ChevronRight, BookOpen, Loader2, List,
-  Settings2, AlignLeft, AlignCenter, Home, Type,
+  Settings2, AlignLeft, AlignCenter, Type,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -371,6 +371,10 @@ export default function ChapterReaderPage() {
         </div>
 
         {/* ── Chapter navigation ───────────────────────────── */}
+        {/* Both buttons are always present; the one at a boundary (first/last
+            chapter) renders disabled instead of being swapped for a novel-page
+            link, so Prev/Next stay in fixed positions and their enabled state
+            reflects the chapter order. */}
         <nav aria-label="Chapter navigation" className="grid grid-cols-2 gap-3 mb-20">
           {prevChapter ? (
             <Link
@@ -385,15 +389,17 @@ export default function ChapterReaderPage() {
               </span>
             </Link>
           ) : (
-            <Link
-              href={`/novel/${id}`}
-              className="flex flex-col items-start gap-1 px-4 py-3 rounded-2xl border border-white/10 hover:border-white/25 hover:bg-white/4 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+            <div
+              className="flex flex-col items-start gap-1 px-4 py-3 rounded-2xl border border-white/10 opacity-40 cursor-not-allowed select-none"
+              aria-disabled="true"
             >
               <span className="flex items-center gap-1 text-[10px] text-white/30 uppercase tracking-widest">
-                <Home size={10} aria-hidden="true" /> Novel Page
+                <ChevronLeft size={10} aria-hidden="true" /> Previous
               </span>
-              <span className="text-sm font-medium text-white/50 truncate w-full">{novel.title}</span>
-            </Link>
+              <span className="text-sm font-medium text-white/50 truncate w-full">
+                No previous chapter
+              </span>
+            </div>
           )}
 
           {nextChapter ? (
@@ -409,15 +415,17 @@ export default function ChapterReaderPage() {
               </span>
             </Link>
           ) : (
-            <Link
-              href={`/novel/${id}`}
-              className="flex flex-col items-end gap-1 px-4 py-3 rounded-2xl border border-white/10 hover:border-white/25 hover:bg-white/4 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+            <div
+              className="flex flex-col items-end gap-1 px-4 py-3 rounded-2xl border border-white/10 opacity-40 cursor-not-allowed select-none"
+              aria-disabled="true"
             >
               <span className="flex items-center gap-1 text-[10px] text-white/30 uppercase tracking-widest">
-                All Chapters <List size={10} aria-hidden="true" />
+                Next <ChevronRight size={10} aria-hidden="true" />
               </span>
-              <span className="text-sm font-medium text-white/50 truncate w-full text-right">{novel.title}</span>
-            </Link>
+              <span className="text-sm font-medium text-white/50 truncate w-full text-right">
+                No next chapter
+              </span>
+            </div>
           )}
         </nav>
 
@@ -431,8 +439,11 @@ export default function ChapterReaderPage() {
       <EndingPoster novel={novel} chapter={chapter ?? undefined} />
 
       {/* ── Floating chapter nav (mobile) ────────────────── */}
+      {/* Prev/Next always shown; the boundary side is a disabled button rather
+          than being hidden, so the control stays symmetric and its state mirrors
+          the chapter order (same behaviour as the inline nav above). */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50">
-        {prevChapter && (
+        {prevChapter ? (
           <Tooltip label="Previous chapter" side="top">
             <Link
               href={`/novel/${id}/chapter/${prevChapter.id}`}
@@ -442,13 +453,22 @@ export default function ChapterReaderPage() {
               <ChevronLeft size={16} aria-hidden="true" />
             </Link>
           </Tooltip>
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-label="No previous chapter"
+            className="w-10 h-10 rounded-full bg-black/70 border border-white/15 backdrop-blur-md flex items-center justify-center text-white/60 opacity-40 cursor-not-allowed"
+          >
+            <ChevronLeft size={16} aria-hidden="true" />
+          </button>
         )}
 
         <div className="px-4 py-2 rounded-full bg-black/70 border border-white/15 backdrop-blur-md text-[11px] text-white/50 font-medium tabular-nums">
           {Math.round(progress)}%
         </div>
 
-        {nextChapter && (
+        {nextChapter ? (
           <Tooltip label="Next chapter" side="top">
             <Link
               href={`/novel/${id}/chapter/${nextChapter.id}`}
@@ -458,6 +478,15 @@ export default function ChapterReaderPage() {
               <ChevronRight size={16} aria-hidden="true" />
             </Link>
           </Tooltip>
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-label="No next chapter"
+            className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black opacity-40 cursor-not-allowed"
+          >
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
         )}
       </div>
     </div>
