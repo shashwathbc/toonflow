@@ -16,7 +16,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, GitMerge, ZoomIn, ZoomOut, Maximize, ChevronDown } from 'lucide-react'
+import { Plus, GitMerge, ZoomIn, ZoomOut, Maximize, ChevronDown, Trash2 } from 'lucide-react'
 import { useEditorStore, type Page } from '@/store/useEditorStore'
 import { cn } from '@/lib/utils/cn'
 
@@ -37,6 +37,9 @@ function PagePreview({ page }: { page: Page }) {
           return <div key={el.id} style={{ ...style, background: el.fill, borderRadius: 1, height: '4%' }} />
         if (el.type === 'image')
           return <div key={el.id} style={{ ...style, background: '#3a3a3a' }} />
+        if (el.type === 'paint') return null
+        if (el.type === 'bubble')
+          return <div key={el.id} style={{ ...style, background: el.fill, borderRadius: 6 }} />
         return (
           <div key={el.id} style={{ ...style, background: el.fill, borderRadius: el.type === 'ellipse' ? '50%' : Math.min(3, el.cornerRadius) }} />
         )
@@ -45,13 +48,23 @@ function PagePreview({ page }: { page: Page }) {
   )
 }
 
-function SortableThumb({ page, index }: { page: Page; index: number }) {
+function SortableThumb({ page, index, boxH }: { page: Page; index: number; boxH: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id })
   const selectedPageId = useEditorStore((s) => s.selectedPageId)
   const selectPage = useEditorStore((s) => s.selectPage)
+  const removePage = useEditorStore((s) => s.removePage)
+  // Fit the thumbnail into the available timeline height (boxH), preserving the
+  // page aspect and capping the width — so short timelines never clip the row.
   const ratio = page.height / page.width
-  const w = 64
-  const h = Math.max(40, Math.min(120, w * ratio))
+  const maxW = 84
+  let h = boxH
+  let w = h / ratio
+  if (w > maxW) {
+    w = maxW
+    h = w * ratio
+  }
+  w = Math.round(w)
+  h = Math.round(h)
 
   return (
     <div
@@ -73,7 +86,20 @@ function SortableThumb({ page, index }: { page: Page; index: number }) {
         <PagePreview page={page} />
         <span className="absolute bottom-0.5 left-0.5 text-[9px] font-mono text-white bg-black/60 rounded px-1 leading-tight">{index + 1}</span>
       </button>
-      <span className="text-[9px] text-white/40 max-w-[64px] truncate">{page.name}</span>
+      {/* Delete — sibling of the thumbnail button (a button can't nest a button). */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          removePage(page.id)
+        }}
+        aria-label={`Delete page ${index + 1}`}
+        title="Delete page"
+        className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded bg-black/70 text-white/80 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-[#E23B3B] hover:text-white transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
+      >
+        <Trash2 size={11} aria-hidden="true" />
+      </button>
+      <span className="text-[9px] text-white/40 truncate" style={{ maxWidth: w }}>{page.name}</span>
     </div>
   )
 }
@@ -138,6 +164,11 @@ export function TimelineBottom() {
 
   const ordered = order.map((id) => pages.find((p) => p.id === id)).filter(Boolean) as Page[]
 
+  // Height available to a thumbnail = panel height minus the header, the page
+  // name label + gap, and row padding. Keeps the row from ever clipping.
+  const thumbBoxH = Math.max(30, Math.min(150, timelineHeight - 66))
+  const showAddLabel = thumbBoxH >= 64
+
   return (
     <div className="bg-[#141414] border-t border-[#262626] w-full flex flex-col shrink-0" style={{ height: timelineHeight }}>
       <div className="h-9 px-3 flex items-center justify-between border-b border-[#222] shrink-0">
@@ -169,7 +200,7 @@ export function TimelineBottom() {
           <SortableContext items={order} strategy={horizontalListSortingStrategy}>
             <div className="flex items-center gap-3">
               {ordered.map((page, i) => (
-                <SortableThumb key={page.id} page={page} index={i} />
+                <SortableThumb key={page.id} page={page} index={i} boxH={thumbBoxH} />
               ))}
             </div>
           </SortableContext>
@@ -177,11 +208,12 @@ export function TimelineBottom() {
 
         <button
           onClick={() => addPage({}, 'webtoon')}
-          className="shrink-0 w-16 h-24 border-2 border-dashed border-[#2E2E2E] hover:border-[#4C9AFF] hover:bg-[#4C9AFF]/5 rounded-md flex flex-col items-center justify-center gap-1.5 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+          style={{ width: 56, height: thumbBoxH }}
+          className="shrink-0 overflow-hidden border-2 border-dashed border-[#2E2E2E] hover:border-[#4C9AFF] hover:bg-[#4C9AFF]/5 rounded-md flex flex-col items-center justify-center gap-1.5 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
           aria-label="Add page"
         >
-          <Plus size={16} className="text-white/40 group-hover:text-[#4C9AFF]" />
-          <span className="text-[9px] text-white/40">New page</span>
+          <Plus size={16} className="text-white/40 group-hover:text-[#4C9AFF] shrink-0" />
+          {showAddLabel && <span className="text-[9px] text-white/40">New page</span>}
         </button>
       </div>
     </div>

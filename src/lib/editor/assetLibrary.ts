@@ -1,4 +1,5 @@
 import type { EditorElement, Page } from '@/store/useEditorStore'
+import { makeBubbleSpec, type BubbleKind } from '@/lib/editor/bubbles'
 
 // A built-in "starter kit" of webtoon building blocks shown in the Assets panel
 // so a blank canvas is never a blank page. Everything here is self-contained:
@@ -53,21 +54,25 @@ const img = (src: string, w: number, page: Page, yFrac: number, name: string, ra
   return { type: 'image', src: svgToDataUri(src), x: centerX(page, width), y: Math.round(page.height * yFrac), width, height, name }
 }
 
+// Editable speech bubble (real 'bubble' element), centered horizontally.
+const bubble = (kind: BubbleKind, page: Page, wFrac = 0.5, yFrac = 0.1): AssetSpec => {
+  const spec = makeBubbleSpec(kind, Math.round(page.width * wFrac))
+  return { ...spec, x: centerX(page, spec.width), y: Math.round(page.height * yFrac) }
+}
+
 export const ASSET_LIBRARY: AssetCategory[] = [
   {
     id: 'speech',
-    label: 'Speech & Text',
+    label: 'Speech Bubbles',
     items: [
-      { id: 'bubble-round', label: 'Speech', thumb: S.bubbleRound, create: (p) => img(S.bubbleRound, 0.5, p, 0.1, 'Speech bubble', 0.75) },
-      { id: 'bubble-thought', label: 'Thought', thumb: S.bubbleThought, create: (p) => img(S.bubbleThought, 0.5, p, 0.1, 'Thought bubble', 0.8) },
-      { id: 'bubble-shout', label: 'Shout', thumb: S.bubbleShout, create: (p) => img(S.bubbleShout, 0.5, p, 0.1, 'Shout bubble', 0.85) },
-      {
-        id: 'caption', label: 'Caption', thumb: S.captionBox,
-        create: (p) => {
-          const w = Math.round(p.width * 0.82)
-          return { type: 'rect', x: centerX(p, w), y: Math.round(p.height * 0.8), width: w, height: Math.round(p.width * 0.12), fill: '#0A0A0A', opacity: 0.78, stroke: '#000000', strokeWidth: 0, cornerRadius: 6, name: 'Caption box' }
-        },
-      },
+      // Real editable bubbles — click to place, then type inside and resize.
+      { id: 'bubble-speech', label: 'Speech', thumb: S.bubbleRound, create: (p) => bubble('speech', p) },
+      { id: 'bubble-thought', label: 'Thought', thumb: S.bubbleThought, create: (p) => bubble('thought', p) },
+      { id: 'bubble-shout', label: 'Shout', thumb: S.bubbleShout, create: (p) => bubble('shout', p) },
+      { id: 'bubble-scream', label: 'Scream', thumb: S.bubbleShout, create: (p) => bubble('scream', p) },
+      { id: 'bubble-whisper', label: 'Whisper', thumb: S.bubbleRound, create: (p) => bubble('whisper', p) },
+      { id: 'bubble-narration', label: 'Narration', thumb: S.captionBox, create: (p) => bubble('narration', p, 0.82, 0.8) },
+      { id: 'bubble-electronic', label: 'Electronic', thumb: S.bubbleRound, create: (p) => bubble('electronic', p) },
     ],
   },
   {

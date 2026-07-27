@@ -15,8 +15,13 @@ const HOUR = 60 * 60 * 1000
 
 /** Per-hour ceilings, keyed by cost tier. */
 export const AI_LIMITS = {
-  /** Stability AI image generation — most expensive per call. */
-  image: { limit: 20, windowMs: HOUR },
+  /**
+   * Image generation. Now served by keyless Pollinations (Flux) which is free
+   * per call, so this ceiling only guards against hammering the upstream free
+   * service — raised well above the old paid-Stability cap so a full-chapter
+   * agent workflow (~20 panels) isn't blocked by our own limiter.
+   */
+  image: { limit: 150, windowMs: HOUR },
   /** Cheap Haiku helpers: image-prompt drafting, synopsis generation. */
   text: { limit: 40, windowMs: HOUR },
   /** Interactive story-assistant chat (Sonnet). */

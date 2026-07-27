@@ -398,6 +398,7 @@ export function CreateWebtoonModal({
                 value={coverURL}
                 progress={coverProgress}
                 onChange={handleCoverFile}
+                onRemove={handleRemoveCover}
               />
               <button
                 type="button"
@@ -422,8 +423,6 @@ export function CreateWebtoonModal({
             {/* AI Image Generator panel */}
             {aiPanel && (
               <AIImageGenerator
-                novelTitle={titleValue}
-                novelSynopsis={synopsisValue}
                 imageType={aiPanel}
                 userId={userId}
                 onAccept={(file) => {

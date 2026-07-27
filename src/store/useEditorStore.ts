@@ -1,12 +1,19 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
+import {
+  type BrushSettings,
+  getBrushPreset,
+  DEFAULT_BRUSH_ID,
+} from '@/lib/editor/brush/presets'
+import { type BubbleKind, makeBubbleSpec } from '@/lib/editor/bubbles'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type ElementType = 'rect' | 'ellipse' | 'text' | 'image'
-export type ToolId = 'select' | 'hand' | 'frame' | 'text' | 'rect' | 'ellipse' | 'ai'
+export type ElementType = 'rect' | 'ellipse' | 'text' | 'image' | 'paint' | 'bubble'
+export type ToolId =
+  | 'select' | 'hand' | 'frame' | 'text' | 'rect' | 'ellipse' | 'ai' | 'brush' | 'eraser'
 export type PageType =
   | 'webtoon'
   | 'cover'
@@ -29,6 +36,8 @@ export interface BaseElement {
   isLocked: boolean
   isHidden: boolean
   name: string
+  /** Layer blend mode (Konva globalCompositeOperation). Omitted = 'source-over'. */
+  blendMode?: GlobalCompositeOperation
 }
 
 export interface ShapeElement extends BaseElement {
@@ -55,7 +64,38 @@ export interface ImageElement extends BaseElement {
   src: string
 }
 
-export type EditorElement = ShapeElement | TextElement | ImageElement
+/**
+ * A raster paint layer. Its live pixels live on a mutable canvas in the paint
+ * bitmap registry (src/lib/editor/brush/bitmaps); `src` is the committed PNG
+ * data URL that gets snapshotted for undo and persisted with the project.
+ */
+export interface PaintElement extends BaseElement {
+  type: 'paint'
+  src: string
+}
+
+/** An editable comic speech bubble: a vector outline (by kind) plus its text. */
+export interface BubbleElement extends BaseElement {
+  type: 'bubble'
+  bubbleType: BubbleKind
+  text: string
+  fill: string
+  stroke: string
+  strokeWidth: number
+  fontSize: number
+  fontFamily: string
+  fontStyle: string
+  textColor: string
+  align: 'left' | 'center' | 'right'
+  dashed: boolean
+}
+
+export type EditorElement =
+  | ShapeElement
+  | TextElement
+  | ImageElement
+  | PaintElement
+  | BubbleElement
 
 export interface Page {
   id: string
@@ -156,6 +196,8 @@ interface EditorState {
   leftWidth: number
   rightWidth: number
   timelineHeight: number
+  // Floating brush settings panel — user can close it to clear the canvas.
+  brushPanelOpen: boolean
 
   undoStack: HistorySnapshot[]
   redoStack: HistorySnapshot[]
@@ -195,6 +237,8 @@ interface EditorState {
   setLeftWidth: (w: number) => void
   setRightWidth: (w: number) => void
   setTimelineHeight: (h: number) => void
+  setBrushPanelOpen: (v: boolean) => void
+  toggleBrushPanel: () => void
 
   // Selection
   selectPage: (id: string | null) => void
@@ -225,6 +269,19 @@ interface EditorState {
   duplicateSelected: () => void
   moveZ: (pageId: string, elementId: string, dir: 'front' | 'back' | 'forward' | 'backward') => void
   nudgeSelected: (dx: number, dy: number) => void
+
+  // Brush / paint
+  brush: BrushSettings
+  activeBrushId: string
+  setBrush: (patch: Partial<BrushSettings>) => void
+  applyBrushPreset: (id: string) => void
+  setBrushColor: (color: string) => void
+  addPaintLayer: (pageId: string) => string
+
+  // Speech bubbles. When set, the Text tool places this bubble on next click.
+  pendingBubbleKind: BubbleKind | null
+  setPendingBubbleKind: (kind: BubbleKind | null) => void
+  addBubble: (pageId: string, kind: BubbleKind, cx: number, cy: number) => string
 
   // History
   pushHistory: () => void
@@ -262,6 +319,17 @@ const elementDefaults = (type: ElementType): EditorElement => {
       }
     case 'image':
       return { ...base, type: 'image', width: 400, height: 400, name: 'Image', src: '' }
+    case 'paint':
+      // width/height are overridden by addPaintLayer to the page's pixel size.
+      return { ...base, type: 'paint', width: 800, height: 1280, name: 'Paint Layer', src: '' }
+    case 'bubble':
+      // addBubble supplies the real fields via makeBubbleSpec; this is a fallback.
+      return {
+        ...base, type: 'bubble', width: 300, height: 216, name: 'Speech bubble',
+        bubbleType: 'speech', text: 'Hello!', fill: '#FFFFFF', stroke: '#111111',
+        strokeWidth: 4, fontSize: 32, fontFamily: 'Inter', fontStyle: 'normal',
+        textColor: '#111111', align: 'center', dashed: false,
+      }
     case 'ellipse':
       return {
         ...base, type: 'ellipse', width: 240, height: 240, name: 'Ellipse',
@@ -347,18 +415,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   leftWidth: 264,
   rightWidth: 288,
   timelineHeight: 168,
+  brushPanelOpen: true,
 
   undoStack: [],
   redoStack: [],
 
   pageClipboard: null,
 
+  brush: { ...getBrushPreset(DEFAULT_BRUSH_ID), color: '#111111' },
+  activeBrushId: DEFAULT_BRUSH_ID,
+  pendingBubbleKind: null,
+
   setViewport: (viewport) => {
     cancelViewportAnim()
     set({ viewport })
   },
   setViewportSize: (width, height) => set({ viewportSize: { width, height } }),
-  setActiveTool: (activeTool) => set({ activeTool }),
+  // Leaving the Text tool clears any pending bubble pick so it can't leak into
+  // a later text insert.
+  setActiveTool: (activeTool) =>
+    set(activeTool === 'text' ? { activeTool } : { activeTool, pendingBubbleKind: null }),
 
   setGridStyle: (gridStyle) => set({ gridStyle }),
   toggleSafeZone: () => set((s) => ({ showSafeZone: !s.showSafeZone })),
@@ -487,6 +563,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setLeftWidth: (w) => set({ leftWidth: Math.max(200, Math.min(w, 460)) }),
   setRightWidth: (w) => set({ rightWidth: Math.max(220, Math.min(w, 460)) }),
   setTimelineHeight: (h) => set({ timelineHeight: Math.max(96, Math.min(h, 360)) }),
+  setBrushPanelOpen: (v) => set({ brushPanelOpen: v }),
+  toggleBrushPanel: () => set((s) => ({ brushPanelOpen: !s.brushPanelOpen })),
 
   selectPage: (id) => set({ selectedPageId: id, selectedElementIds: [] }),
 
@@ -551,12 +629,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   removePage: (id) => {
     get().pushHistory()
-    set((s) => ({
-      pages: s.pages.filter((p) => p.id !== id),
-      timelineOrder: s.timelineOrder.filter((pid) => pid !== id),
-      selectedPageId: s.selectedPageId === id ? null : s.selectedPageId,
-      selectedElementIds: [],
-    }))
+    const removed = get().pages.find((p) => p.id === id)
+    set((s) => {
+      let pages = s.pages.filter((p) => p.id !== id)
+      // If the deleted page sat in a stacked column, pull the pages below it up
+      // by its height so the strip stays contiguous (no hole in the middle).
+      if (removed) {
+        const EPS = 1.5
+        pages = pages.map((p) =>
+          Math.abs(p.x - removed.x) < EPS && p.y >= removed.y + removed.height - EPS
+            ? { ...p, y: p.y - removed.height }
+            : p,
+        )
+      }
+      return {
+        pages,
+        timelineOrder: s.timelineOrder.filter((pid) => pid !== id),
+        selectedPageId: s.selectedPageId === id ? null : s.selectedPageId,
+        selectedElementIds: [],
+      }
+    })
   },
 
   duplicatePage: (id) => {
@@ -768,6 +860,48 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         elements: p.elements.map((el) => (ids.has(el.id) ? { ...el, x: el.x + dx, y: el.y + dy } : el)),
       })),
     }))
+  },
+
+  // --- brush / paint ------------------------------------------------------
+  setBrush: (patch) => set((s) => ({ brush: { ...s.brush, ...patch } })),
+
+  applyBrushPreset: (id) => {
+    const preset = getBrushPreset(id)
+    // Keep the current ink colour when swapping presets.
+    set((s) => ({ activeBrushId: preset.id, brush: { ...preset, color: s.brush.color } }))
+  },
+
+  setBrushColor: (color) => set((s) => ({ brush: { ...s.brush, color } })),
+
+  // Add a full-page raster layer to paint on. addElement pushes history + selects.
+  addPaintLayer: (pageId) => {
+    const page = get().pages.find((p) => p.id === pageId)
+    if (!page) return ''
+    return get().addElement(pageId, {
+      type: 'paint',
+      x: 0,
+      y: 0,
+      width: page.width,
+      height: page.height,
+      name: 'Paint Layer',
+      src: '',
+    })
+  },
+
+  // --- speech bubbles -----------------------------------------------------
+  setPendingBubbleKind: (kind) => set({ pendingBubbleKind: kind }),
+
+  // Insert an editable bubble centered on (cx, cy) in page-local coords, sized
+  // relative to the page. addElement pushes history + selects it.
+  addBubble: (pageId, kind, cx, cy) => {
+    const page = get().pages.find((p) => p.id === pageId)
+    if (!page) return ''
+    const spec = makeBubbleSpec(kind, Math.round(Math.min(page.width * 0.42, 340)))
+    return get().addElement(pageId, {
+      ...spec,
+      x: Math.round(cx - spec.width / 2),
+      y: Math.round(cy - spec.height / 2),
+    })
   },
 
   pushHistory: () => {

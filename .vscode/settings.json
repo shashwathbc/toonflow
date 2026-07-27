@@ -1,0 +1,6 @@
+{
+  "// Tailwind directives": "@tailwind / @apply / @layer are valid here — compiled by PostCSS/Tailwind. Stop the built-in CSS linter flagging them as unknown at-rules.",
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore"
+}

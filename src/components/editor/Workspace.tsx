@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { Stage, Layer, Rect, Ellipse, Text, Group, Line, Transformer } from 'react-konva'
+import { Stage, Layer, Rect, Ellipse, Text, Group, Line, Shape, Transformer, Image as KonvaImage } from 'react-konva'
 import useImage from 'use-image'
 import Konva from 'konva'
 import {
@@ -10,11 +10,92 @@ import {
   type EditorElement,
   type ImageElement,
   type TextElement,
+  type PaintElement,
+  type BubbleElement,
 } from '@/store/useEditorStore'
 import { registerStage } from '@/lib/editor/exportProject'
 import { PageContextMenu } from '@/components/editor/PageContextMenu'
+import { BrushEngine, type InputSample } from '@/lib/editor/brush/engine'
+import { getPaintCanvas, reconcilePaintCanvas, markPaintSrc } from '@/lib/editor/brush/bitmaps'
+import { pathBubble, bubbleTextRect } from '@/lib/editor/bubbles'
 
 const SELECT = '#4C9AFF'
+
+// ---------------------------------------------------------------------------
+// Paint node — a raster layer drawn from its live offscreen canvas. The brush
+// engine mutates that canvas directly; this node reconciles it from `el.src`
+// whenever src changes externally (undo / redo / project load).
+// ---------------------------------------------------------------------------
+function PaintNode({ el, common }: { el: PaintElement; common: Record<string, unknown> }) {
+  const canvas = getPaintCanvas(el.id, el.width, el.height)
+  const nodeRef = useRef<Konva.Image>(null)
+  useEffect(() => {
+    let cancelled = false
+    // Redraw imperatively once the canvas matches src — the image object ref is
+    // stable across undo/redo, so React alone wouldn't repaint the Konva node.
+    const done = () => { if (!cancelled) nodeRef.current?.getLayer()?.batchDraw() }
+    const r = reconcilePaintCanvas(el.id, el.src, el.width, el.height)
+    if (r) r.then(done)
+    else done()
+    return () => { cancelled = true }
+  }, [el.id, el.src, el.width, el.height])
+  return <KonvaImage ref={nodeRef} {...common} image={canvas} width={el.width} height={el.height} />
+}
+
+// ---------------------------------------------------------------------------
+// Bubble node — a vector speech-bubble outline (by kind) plus its wrapped text,
+// grouped so it drags / selects / resizes as one unit. Text is hidden while the
+// inline editor is open over it.
+// ---------------------------------------------------------------------------
+function BubbleNode({
+  el, common, beingEdited, onEdit,
+}: {
+  el: BubbleElement
+  common: Record<string, unknown>
+  beingEdited: boolean
+  onEdit: () => void
+}) {
+  const tr = bubbleTextRect(el.bubbleType, el.width, el.height)
+  return (
+    <Group
+      {...common}
+      x={el.x}
+      y={el.y}
+      width={el.width}
+      height={el.height}
+      onDblClick={(e: Konva.KonvaEventObject<MouseEvent>) => { e.cancelBubble = true; onEdit() }}
+    >
+      <Shape
+        width={el.width}
+        height={el.height}
+        sceneFunc={(ctx, shape) => {
+          pathBubble(ctx, el.bubbleType, el.width, el.height)
+          ctx.fillStrokeShape(shape)
+        }}
+        fill={el.fill}
+        stroke={el.stroke}
+        strokeWidth={el.strokeWidth}
+        dash={el.dashed ? [12, 7] : undefined}
+        lineJoin="round"
+      />
+      <Text
+        x={tr.x}
+        y={tr.y}
+        width={tr.width}
+        height={tr.height}
+        text={beingEdited ? '' : el.text}
+        fontSize={el.fontSize}
+        fontFamily={el.fontFamily}
+        fontStyle={el.fontStyle}
+        fill={el.textColor}
+        align={el.align}
+        verticalAlign="middle"
+        wrap="word"
+        listening={false}
+      />
+    </Group>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Image node — loads its bitmap through use-image so Konva can paint it.
@@ -58,6 +139,9 @@ export function Workspace() {
   const [renaming, setRenaming] = useState<{ id: string; left: number; top: number; value: string } | null>(null)
   const startRef = useRef<{ x: number; y: number } | null>(null)
   const midPan = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null)
+  const spaceRef = useRef(false)
+  // Active brush stroke (paint tools use native pointer events, not Konva mouse).
+  const brushRef = useRef<{ engine: BrushEngine; elId: string; pageId: string; canvas: HTMLCanvasElement } | null>(null)
 
   const pages = useEditorStore((s) => s.pages)
   const viewport = useEditorStore((s) => s.viewport)
@@ -131,11 +215,15 @@ export function Workspace() {
     const down = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !isTyping(e.target) && !editing) {
         e.preventDefault()
+        spaceRef.current = true
         setSpaceDown(true)
       }
     }
     const up = (e: KeyboardEvent) => {
-      if (e.code === 'Space') setSpaceDown(false)
+      if (e.code === 'Space') {
+        spaceRef.current = false
+        setSpaceDown(false)
+      }
     }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
@@ -150,12 +238,124 @@ export function Workspace() {
     const stage = stageRef.current
     const tr = trRef.current
     if (!stage || !tr) return
-    const nodes = selectedElementIds
-      .map((id) => stage.findOne('#' + id))
-      .filter((n): n is Konva.Node => Boolean(n))
+    // No transform handles while a paint tool is active — they'd box the
+    // full-page layer and get in the way of drawing.
+    const paintTool = activeTool === 'brush' || activeTool === 'eraser'
+    const nodes = paintTool
+      ? []
+      : selectedElementIds
+          .map((id) => stage.findOne('#' + id))
+          .filter((n): n is Konva.Node => Boolean(n))
     tr.nodes(nodes)
     tr.getLayer()?.batchDraw()
-  }, [selectedElementIds, pages, editing])
+  }, [selectedElementIds, pages, editing, activeTool])
+
+  // ------- brush / eraser painting (native pointer events) ------------------
+  // Paint tools use raw PointerEvents (not Konva's mouse events) so strokes get
+  // pen pressure and coalesced sub-frame samples — tablet-grade input from
+  // Wacom / Huion / XP-Pen / Apple Pencil / Surface Pen via the standard API.
+  useEffect(() => {
+    if (activeTool !== 'brush' && activeTool !== 'eraser') return
+    const el = containerRef.current
+    if (!el) return
+
+    const pressureOf = (ev: PointerEvent) =>
+      ev.pointerType === 'mouse' ? 0.5 : ev.pressure > 0 ? ev.pressure : 0.5
+
+    const toWorldPt = (clientX: number, clientY: number) => {
+      const rect = el.getBoundingClientRect()
+      const vp = useEditorStore.getState().viewport
+      return { x: (clientX - rect.left - vp.x) / vp.scale, y: (clientY - rect.top - vp.y) / vp.scale }
+    }
+
+    const pageAtWorld = (wx: number, wy: number): Page | null => {
+      const ps = useEditorStore.getState().pages
+      for (let i = ps.length - 1; i >= 0; i--) {
+        const p = ps[i]
+        if (wx >= p.x && wx <= p.x + p.width && wy >= p.y && wy <= p.y + p.height) return p
+      }
+      return null
+    }
+
+    // Coalesce redraws to one per animation frame. pointermove (with coalesced
+    // samples) fires far faster than 60fps; calling batchDraw on every event is
+    // what made strokes feel janky. The engine still ingests every sample.
+    let raf: number | null = null
+    const scheduleRedraw = () => {
+      if (raf != null) return
+      raf = requestAnimationFrame(() => { raf = null; stageRef.current?.batchDraw() })
+    }
+
+    const onDown = (ev: PointerEvent) => {
+      if (ev.button !== 0 || spaceRef.current) return
+      const st = useEditorStore.getState()
+      if (st.activeTool !== 'brush' && st.activeTool !== 'eraser') return
+      const w = toWorldPt(ev.clientX, ev.clientY)
+      const page = pageAtWorld(w.x, w.y)
+      if (!page) return
+      ev.preventDefault()
+      el.setPointerCapture?.(ev.pointerId)
+
+      // Target the selected paint layer on this page, else its topmost paint
+      // layer, else create a fresh one (so we don't spawn a layer per stroke).
+      const paints = page.elements.filter((e): e is PaintElement => e.type === 'paint')
+      let target = paints.find((e) => st.selectedElementIds.includes(e.id)) ?? paints[paints.length - 1]
+      if (!target) {
+        const id = st.addPaintLayer(page.id) // pushes history + selects
+        target = useEditorStore.getState().pages
+          .find((p) => p.id === page.id)!
+          .elements.find((e) => e.id === id) as PaintElement
+      } else {
+        st.selectElements([target.id])
+        st.pushHistory() // snapshot pre-stroke src for undo
+      }
+
+      const canvas = getPaintCanvas(target.id, page.width, page.height)
+      const engine = new BrushEngine(canvas, { ...st.brush }, st.activeTool === 'eraser')
+      brushRef.current = { engine, elId: target.id, pageId: page.id, canvas }
+      engine.begin({ x: w.x - page.x, y: w.y - page.y, pressure: pressureOf(ev) })
+      scheduleRedraw()
+    }
+
+    const onMove = (ev: PointerEvent) => {
+      const cur = brushRef.current
+      if (!cur) return
+      const page = useEditorStore.getState().pages.find((p) => p.id === cur.pageId)
+      if (!page) return
+      const raw = (ev.getCoalescedEvents?.() as PointerEvent[] | undefined) ?? [ev]
+      const samples: InputSample[] = raw.map((pe) => {
+        const w = toWorldPt(pe.clientX, pe.clientY)
+        return { x: w.x - page.x, y: w.y - page.y, pressure: pressureOf(pe) }
+      })
+      cur.engine.extend(samples)
+      scheduleRedraw()
+    }
+
+    const finish = (ev: PointerEvent) => {
+      const cur = brushRef.current
+      if (!cur) return
+      brushRef.current = null
+      cur.engine.end()
+      const url = cur.canvas.toDataURL('image/png')
+      markPaintSrc(cur.elId, url) // we produced these pixels — don't reload them
+      useEditorStore.getState().updateElement(cur.pageId, cur.elId, { src: url }, false)
+      el.releasePointerCapture?.(ev.pointerId)
+      if (raf != null) { cancelAnimationFrame(raf); raf = null }
+      stageRef.current?.batchDraw()
+    }
+
+    el.addEventListener('pointerdown', onDown)
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', finish)
+    el.addEventListener('pointercancel', finish)
+    return () => {
+      if (raf != null) cancelAnimationFrame(raf)
+      el.removeEventListener('pointerdown', onDown)
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', finish)
+      el.removeEventListener('pointercancel', finish)
+    }
+  }, [activeTool])
 
   // ------- coordinate helpers ---------------------------------------------
   const toWorld = useCallback(
@@ -224,6 +424,9 @@ export function Workspace() {
       return
     }
     if (panning) return
+    // Paint tools are handled by native pointer listeners (for pressure), so the
+    // Konva mouse path must not also marquee/select.
+    if (activeTool === 'brush' || activeTool === 'eraser') return
     const w = toWorld(pointer.x, pointer.y)
     const targetIsStage = e.target === stage
     const onArtboard = e.target.name() === 'artboard'
@@ -240,7 +443,12 @@ export function Workspace() {
     if (activeTool === 'text') {
       const page = pageAt(w.x, w.y)
       if (page) {
-        const id = addElement(page.id, { type: 'text', x: w.x - page.x, y: w.y - page.y })
+        const st = useEditorStore.getState()
+        const kind = st.pendingBubbleKind
+        const id = kind
+          ? st.addBubble(page.id, kind, Math.round(w.x - page.x), Math.round(w.y - page.y))
+          : addElement(page.id, { type: 'text', x: w.x - page.x, y: w.y - page.y })
+        if (kind) st.setPendingBubbleKind(null)
         const created = useEditorStore.getState().pages.find((p) => p.id === page.id)?.elements.find((el) => el.id === id)
         setActiveTool('select')
         if (created) setEditing({ pageId: page.id, el: created })
@@ -460,18 +668,22 @@ export function Workspace() {
       rotation: Math.round(node.rotation()),
     }
     if (el.type === 'text') (patch as Partial<TextElement>).fontSize = Math.max(6, Math.round(el.fontSize * sy))
+    if (el.type === 'bubble') (patch as Partial<BubbleElement>).fontSize = Math.max(8, Math.round(el.fontSize * ((sx + sy) / 2)))
     updateElement(page.id, el.id, patch)
   }
 
   // ------- render one element ---------------------------------------------
   const renderElement = (page: Page, el: EditorElement) => {
     if (el.isHidden) return null
-    if (editing && editing.el.id === el.id) return null // hidden while inline-editing
+    // Text elements vanish behind the inline editor; bubbles stay (only their
+    // text is blanked) so the outline is visible while you type.
+    if (editing && editing.el.id === el.id && el.type === 'text') return null
     const draggable = activeTool === 'select' && !el.isLocked && !panning
     const common = {
       id: el.id,
       name: 'element',
       opacity: el.opacity,
+      globalCompositeOperation: el.blendMode ?? undefined,
       rotation: el.rotation,
       draggable,
       onMouseDown: (ev: Konva.KonvaEventObject<MouseEvent>) => {
@@ -518,6 +730,20 @@ export function Workspace() {
     if (el.type === 'image') {
       return <ImageNode key={el.id} el={el} common={{ ...common, x: el.x, y: el.y }} />
     }
+    if (el.type === 'paint') {
+      return <PaintNode key={el.id} el={el} common={{ ...common, x: el.x, y: el.y }} />
+    }
+    if (el.type === 'bubble') {
+      return (
+        <BubbleNode
+          key={el.id}
+          el={el}
+          common={common}
+          beingEdited={!!editing && editing.el.id === el.id}
+          onEdit={() => setEditing({ pageId: page.id, el })}
+        />
+      )
+    }
     return null
   }
 
@@ -526,10 +752,27 @@ export function Workspace() {
     ? (() => {
         const page = pages.find((p) => p.id === editing.pageId)
         const el = page?.elements.find((e) => e.id === editing.el.id)
-        if (!page || !el || el.type !== 'text') return null
-        const screenX = (page.x + el.x) * viewport.scale + viewport.x
-        const screenY = (page.y + el.y) * viewport.scale + viewport.y
-        return { page, el, screenX, screenY }
+        if (!page || !el) return null
+        if (el.type === 'text') {
+          return {
+            page, elId: el.id,
+            screenX: (page.x + el.x) * viewport.scale + viewport.x,
+            screenY: (page.y + el.y) * viewport.scale + viewport.y,
+            width: el.width, fontSize: el.fontSize, fontFamily: el.fontFamily,
+            color: el.fill, lineHeight: el.lineHeight, align: el.align, text: el.text,
+          }
+        }
+        if (el.type === 'bubble') {
+          const t = bubbleTextRect(el.bubbleType, el.width, el.height)
+          return {
+            page, elId: el.id,
+            screenX: (page.x + el.x + t.x) * viewport.scale + viewport.x,
+            screenY: (page.y + el.y + t.y) * viewport.scale + viewport.y,
+            width: t.width, fontSize: el.fontSize, fontFamily: el.fontFamily,
+            color: el.textColor, lineHeight: 1.2, align: el.align, text: el.text,
+          }
+        }
+        return null
       })()
     : null
 
@@ -716,16 +959,17 @@ export function Workspace() {
           style={{
             left: editorBox.screenX,
             top: editorBox.screenY,
-            width: editorBox.el.width * viewport.scale,
-            minHeight: (editorBox.el as TextElement).fontSize * viewport.scale,
-            fontSize: (editorBox.el as TextElement).fontSize * viewport.scale,
-            fontFamily: (editorBox.el as TextElement).fontFamily,
-            color: (editorBox.el as TextElement).fill,
-            lineHeight: (editorBox.el as TextElement).lineHeight,
+            width: editorBox.width * viewport.scale,
+            minHeight: editorBox.fontSize * viewport.scale,
+            fontSize: editorBox.fontSize * viewport.scale,
+            fontFamily: editorBox.fontFamily,
+            color: editorBox.color,
+            lineHeight: editorBox.lineHeight,
+            textAlign: editorBox.align,
           }}
-          defaultValue={(editorBox.el as TextElement).text}
+          defaultValue={editorBox.text}
           onBlur={(e) => {
-            updateElement(editorBox.page.id, editorBox.el.id, { text: e.target.value }, true)
+            updateElement(editorBox.page.id, editorBox.elId, { text: e.target.value }, true)
             setEditing(null)
           }}
           onKeyDown={(e) => {

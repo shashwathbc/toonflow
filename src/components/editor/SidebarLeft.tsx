@@ -22,6 +22,8 @@ import {
   Pencil,
   User,
   ImagePlus,
+  MessageSquare,
+  Loader2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -37,6 +39,7 @@ import { ASSET_LIBRARY, svgToDataUri, type AssetItem } from '@/lib/editor/assetL
 import { useCharacters } from '@/hooks/useCharacters'
 import { deleteCharacter } from '@/lib/firebase/firestore'
 import { CharacterDialog } from '@/components/editor/CharacterDialog'
+import { useAgentWorkflow } from '@/components/editor/useAgentWorkflow'
 import { cn } from '@/lib/utils/cn'
 import type { Character } from '@/types'
 
@@ -48,7 +51,7 @@ const TABS: { id: LeftTab; icon: typeof Layers; label: string }[] = [
   { id: 'ai', icon: Sparkles, label: 'AI Agents' },
 ]
 
-const ELEMENT_ICON = { rect: Square, ellipse: Circle, text: Type, image: ImageIcon } as const
+const ELEMENT_ICON = { rect: Square, ellipse: Circle, text: Type, image: ImageIcon, paint: Pencil, bubble: MessageSquare } as const
 
 const AGENTS = [
   { name: 'Story Director', desc: 'Plans the full episode beat sheet', color: '#4C9AFF' },
@@ -472,32 +475,65 @@ function CharactersPanel() {
 // ---------------------------------------------------------------------------
 function AgentsPanel() {
   const [prompt, setPrompt] = useState('')
+  const { run, running, progress, result } = useAgentWorkflow()
+
   return (
     <>
       <PanelHeader title="AI Agents" />
       <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-[#333]">
         {AGENTS.map((a) => (
-          <button
+          <div
             key={a.name}
-            className="w-full text-left flex items-start gap-2.5 p-2.5 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+            className={cn(
+              'w-full text-left flex items-start gap-2.5 p-2.5 rounded-xl bg-[#1E1E1E] border transition-colors',
+              running ? 'border-[#3A3A3A]' : 'border-[#2A2A2A]',
+            )}
           >
-            <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: a.color }} />
+            <span
+              className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', running && 'animate-pulse')}
+              style={{ background: a.color }}
+            />
             <span className="flex-1 min-w-0">
               <span className="block text-xs font-semibold text-white">{a.name}</span>
               <span className="block text-[10px] text-white/45">{a.desc}</span>
             </span>
-          </button>
+          </div>
         ))}
       </div>
       <div className="p-3 border-t border-[#262626]">
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Brief the team — e.g. 'storyboard a 6-panel rooftop confrontation at dusk'…"
-          className="w-full h-20 resize-none rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] focus:border-[#4C9AFF] outline-none p-2.5 text-xs text-white placeholder:text-white/30"
+          onKeyDown={(e) => e.stopPropagation()}
+          disabled={running}
+          placeholder="Paste your script or scene here. The team storyboards it, lays out the dialogue as speech bubbles, then paints each panel into one long vertical webtoon."
+          className="w-full h-24 resize-none rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] focus:border-[#4C9AFF] outline-none p-2.5 text-xs text-white placeholder:text-white/30 disabled:opacity-60"
         />
-        <button className="mt-2 w-full py-2 rounded-lg bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
-          Run agent workflow
+        {progress && (
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-[#4C9AFF]" role="status" aria-live="polite">
+            <Loader2 size={12} className="animate-spin shrink-0" aria-hidden="true" />
+            <span className="truncate">{progress}</span>
+          </p>
+        )}
+        {!running && result && (
+          <p className="mt-2 text-[11px] leading-snug text-white/60 border border-[#2A2A2A] rounded-md p-2" role="status">
+            {result}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => run(prompt)}
+          disabled={running}
+          className="mt-2 w-full py-2 rounded-lg bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
+        >
+          {running ? (
+            <>
+              <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+              Working…
+            </>
+          ) : (
+            'Run agent workflow'
+          )}
         </button>
       </div>
     </>

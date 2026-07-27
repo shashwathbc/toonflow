@@ -32,6 +32,7 @@ import { CommandPalette } from '@/components/editor/CommandPalette'
 import { ResizeHandle } from '@/components/editor/ResizeHandle'
 import { BrandingMetaDialog } from '@/components/editor/BrandingMetaDialog'
 import { useEditorShortcuts } from '@/components/editor/useEditorShortcuts'
+import { usePaintPersistence } from '@/components/editor/usePaintPersistence'
 import { useEditorStore } from '@/store/useEditorStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useEpisodes } from '@/hooks/useEpisodes'
@@ -109,6 +110,7 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
   const toggleTimeline = useEditorStore((s) => s.toggleTimeline)
 
   useEditorShortcuts()
+  usePaintPersistence()
 
   // ---- autosave plumbing ---------------------------------------------------
   const hydratingRef = useRef(false)

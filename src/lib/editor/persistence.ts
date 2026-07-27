@@ -15,8 +15,22 @@ export const PROJECT_VERSION = 1
  */
 export function serializeProject(): CanvasProject {
   const { pages, timelineOrder } = useEditorStore.getState()
+  // Strip inline base64 (data:) sources before persisting. Image drops already
+  // upload to Storage, but a raster paint layer holds a live data-URL bitmap in
+  // `src` — writing that into the Firestore doc would blow the 1 MB limit and
+  // fail the save. Painted pixels are still captured at publish (the stage is
+  // rasterized); Storage-backed persistence of raw paint layers is the next
+  // step. This guarantees autosave can never be rejected for size.
+  const safePages = pages.map((p) => ({
+    ...p,
+    elements: p.elements.map((el) =>
+      'src' in el && typeof el.src === 'string' && el.src.startsWith('data:')
+        ? { ...el, src: '' }
+        : el,
+    ),
+  }))
   return JSON.parse(
-    JSON.stringify({ version: PROJECT_VERSION, pages, timelineOrder }),
+    JSON.stringify({ version: PROJECT_VERSION, pages: safePages, timelineOrder }),
   ) as CanvasProject
 }
 
@@ -81,8 +95,28 @@ export function migratePanelsToPages(panels: PanelImage[]): CanvasProject {
 
 /** Convert a data/blob URL into a typed File suitable for Storage upload. */
 export async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
-  const res = await fetch(dataUrl)
-  const blob = await res.blob()
+  let blob: Blob
+  if (dataUrl.startsWith('data:')) {
+    // Decode the data URL directly — do NOT fetch() it. The app's CSP
+    // connect-src (next.config.js) doesn't allow `data:`, so fetch('data:…')
+    // throws "Failed to fetch" and breaks every canvas/AI image upload.
+    const comma = dataUrl.indexOf(',')
+    const header = dataUrl.slice(5, comma) // between "data:" and ","
+    const type = header.split(';')[0] || 'image/jpeg'
+    const payload = dataUrl.slice(comma + 1)
+    if (/;base64/i.test(header)) {
+      const bin = atob(payload)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      blob = new Blob([bytes], { type })
+    } else {
+      blob = new Blob([decodeURIComponent(payload)], { type })
+    }
+  } else {
+    // blob: object URLs must be read via fetch (same-origin).
+    const res = await fetch(dataUrl)
+    blob = await res.blob()
+  }
   const type = blob.type || 'image/jpeg'
   const ext = (type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
   const name = /\.[a-z0-9]+$/i.test(filename) ? filename : `${filename}.${ext}`

@@ -36,6 +36,25 @@ const TABS: { id: RightTab; icon: typeof SlidersHorizontal; label: string }[] = 
   { id: 'export', icon: Download, label: 'Export' },
 ]
 
+const BLEND_MODES: { value: GlobalCompositeOperation; label: string }[] = [
+  { value: 'source-over', label: 'Normal' },
+  { value: 'multiply', label: 'Multiply' },
+  { value: 'screen', label: 'Screen' },
+  { value: 'overlay', label: 'Overlay' },
+  { value: 'darken', label: 'Darken' },
+  { value: 'lighten', label: 'Lighten' },
+  { value: 'color-dodge', label: 'Color Dodge' },
+  { value: 'color-burn', label: 'Color Burn' },
+  { value: 'hard-light', label: 'Hard Light' },
+  { value: 'soft-light', label: 'Soft Light' },
+  { value: 'difference', label: 'Difference' },
+  { value: 'exclusion', label: 'Exclusion' },
+  { value: 'hue', label: 'Hue' },
+  { value: 'saturation', label: 'Saturation' },
+  { value: 'color', label: 'Color' },
+  { value: 'luminosity', label: 'Luminosity' },
+]
+
 export function SidebarRight() {
   const rightTab = useEditorStore((s) => s.rightTab)
   const setRightTab = useEditorStore((s) => s.setRightTab)
@@ -204,6 +223,19 @@ function PropertiesTab() {
               className="w-28 accent-[#4C9AFF]"
             />
             <span className="text-[11px] font-mono text-white/60 w-8 text-right">{Math.round(el.opacity * 100)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-white/70 flex-1">Blend</span>
+            <select
+              value={el.blendMode ?? 'source-over'}
+              onChange={(e) => set({ blendMode: e.target.value as GlobalCompositeOperation })}
+              className="w-28 bg-[#1E1E1E] rounded-md border border-[#2E2E2E] focus:border-[#4C9AFF] outline-none px-2 py-1 text-[11px] text-white cursor-pointer"
+              aria-label="Blend mode"
+            >
+              {BLEND_MODES.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
           </div>
           {(el.type === 'rect' || el.type === 'ellipse') && (
             <>

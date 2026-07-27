@@ -1892,3 +1892,109 @@ Batch of UX fixes requested together.
 - Per request, removed the `LikeButton` from the novel detail/description page only — src/app/(main)/novel/[id]/page.tsx (was in the action row next to Bookmark/Rating). Dropped its now-unused import too.
 - Left in place everywhere else: webtoon detail page, novel chapter reader, and the webtoon episode page still have their like buttons. The shared LikeButton component and the likes backend are untouched.
 - Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean.
+
+## Fixed webtoon editor "Something went wrong / editor failed to load" crash (2026-07-26)
+- Root cause: the editor was being refactored — all logic was extracted into the new src/components/editor/CanvasEditor.tsx (606 lines), and the route page src/app/(novel)/create/webtoon/[webtoonId]/page.tsx was meant to become a thin wrapper. Its imports were reduced to just `use` + `CanvasEditor`, but the OLD ~700-line inline editor body was left in place, still referencing useState/useAuth/useEpisodes/etc. that were no longer imported. At render that threw `ReferenceError: useState is not defined`, caught by the route error boundary → "The editor failed to load."
+- Fix: replaced page.tsx with the intended thin wrapper — `const { webtoonId } = use(params); return <CanvasEditor webtoonId={webtoonId} />`. CanvasEditor (named export, props `{ webtoonId: string }`) is self-contained (fetches webtoon, auth/permission, episodes, panels, Konva workspace).
+- While verifying, tsc surfaced two real errors in the concurrently-refactored CreateWebtoonModal.tsx (its banner upload box was removed and a duplicate AI panel block remained): (a) cover UploadBox was missing required `onRemove` → added `onRemove={handleRemoveCover}`; (b) a leftover AIImageGenerator block still passed `novelTitle`/`novelSynopsis` (props I removed earlier when deleting Auto-fill) → dropped them.
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint 0 errors. Remaining CreateWebtoonModal warnings (`bannerProgress`, `handleRemoveBanner` unused) are pre-existing leftovers from the banner-removal refactor and were left untouched. Note also that CreateWebtoonModal still renders a duplicate cover AI panel (blocks at ~411 and ~423) — a cosmetic issue owned by that in-progress refactor, not fixed here.
+
+## Phase 1 · Slice 1 — Real raster brush engine + paint layers (2026-07-27)
+- Foundation for turning the Konva object-editor into a paint-capable webtoon studio. The editor previously had NO raster painting; this adds a genuine, extensible drawing engine.
+- New, framework-agnostic subsystem in src/lib/editor/brush/:
+  - engine.ts — BrushEngine: stamp/dab strokes with per-sample interpolation, spacing, pressure→size & pressure→opacity, hardness (soft radial dab), flow-vs-opacity via a stroke buffer (overlapping dabs never exceed stroke opacity), stabilization (input smoothing) and scatter. Erasers reuse the same pipeline with a 'destination-out' final composite. Pure canvas 2D, no React/Konva — unit-testable and reusable.
+  - presets.ts — BrushSettings model + BRUSH_PRESETS registry (15 brushes: Pen, G-Pen, Mapping Pen, Ink, Calligraphy, Pencil, Mechanical Pencil, Marker, Airbrush, Watercolor, Oil, Flat, Chalk, Charcoal, Pixel). Adding a brush = push one object; no engine/UI change.
+  - bitmaps.ts — runtime registry of live paint canvases (kept OUT of the store), with reconcile() to sync a layer's canvas from its committed `src` on undo/redo/load, and markPaintSrc() to avoid reloading pixels we just produced.
+- Store (useEditorStore): new 'paint' element type (PaintElement { src }), 'brush'/'eraser' tools, live `brush` settings + `activeBrushId`, actions setBrush/applyBrushPreset/setBrushColor/addPaintLayer.
+- Workspace: PaintNode renders a paint layer as a Konva.Image bound to its live offscreen canvas (so pan/zoom/export "just work"); native PointerEvent handlers (with getCoalescedEvents + ev.pressure) drive the engine in page-local coords — tablet-grade input from Wacom/Huion/XP-Pen/Apple Pencil/Surface Pen via the standard API. Konva mouse path is guarded off for paint tools. Undo/redo works by snapshotting `src` and reconciling the canvas.
+- UI: Brush + Eraser added to the floating TopToolbar (keys B/E); new BrushPanel (floating) with preset chips, color, and Size/Hardness/Opacity/Flow/Spacing/Stabilizer sliders. SidebarLeft layer list + TimelineBottom mini-preview handle the new 'paint' type.
+- Persistence guard: serializeProject() now strips inline data: URLs before writing to Firestore, so a paint layer's base64 bitmap can never blow the 1 MB doc limit / fail autosave. Painted pixels ARE captured on publish (stage rasterization).
+- Known follow-ups (next slices): Storage-backed persistence of raw paint layers (debounced upload → URL in src) so paint survives reload; tile/stroke-based paint history (current undo clones full-page PNGs into snapshots — bounded to 80 but memory-heavy); brush cursor ring; tilt/rotation/texture/wet-blend brush dynamics; smudge/blend/pattern brushes (need layer sampling / image stamps).
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry) and eslint clean across all touched files.
+
+## Brush panel toggle + cloud persistence + blend modes (2026-07-27)
+- **Closable brush panel** (user request): the floating BrushPanel now has an X and a `brushPanelOpen` store flag. Selecting Brush/Eraser (toolbar or B/E) opens it; the X closes it to clear the canvas; clicking the already-active paint tool toggles it back. useEditorShortcuts reopens it on B/E.
+- **Paint layers now persist to cloud** (finishes the brush feature): new hook src/components/editor/usePaintPersistence.ts (mounted in CanvasEditor) debounces (1.5s) and uploads any paint layer still holding an inline `data:` bitmap to Storage via uploadCanvasImage, swapping `src` to the download URL. serializeProject already strips data: URLs, so the persisted Firestore doc carries the small URL (never base64) — survives reload; PaintNode reconciles the canvas from the URL on open. In-flight guard + "src unchanged" recheck avoid clobbering a stroke that lands mid-upload; with no assetCtx (dev/unauth) it no-ops and keeps the inline bitmap.
+- bitmaps.ts reconcile now sets `crossOrigin='anonymous'` for non-data URLs so Storage-loaded bitmaps don't taint the canvas (which would break the next stroke's toDataURL / export).
+- **Layer blend modes + opacity**: added optional `blendMode` (Konva globalCompositeOperation) to BaseElement, applied via the Workspace node `common` props (works for every element type, incl. paint), with a 16-mode dropdown (Normal→Luminosity) added next to the existing Opacity slider in the Properties panel. Opacity already worked; now blend does too.
+- Known follow-ups: each settle uploads a fresh file (old paint uploads orphan — needs cleanup/dedupe); paint undo still clones full-page PNGs (tile/stroke history later).
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean across all touched files.
+
+## Brush usability: smoothness + stop panel blocking the canvas (2026-07-27)
+- **Smoother strokes**: redraw is now throttled to one requestAnimationFrame per frame instead of once per pointermove (coalesced pointer samples fire far faster than 60fps; the engine still ingests every sample). Removes the jank.
+- **No transform box while painting**: the Konva Transformer is detached whenever a paint tool is active, so drawing no longer boxes the full-page paint layer with resize handles.
+- **Panel stops covering the page**: BrushPanel moved from top-center to the top-left corner (top-4 left-3), narrower (280px). A centered/focused page is no longer hidden behind the panel — was the likely cause of "can't draw directly on the page." Still closable (X) and reopenable (click the active tool / press B/E).
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean.
+
+## Editable speech-bubble system (spec #8) (2026-07-27)
+- Replaces the old static SVG-image bubbles (empty white boxes, no text) with a real, editable `bubble` element type.
+- New src/lib/editor/bubbles.ts (pure data+geometry, no Konva → SSR-safe): 7 emotion presets (Speech/Thought/Shout/Scream/Whisper/Narration/Electronic) each with default text, colors, font; `pathBubble()` draws the vector outline per kind (rounded+tail, cloud+puffs, spiky burst, cut-corner electronic, dashed whisper, caption box); `bubbleTextRect()` gives the inner text box; `makeBubbleSpec()` builds a full element spec (shared by store + assets).
+- Store: `BubbleElement` type (bubbleType/text/fill/stroke/strokeWidth/font*/textColor/align/dashed), `addBubble(pageId,kind,cx,cy)`, `pendingBubbleKind` + `setPendingBubbleKind`; `setActiveTool` clears pendingBubbleKind when leaving the Text tool.
+- Workspace: `BubbleNode` = Konva Group(Shape sceneFunc + wrapped Text), drags/selects/resizes as one; resize scales font; double-click edits text inline (the inline editor was generalized to handle both text and bubbles, positioned over the bubble's text rect, with the bubble outline staying visible while typing).
+- T tool now opens a dropdown (src/components/editor/TextToolMenu.tsx): Plain Text + the 7 bubbles (labelled with their emotion + icon). Pick one → click a page to place → auto-opens inline editor. Clicking the active T toggles the menu.
+- Assets panel "Speech Bubbles" category rebuilt to insert the 7 editable bubbles (thumbnails kept). SidebarLeft layer icons + TimelineBottom mini-preview handle the new 'bubble' type.
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean across all touched files.
+- Follow-ups: bubble fill/stroke/text-color controls in the Properties panel (currently defaults per preset; text editable inline); draggable/snapping tails.
+
+## Fix: Story Timeline thumbnails clipping when panel is short (2026-07-27)
+- Thumbnails used a fixed height (up to 120px) + a name label, but the timeline panel is resizable down to 96px — so a short panel clipped the row (overflow-y-hidden). Now the thumbnail fits the available height: `thumbBoxH = clamp(timelineHeight - 66, 30, 150)`, width derived from the page aspect and capped at 84px. The "New page" button matches that height (was a fixed h-24) and hides its label when the row is very short. Nothing clips at any panel height.
+- Verified: tsc + eslint clean.
+
+## AI Agents "Run agent workflow" now works: script → template → vertical webtoon (2026-07-27)
+- The AI Agents panel button was a stub. It now runs a real two-phase pipeline from the pasted script.
+- New API src/app/api/ai/storyboard/route.ts: Claude (haiku-4-5) turns the script into a storyboard — up to 6 sequential panels, each with a `scene` image prompt + `bubbles` [{kind,text}] using the editor's bubble kinds. Auth (verifiedUid) + aiRateLimit + body guard like the other AI routes; robust JSON extraction/normalisation; 422 if nothing usable.
+- New hook src/components/editor/useAgentWorkflow.ts orchestrates:
+  1. TEMPLATE (instant): one webtoon page per panel; dialogue/narration placed as editable speech bubbles spread down the page (so the layout appears before any image waits).
+  2. ART: sequentially generates a background per panel via /api/ai/generate-image, uploads it to Storage (uploadCanvasImage → URL, not base64), adds it as a locked full-page image and moveZ('back') so it sits behind the bubbles. A failed panel is skipped; the rest continue.
+  3. STACK: mergeEpisode() + fitWidth() → one continuous long vertical webtoon.
+- SidebarLeft AgentsPanel wired: script textarea, live progress line ("Story Director planning…", "painting panel 2 of 5…"), disabled/spinner while running; agent roster dots pulse during the run.
+- Notes/follow-ups: mergeEpisode stacks the WHOLE episode (pre-existing pages included) — intended for "one long strip" but worth knowing; image generation is sequential (minutes for 5-6 panels); character consistency across panels relies on the prompt + shared style suffix (true consistency is a later slice using references/seeds).
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean.
+
+## Agent workflow v2: fresh ~20-page manhwa chapter + page delete/reorder (2026-07-27)
+- "Run agent workflow" now builds a FRESH long-vertical chapter (was appending + merging everything):
+  - Confirms first (clears the canvas via loadProject(null)) since it replaces current work.
+  - Pulls the webtoon's title/synopsis (getWebtoonById on assetCtx.webtoonId) so a short brief like "make chapter 1" writes chapter 1 of THIS series.
+  - storyboard route: MAX_PANELS 6→20, accepts title/synopsis, max_tokens 4096, target ~20; prompt reframed as premium Korean vertical-scroll manhwa (Magic Emperor / Fated Villain), invents a full chapter from a short brief, and pins a fixed main-character appearance repeated every panel for consistency.
+  - Workflow: fresh canvas → 20 webtoon pages + dialogue bubbles (template) → mergeEpisode()+fitWidth() immediately (long scroll usable in seconds) → paint a manhwa-style background per panel (scene + MANHWA_STYLE suffix) behind the bubbles, 2 at a time via a concurrency pool, progress counter, failures skipped.
+- Image rate limit raised 20→150/hour (aiRateLimit.ts): image gen is keyless Pollinations (free), so the old paid-Stability cap was blocking a full-chapter run; the ceiling now only guards upstream hammering.
+- Timeline: each page thumbnail gets a hover Delete (trash) button. removePage now closes the vertical gap in a stacked column (pages below shift up by the removed height) so deleting a middle page leaves no hole; page numbers already re-derive from order.
+- Notes: 20 backgrounds take several minutes and the free image service may drop some (those panels keep their bubbles, art can be re-added); character consistency is prompt-driven (reference-locked consistency is a later slice).
+- Verified: tsc clean (apart from the known pre-existing .next/types validator entry); eslint clean.
+
+## Agent workflow art quality: manhwa style + character consistency (2026-07-27)
+- User feedback: generated panels didn't look like a published webtoon. Diagnosed against the LIVE image service (Pollinations now serves the "sana" model; the `model=` param is ignored — flux/sana/turbo returned byte-identical output).
+- Finding via live tests: single-panel quality is actually good; the real gaps were (a) a weak style prompt and (b) no cross-panel character consistency.
+- Fixes:
+  - storyboard route now returns a top-level "character" string (the protagonist's fixed appearance ~25 words); the workflow prepends it to EVERY panel's image prompt → the same hair/eyes/outfit render across all panels (verified across a wide shot, an action beat and a close-up — clearly the same character).
+  - MANHWA_STYLE suffix strengthened to studio-webtoon tokens (official webtoon art style, clean sharp lineart, cel shading, screentone, cinematic lighting, professional studio quality) — tuned against live output.
+- Published a proof artifact showing 3 consistent manhwa panels as a vertical strip.
+- Honest limit documented: free text-to-image is consistent-not-identical and won't match hand-drawn published webtoons; the image step is one isolated route (/api/ai/generate-image) so a reference/LoRA/paid backend is a drop-in upgrade later.
+- Verified: tsc + eslint clean.
+
+## Fix: workflow produced no art — image rate-limit block (2026-07-27)
+- Symptom: agent workflow built the template (bubbles) but every panel was blank — no background art.
+- Root cause: the image endpoint was capped at 20/hour (paid-Stability era) while a single run needs ~20 images. Repeated testing exceeded it; after 5 violations the sliding-window limiter (src/lib/views/rateLimit.ts, config blockAfterViolations:5 / blockDurationMs:15min) applied a 15-minute BLOCK, and the block is evaluated before the limit — so every generate-image call 429'd. The art phase swallowed all errors, so it looked like silent failure.
+- Fixes:
+  - Image ceiling already raised 20→150/hour (aiRateLimit.ts) so a full-chapter run no longer trips the limiter (→ no violations → no block).
+  - useAgentWorkflow art phase rewritten to be observable + resilient: per-panel generate with 1 retry (429s aren't retried), counts painted/failed, logs failures to console, and ends with a clear toast — "image limit reached, wait then Run again", or "painted X of N, run again to fill the rest", or full success. No more silent blank pages.
+- Recovery for an ACTIVE block: it's in-memory per dev process — wait ≤15 min for it to expire, OR restart `next dev` to clear it instantly, then Run again.
+- Verified: tsc + eslint clean.
+
+## Fix VS Code Problems in globals.css (2026-07-27)
+- Removed the dead, broken `@keyframes reader-line-grow` (used `scaleX: 0/1`, which aren't valid CSS properties — should have been `transform: scaleX(...)`; the keyframe was never referenced anywhere).
+- Added .vscode/settings.json with `css/scss/less.lint.unknownAtRules: "ignore"` so VS Code's built-in CSS linter stops flagging Tailwind's `@tailwind` / `@apply` / `@layer` directives (valid — compiled by PostCSS) as unknown at-rules. That was the bulk of the globals.css "problems".
+- The other Problems-panel entry (toonflow-review.html) is a leftover review artifact in a prior session's temp scratchpad (AppData/Local/Temp/claude/...), not project code — closing that editor tab clears it.
+
+## Diagnose persistent "no art" + sticky failure reporting (2026-07-28)
+- Verified the pieces work in isolation: live Pollinations returns valid HTTP 200 images (slow, ~35s each — 3/3 completed in a rapid test before a 2-min cap); storyboard/Claude works (bubbles appear); Storage rule for webtoons/{uid}/{webtoonId}/{episodeId}/{file} permits the panel upload. So art failing for the user is a specific, hidden cause — almost certainly the in-memory rate-limit BLOCK: under the old 20/hour image cap, repeated runs exceeded the window and tripped the 15-min block (checked before the limit), so every generate-image call 429s. The 20→150 cap fix only takes effect once the dev server actually reloads it; the block lives in the process memory until it expires or the server restarts.
+- useAgentWorkflow now reports the exact outcome instead of silently swallowing failures: per-image AbortController (75s) so a hung request can't stall the run; captures the first concrete failure (`HTTP 429 — ...`, `AbortError`, `upload failed — ...`); and returns a sticky `result` string. SidebarLeft AgentsPanel shows that result persistently under the button (e.g. "0/20 panels got art — the image limit was hit — wait ~2 min or restart the dev server").
+- Action for the user: restart `next dev` (applies the 150 cap AND clears the stuck in-memory block), then Run again; art paints over a few minutes with live progress. If the sticky result still shows HTTP 429 after a restart it's a different cause the message will now name.
+- Verified: tsc + eslint clean.
+
+## ROOT CAUSE of "no art": CSP blocked fetch() of data: URLs (2026-07-28)
+- The error overlay pinpointed it: `TypeError: Failed to fetch` at persistence.ts dataUrlToFile → `await fetch(dataUrl)`, in the uploadCanvasImage → agent-workflow path.
+- Cause: next.config.js CSP `connect-src` allows Firebase/Razorpay but NOT `data:`. So `fetch('data:image/…')` (used to turn the generated base64 into a Blob/File) was blocked → every panel upload threw before hitting Storage → 0 panels got art. The rate-limit angle was a red herring; even successfully generated images died at this step. (The manual AI cover generator was unaffected — it builds the File via atob() directly.)
+- Fix: dataUrlToFile now DECODES data: URLs directly (atob → Uint8Array → Blob → File), no fetch(); keeps a fetch fallback only for blob: object URLs. No CSP change needed.
+- This also un-breaks paint-layer cloud persistence and canvas image drops that pass data: URLs (same code path).
+- Verified: tsc + eslint clean.

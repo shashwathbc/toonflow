@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import {
   MousePointer2,
   Hand,
@@ -8,17 +8,23 @@ import {
   Type,
   Square,
   Circle,
+  Paintbrush,
+  Eraser,
   Sparkles,
   Undo2,
   Redo2,
 } from 'lucide-react'
 import { useEditorStore, type ToolId } from '@/store/useEditorStore'
 import { cn } from '@/lib/utils/cn'
+import { BrushPanel } from '@/components/editor/BrushPanel'
+import { TextToolMenu } from '@/components/editor/TextToolMenu'
 
 const TOOLS: { id: ToolId; icon: typeof MousePointer2; label: string; key: string }[] = [
   { id: 'select', icon: MousePointer2, label: 'Move', key: 'V' },
   { id: 'hand', icon: Hand, label: 'Hand', key: 'H' },
   { id: 'frame', icon: Frame, label: 'Frame / Page', key: 'F' },
+  { id: 'brush', icon: Paintbrush, label: 'Brush', key: 'B' },
+  { id: 'eraser', icon: Eraser, label: 'Eraser', key: 'E' },
   { id: 'text', icon: Type, label: 'Text', key: 'T' },
   { id: 'rect', icon: Square, label: 'Rectangle', key: 'R' },
   { id: 'ellipse', icon: Circle, label: 'Ellipse', key: 'O' },
@@ -27,6 +33,9 @@ const TOOLS: { id: ToolId; icon: typeof MousePointer2; label: string; key: strin
 export function TopToolbar() {
   const activeTool = useEditorStore((s) => s.activeTool)
   const setActiveTool = useEditorStore((s) => s.setActiveTool)
+  const setBrushPanelOpen = useEditorStore((s) => s.setBrushPanelOpen)
+  const toggleBrushPanel = useEditorStore((s) => s.toggleBrushPanel)
+  const [textMenuOpen, setTextMenuOpen] = useState(false)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.undoStack.length > 0)
@@ -34,11 +43,27 @@ export function TopToolbar() {
   const setRightTab = useEditorStore((s) => s.setRightTab)
 
   return (
+    <>
     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-[#1B1B1B]/95 backdrop-blur-xl rounded-xl shadow-2xl border border-[#2E2E2E] px-1.5 py-1.5">
-      {TOOLS.map((t) => (
+      {TOOLS.map((t) => {
+        const isPaint = t.id === 'brush' || t.id === 'eraser'
+        return (
         <button
           key={t.id}
-          onClick={() => setActiveTool(t.id)}
+          onClick={() => {
+            if (isPaint) {
+              // Clicking the already-active paint tool toggles its panel;
+              // switching to it (re)opens the panel.
+              if (activeTool === t.id) toggleBrushPanel()
+              else { setActiveTool(t.id); setBrushPanelOpen(true) }
+            } else if (t.id === 'text') {
+              // The Text tool opens a dropdown of text + speech-bubble formats.
+              setActiveTool('text')
+              setTextMenuOpen(activeTool === 'text' ? !textMenuOpen : true)
+            } else {
+              setActiveTool(t.id)
+            }
+          }}
           title={`${t.label}  ·  ${t.key}`}
           aria-label={t.label}
           aria-pressed={activeTool === t.id}
@@ -49,7 +74,8 @@ export function TopToolbar() {
         >
           <t.icon size={18} />
         </button>
-      ))}
+        )
+      })}
 
       <div className="w-px h-6 bg-[#2E2E2E] mx-1" />
 
@@ -84,5 +110,8 @@ export function TopToolbar() {
         <span className="text-xs font-semibold">AI</span>
       </button>
     </div>
+    <BrushPanel />
+    {textMenuOpen && <TextToolMenu onPick={() => setTextMenuOpen(false)} />}
+    </>
   )
 }

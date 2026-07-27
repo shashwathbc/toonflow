@@ -7,6 +7,8 @@ const TOOL_KEYS: Record<string, ToolId> = {
   v: 'select',
   h: 'hand',
   f: 'frame',
+  b: 'brush',
+  e: 'eraser',
   t: 'text',
   r: 'rect',
   o: 'ellipse',
@@ -78,7 +80,11 @@ export function useEditorShortcuts() {
       }
       // tools
       const tool = TOOL_KEYS[e.key.toLowerCase()]
-      if (tool) s.setActiveTool(tool)
+      if (tool) {
+        s.setActiveTool(tool)
+        // Selecting a paint tool via keyboard also reopens its settings panel.
+        if (tool === 'brush' || tool === 'eraser') s.setBrushPanelOpen(true)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
