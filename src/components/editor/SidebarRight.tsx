@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   SlidersHorizontal,
@@ -21,6 +21,9 @@ import {
   ScanText,
   Palette,
   Loader2,
+  Lock,
+  CheckCircle2,
+  ArrowRight,
 } from 'lucide-react'
 import {
   useEditorStore,
@@ -32,6 +35,7 @@ import {
 } from '@/store/useEditorStore'
 import { exportPagePng, exportProjectJson } from '@/lib/editor/exportProject'
 import { regeneratePanelArt, pageHasArt } from '@/lib/editor/panelArt'
+import { pageGating, effectiveStatus, PAGE_STATUS_META } from '@/lib/editor/pageWorkflow'
 import { cn } from '@/lib/utils/cn'
 
 const TABS: { id: RightTab; icon: typeof SlidersHorizontal; label: string }[] = [
@@ -176,10 +180,11 @@ function ColorField({
 
 // ---------------------------------------------------------------------------
 /**
- * Per-page AI art editing. Shown for any agent-built webtoon panel (a page that
- * carries an `artPrompt`). Edit the prompt and regenerate JUST this panel's
- * background art — it's swapped in behind the bubbles, so the dialogue and any
- * manual edits on top are left untouched.
+ * Per-page AI art + gated page-by-page workflow. Shown for any agent-built
+ * webtoon panel (a page that carries an `artPrompt`). Edit the prompt and
+ * generate JUST this panel's background art (swapped in behind the bubbles, so
+ * dialogue and manual edits stay on top), then Approve the page — which locks it
+ * in and unlocks the next page in reading order.
  */
 function PanelArtSection({ page }: { page: Page }) {
   // The parent keys this component by page id, so it remounts (and re-seeds the
@@ -189,7 +194,18 @@ function PanelArtSection({ page }: { page: Page }) {
   const [prompt, setPrompt] = useState(page.artPrompt ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const pages = useEditorStore((s) => s.pages)
+  const order = useEditorStore((s) => s.timelineOrder)
+  const setPageStatus = useEditorStore((s) => s.setPageStatus)
+  const selectPage = useEditorStore((s) => s.selectPage)
+  const fitPage = useEditorStore((s) => s.fitPage)
+
+  const gate = useMemo(() => pageGating(pages, order).info.get(pageId), [pages, order, pageId])
+  const status = gate?.status ?? effectiveStatus(page)
+  const locked = gate?.locked ?? false
   const hasArt = pageHasArt(page)
+  const meta = PAGE_STATUS_META[status]
 
   const run = async () => {
     const p = prompt.trim()
@@ -197,20 +213,60 @@ function PanelArtSection({ page }: { page: Page }) {
       setError('Describe the panel art first.')
       return
     }
+    const wasCompleted = status === 'completed'
     setBusy(true)
     setError(null)
+    setPageStatus(pageId, 'generating')
     const res = await regeneratePanelArt(pageId, p)
     setBusy(false)
     if (res.ok) {
+      // Keep an already-approved page approved after a tweak; otherwise it now
+      // has art and is waiting for the creator to approve it.
+      setPageStatus(pageId, wasCompleted ? 'completed' : 'painted')
       toast.success('Panel art updated')
     } else {
+      setPageStatus(pageId, wasCompleted ? 'completed' : 'ready')
       setError(res.error)
-      toast.error(`Couldn't regenerate: ${res.error}`)
+      toast.error(`Couldn't generate: ${res.error}`)
     }
+  }
+
+  const approve = () => {
+    setPageStatus(pageId, 'completed')
+    // Recompute after the status change; currentId is now the next unapproved page.
+    const s = useEditorStore.getState()
+    const next = pageGating(s.pages, s.timelineOrder).currentId
+    if (next && next !== pageId) {
+      selectPage(next)
+      fitPage(next)
+      toast.success('Page approved — next page unlocked')
+    } else {
+      toast.success('Chapter complete — every page approved 🎉')
+    }
+  }
+
+  // A later page can't be worked until the earlier ones are approved.
+  if (locked) {
+    return (
+      <Section title="AI art">
+        <div className="flex items-center gap-2 rounded-md border border-[#2E2E2E] bg-[#1E1E1E] p-2.5">
+          <Lock size={14} className="text-white/40 shrink-0" aria-hidden="true" />
+          <p className="text-[11px] text-white/50 leading-snug">Approve the earlier pages first to unlock this one.</p>
+        </div>
+      </Section>
+    )
   }
 
   return (
     <Section title="AI art">
+      <div className="flex items-center justify-between">
+        <span className={cn('inline-flex items-center gap-1.5 text-[10px] font-semibold', meta.text)}>
+          <span className="w-2 h-2 rounded-full" style={{ background: meta.dot }} aria-hidden="true" />
+          {meta.label}
+        </span>
+        {gate && <span className="text-[10px] font-mono text-white/35">Page {gate.index + 1}</span>}
+      </div>
+
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -229,22 +285,44 @@ function PanelArtSection({ page }: { page: Page }) {
         {busy ? (
           <>
             <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-            Painting… (~1 min)
+            Generating… (~1 min)
           </>
         ) : (
           <>
             <Wand2 size={13} aria-hidden="true" />
-            {hasArt ? 'Regenerate this panel' : 'Paint this panel'}
+            {hasArt ? 'Regenerate this page' : 'Generate this page'}
           </>
         )}
       </button>
+
+      {/* Approve → lock this page in and unlock the next. Only offered once the
+          page has art and hasn't been approved yet. */}
+      {hasArt && status !== 'completed' && (
+        <button
+          type="button"
+          onClick={approve}
+          disabled={busy}
+          className="w-full py-2 rounded-md bg-[#22C55E] text-black text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E] flex items-center justify-center gap-1.5"
+        >
+          <CheckCircle2 size={13} aria-hidden="true" />
+          Approve page
+          <ArrowRight size={13} aria-hidden="true" />
+        </button>
+      )}
+      {status === 'completed' && (
+        <p className="flex items-center gap-1.5 text-[10px] text-[#22C55E] leading-snug">
+          <CheckCircle2 size={12} aria-hidden="true" />
+          Approved — you can still edit or regenerate anytime.
+        </p>
+      )}
+
       {error && (
         <p className="text-[10px] text-danger leading-snug" role="alert">
           {error}
         </p>
       )}
       <p className="text-[10px] text-white/40 leading-snug">
-        Edit the description, then regenerate. Your speech bubbles and edits stay on top.
+        Edit the description, then generate. Your speech bubbles and edits stay on top.
       </p>
     </Section>
   )

@@ -99,9 +99,27 @@ function BubbleNode({
 
 // ---------------------------------------------------------------------------
 // Image node — loads its bitmap through use-image so Konva can paint it.
+//
+// Remote (Storage) images are requested with crossOrigin="anonymous" so the
+// canvas stays untainted and pages can be exported. If that request is blocked —
+// most often because the Storage bucket has no CORS config, which the browser
+// fails *silently* (no error, no onload) — the image would never paint and the
+// panel would show only the gray #2A2A2A placeholder below. So on a failed
+// anonymous load we retry the same URL WITHOUT crossOrigin: the art then at
+// least DISPLAYS (that page just can't be exported until CORS is configured —
+// see cors.json / the bucket CORS setup). data: URLs never need crossOrigin.
 // ---------------------------------------------------------------------------
+function useResilientImage(src: string | undefined): HTMLImageElement | undefined {
+  const isData = !!src?.startsWith('data:')
+  const [anon, anonStatus] = useImage(src ?? '', isData ? undefined : 'anonymous')
+  // Only fire the fallback for a remote URL whose anonymous load actually failed
+  // (empty url is a no-op in use-image, so the hook stays cheap while idle).
+  const [plain] = useImage(anonStatus === 'failed' && !isData ? (src ?? '') : '')
+  return anon ?? plain
+}
+
 function ImageNode({ el, common }: { el: ImageElement; common: Record<string, unknown> }) {
-  const [img] = useImage(el.src, el.src?.startsWith('data:') ? undefined : 'anonymous')
+  const img = useResilientImage(el.src)
   return (
     <Rect
       {...common}
@@ -881,6 +899,11 @@ export function Workspace() {
               const radius: number | number[] = inColumn
                 ? [hasAbove ? 0 : 2, hasAbove ? 0 : 2, hasBelow ? 0 : 2, hasBelow ? 0 : 2]
                 : 2
+              // Bleed the fill ~1 device-px into the page below so the two rects
+              // overlap at their shared edge. Without it, anti-aliasing renders
+              // each edge independently and the dark stage shows through as a
+              // hairline seam — so a merged column reads as one continuous page.
+              const seamBleed = hasBelow ? 1 / viewport.scale : 0
               return (
                 <Group
                   key={page.id}
@@ -899,7 +922,7 @@ export function Workspace() {
                   {!hasAbove && (
                     <Text text={page.name} x={0} y={-26 / viewport.scale} fontSize={13 / viewport.scale} fill={selPage ? SELECT : '#8B8B8B'} fontFamily="Inter" listening={false} />
                   )}
-                  <Rect name="artboard" id={page.id} x={0} y={0} width={page.width} height={page.height} fill={page.backgroundColor} cornerRadius={radius} shadowColor="black" shadowBlur={inColumn ? 0 : 24} shadowOpacity={inColumn ? 0 : 0.55} shadowOffset={{ x: 0, y: inColumn ? 0 : 12 }} stroke={selPage ? SELECT : undefined} strokeWidth={selPage ? 1.5 / viewport.scale : 0} />
+                  <Rect name="artboard" id={page.id} x={0} y={0} width={page.width} height={page.height + seamBleed} fill={page.backgroundColor} cornerRadius={radius} shadowColor="black" shadowBlur={inColumn ? 0 : 24} shadowOpacity={inColumn ? 0 : 0.55} shadowOffset={{ x: 0, y: inColumn ? 0 : 12 }} stroke={selPage ? SELECT : undefined} strokeWidth={selPage ? 1.5 / viewport.scale : 0} />
                   <Group clipX={0} clipY={0} clipWidth={page.width} clipHeight={page.height}>
                     {page.elements.map((el) => renderElement(page, el))}
                   </Group>

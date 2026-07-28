@@ -145,9 +145,27 @@ Return ONLY the image prompt text.`,
           : `${prompt}${STYLE_SUFFIX}`
 
       const seed = Math.floor(Math.random() * 1_000_000)
+
+      // Optional Pollinations auth. The keyless/anonymous tier is throttled to
+      // ~1 image request every 15s, which a 20-panel chapter run trips
+      // constantly (→ blank panels). Registering a free token at
+      // https://auth.pollinations.ai lifts the account to the Seed tier
+      // (1 req/5s) or higher; set POLLINATIONS_TOKEN (server env) to use it.
+      // POLLINATIONS_REFERRER identifies the app for referrer-based tiering.
+      const pollToken = process.env.POLLINATIONS_TOKEN
+      const pollReferrer = process.env.POLLINATIONS_REFERRER
+      const params = new URLSearchParams({
+        width: String(width),
+        height: String(height),
+        model: 'flux',
+        nologo: 'true',
+        seed: String(seed),
+      })
+      if (pollReferrer) params.set('referrer', pollReferrer)
       const url =
-        `https://image.pollinations.ai/prompt/${encodeURIComponent(styledPrompt)}` +
-        `?width=${width}&height=${height}&model=flux&nologo=true&seed=${seed}`
+        `https://image.pollinations.ai/prompt/${encodeURIComponent(styledPrompt)}?${params.toString()}`
+      const headers: Record<string, string> = { Accept: 'image/*' }
+      if (pollToken) headers.Authorization = `Bearer ${pollToken}`
 
       // Cap the wait so the request can't hang forever if the service stalls.
       // Long unique prompts routinely take 45–60s, so allow up to 80s (still
@@ -157,16 +175,25 @@ Return ONLY the image prompt text.`,
       try {
         const response = await fetch(url, {
           signal: controller.signal,
-          headers: { Accept: 'image/*' },
+          headers,
         })
 
         if (!response.ok) {
           console.error('[/api/ai/generate-image] Pollinations error:', response.status)
           if (response.status === 429) {
-            return NextResponse.json(
-              { error: 'Too many image requests right now. Please wait a moment and try again.' },
+            // Pass Pollinations' Retry-After through so the client can back off
+            // for exactly the window it asks for instead of guessing.
+            const retryAfter = Number(response.headers.get('retry-after'))
+            const retryAfterMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined
+            const res = NextResponse.json(
+              {
+                error: 'Too many image requests right now. Please wait a moment and try again.',
+                retryAfterMs,
+              },
               { status: 429 }
             )
+            if (retryAfterMs) res.headers.set('Retry-After', String(retryAfter))
+            return res
           }
           return NextResponse.json(
             { error: 'AI image generation is busy right now. Please try again in a moment.' },

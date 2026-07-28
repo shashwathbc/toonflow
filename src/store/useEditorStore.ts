@@ -97,6 +97,18 @@ export type EditorElement =
   | PaintElement
   | BubbleElement
 
+/**
+ * Page-by-page workflow status for an agent-built panel. Drives the gated
+ * "generate → review → approve → unlock next" flow (see lib/editor/pageWorkflow):
+ *  - ready      → planned, no art yet (or awaiting first generation)
+ *  - generating → an art request is in flight
+ *  - painted    → has art, awaiting the creator's approval
+ *  - completed  → approved & locked in; the next page unlocks
+ * "Locked" (a later page you can't work yet) is DERIVED from order + which
+ * earlier pages are completed — it is not stored here.
+ */
+export type PageStatus = 'ready' | 'generating' | 'painted' | 'completed'
+
 export interface Page {
   id: string
   name: string
@@ -116,6 +128,12 @@ export interface Page {
    * scratch. Only set on pages the agent workflow built.
    */
   artPrompt?: string
+  /**
+   * Page-by-page workflow status. Only set on agent-built pages; absent on
+   * hand-made pages and on projects created before the gated workflow existed
+   * (effectiveStatus() in pageWorkflow.ts derives a sensible value for those).
+   */
+  status?: PageStatus
 }
 
 export interface Viewport {
@@ -257,6 +275,8 @@ interface EditorState {
   activePageId: () => string | null
   addPage: (data?: Partial<Page>, type?: PageType) => string
   updatePage: (id: string, data: Partial<Page>, commit?: boolean) => void
+  /** Set an agent-built page's workflow status (no history — it's metadata). */
+  setPageStatus: (id: string, status: PageStatus) => void
   removePage: (id: string) => void
   duplicatePage: (id: string) => void
   reorderPages: (order: string[]) => void
@@ -633,6 +653,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (commit) get().pushHistory()
     set((s) => ({ pages: s.pages.map((p) => (p.id === id ? { ...p, ...data } : p)) }))
   },
+
+  setPageStatus: (id, status) =>
+    set((s) => ({ pages: s.pages.map((p) => (p.id === id ? { ...p, status } : p)) })),
 
   removePage: (id) => {
     get().pushHistory()

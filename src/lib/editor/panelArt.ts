@@ -47,7 +47,7 @@ export async function generatePanelImage(
   prompt: string,
   isCancelled: () => boolean = () => false,
 ): Promise<PanelImageResult> {
-  const MAX_ATTEMPTS = 3
+  const MAX_ATTEMPTS = 4
   let error = 'the image service returned no image'
   let status: number | undefined
   let rateLimited = false
@@ -65,7 +65,7 @@ export async function generatePanelImage(
         signal: ctrl.signal,
       })
       if (isCancelled()) return { ok: false, error: 'cancelled', rateLimited }
-      const idata = (await ires.json()) as { imageBase64?: string; imageMime?: string; error?: string }
+      const idata = (await ires.json()) as { imageBase64?: string; imageMime?: string; error?: string; retryAfterMs?: number }
       if (ires.ok && idata.imageBase64) {
         return { ok: true, base64: idata.imageBase64, mime: idata.imageMime ?? 'image/jpeg' }
       }
@@ -74,7 +74,11 @@ export async function generatePanelImage(
       if (ires.status === 429) {
         rateLimited = true
         if (attempt < MAX_ATTEMPTS - 1) {
-          await sleepCancellable(3000 * (attempt + 1), isCancelled)
+          // The keyless Pollinations tier allows only ~1 request/15s, so a short
+          // backoff just 429s again. Wait the server-provided Retry-After if we
+          // got one, else at least the 15s window (escalating a little each try).
+          const serverWait = typeof idata.retryAfterMs === 'number' && idata.retryAfterMs > 0 ? idata.retryAfterMs : 0
+          await sleepCancellable(Math.max(serverWait, 15_000 + attempt * 5_000), isCancelled)
           continue
         }
         return { ok: false, status, error, rateLimited }

@@ -13,11 +13,13 @@ export interface StoryPanel { scene: string; palette?: string; bubbles: StoryBub
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 const TARGET_PANELS = 20
-// Paint 2 panels at a time. Each generation takes ~45–60s, so serial (1) meant
-// ~15+ min for a chapter; 2-wide roughly halves wall-clock time while staying
-// gentle enough on the keyless upstream (429s are backed-off and retried, not
-// dropped — see generatePanelImage). Small stagger between request starts.
-const ART_CONCURRENCY = 2
+// Paint ONE panel at a time. Pollinations' keyless/anonymous tier allows only
+// ~1 image request every 15s, so firing 2 concurrently (or even 1.2s apart)
+// guarantees a 429 on the second → blank panels. Each generation of a long,
+// unique Color-Bible prompt takes ~45–60s, so serial requests are naturally
+// spaced well past the 15s window → no 429 storms. Set POLLINATIONS_TOKEN
+// (server env) for a higher tier if you want to raise this back up.
+const ART_CONCURRENCY = 1
 const START_STAGGER_MS = 1200
 
 async function pool<T>(items: T[], n: number, fn: (item: T, i: number) => Promise<void>) {
@@ -137,8 +139,10 @@ export function useAgentWorkflow() {
         const palette = panel.palette ? `. Color: ${panel.palette}` : ''
         const artPrompt = stylePrefix + characterPrefix + panel.scene + palette
         // Stash the prompt on the page so a blank panel can be re-painted later
-        // WITHOUT re-running the storyboard from scratch (see paintCanvas).
-        const pageId = store.addPage({ artPrompt }, 'webtoon')
+        // WITHOUT re-running the storyboard from scratch (see paintCanvas). Each
+        // page starts 'ready' so the page-by-page gate makes only the first one
+        // workable and unlocks the rest as they're approved.
+        const pageId = store.addPage({ artPrompt, status: 'ready' }, 'webtoon')
         const page = useEditorStore.getState().pages.find((p) => p.id === pageId)
         if (!page) continue
         const n = panel.bubbles.length || 1
@@ -188,6 +192,9 @@ export function useAgentWorkflow() {
         // Stagger request starts a little so the two workers don't fire together.
         if (i > 0) await sleepCancellable(START_STAGGER_MS, () => cancelRef.current)
         if (cancelRef.current) return
+        // Reflect batch progress on the page itself so the Page Overview shows
+        // it painting live and marks it done (unlocking the next in the gate).
+        useEditorStore.getState().setPageStatus(pageId, 'generating')
         // generatePanelImage handles retry + 429 backoff internally.
         const res = await generatePanelImage(prompt, () => cancelRef.current)
         if (cancelRef.current) return
@@ -195,17 +202,24 @@ export function useAgentWorkflow() {
         if (res.ok) {
           try {
             const url = await uploadCanvasImage(`data:${res.mime};base64,${res.base64}`, `panel-${pageId}`)
-            if (placePanelArt(pageId, url)) painted += 1
-            else failed += 1
+            if (placePanelArt(pageId, url)) {
+              painted += 1
+              useEditorStore.getState().setPageStatus(pageId, 'completed')
+            } else {
+              failed += 1
+              useEditorStore.getState().setPageStatus(pageId, 'ready')
+            }
           } catch (e) {
             if (cancelRef.current) return
             if (!firstFail) firstFail = e instanceof Error ? `upload failed — ${e.message}` : 'upload failed'
             failed += 1
+            useEditorStore.getState().setPageStatus(pageId, 'ready')
           }
         } else {
           if (res.rateLimited) rateLimited = true
           if (!firstFail) firstFail = res.error
           failed += 1
+          useEditorStore.getState().setPageStatus(pageId, 'ready')
         }
         setProgress(`Painting panels… ${painted + failed}/${built.length} · ${painted} done`)
       })

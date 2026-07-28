@@ -36,7 +36,15 @@ function PagePreview({ page }: { page: Page }) {
         if (el.type === 'text')
           return <div key={el.id} style={{ ...style, background: el.fill, borderRadius: 1, height: '4%' }} />
         if (el.type === 'image')
-          return <div key={el.id} style={{ ...style, background: '#3a3a3a' }} />
+          // Show the real bitmap (AI panel art, uploads) — a plain <img> displays
+          // regardless of Storage CORS, unlike the crossOrigin canvas. Falls back
+          // to a gray box only while there's no src.
+          return el.src ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={el.id} src={el.src} alt="" draggable={false} style={{ ...style, objectFit: 'cover' }} />
+          ) : (
+            <div key={el.id} style={{ ...style, background: '#3a3a3a' }} />
+          )
         if (el.type === 'paint') return null
         if (el.type === 'bubble')
           return <div key={el.id} style={{ ...style, background: el.fill, borderRadius: 6 }} />

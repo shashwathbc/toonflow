@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import {
   FileStack,
   Layers,
@@ -24,6 +24,7 @@ import {
   ImagePlus,
   MessageSquare,
   Loader2,
+  Check,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -39,7 +40,8 @@ import { ASSET_LIBRARY, svgToDataUri, type AssetItem } from '@/lib/editor/assetL
 import { useCharacters } from '@/hooks/useCharacters'
 import { deleteCharacter } from '@/lib/firebase/firestore'
 import { CharacterDialog } from '@/components/editor/CharacterDialog'
-import { useAgentWorkflow } from '@/components/editor/useAgentWorkflow'
+import { useAgentWorkflow, type WorkflowState } from '@/components/editor/useAgentWorkflow'
+import { pageGating, PAGE_STATUS_META } from '@/lib/editor/pageWorkflow'
 import { cn } from '@/lib/utils/cn'
 import type { Character } from '@/types'
 
@@ -117,12 +119,21 @@ function PagesPanel() {
   const order = useEditorStore((s) => s.timelineOrder)
   const selectedPageId = useEditorStore((s) => s.selectedPageId)
   const selectPage = useEditorStore((s) => s.selectPage)
+  const fitPage = useEditorStore((s) => s.fitPage)
   const addPage = useEditorStore((s) => s.addPage)
   const duplicatePage = useEditorStore((s) => s.duplicatePage)
   const removePage = useEditorStore((s) => s.removePage)
   const [menu, setMenu] = useState(false)
 
   const ordered = order.map((id) => pages.find((p) => p.id === id)).filter(Boolean) as typeof pages
+  // Page-by-page workflow gate: which agent-built pages are done / current / locked.
+  const gating = useMemo(() => pageGating(pages, order), [pages, order])
+
+  // Clicking a page "opens" it — select it and scroll the canvas to it.
+  const openPage = (id: string) => {
+    selectPage(id)
+    fitPage(id)
+  }
 
   return (
     <>
@@ -158,44 +169,92 @@ function PagesPanel() {
         </div>
       </PanelHeader>
 
+      {/* Chapter progress — only when the agent workflow has built pages. */}
+      {gating.total > 0 && (
+        <div className="px-3 pt-2.5 pb-2 border-b border-[#242424] shrink-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-semibold text-white/50 uppercase tracking-widest">Chapter</span>
+            <span className="text-[10px] font-mono text-white/45">{gating.completed}/{gating.total} approved</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-[#242424] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#4C9AFF] to-[#22C55E] transition-all"
+              style={{ width: `${gating.total ? (gating.completed / gating.total) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
         {ordered.length === 0 && <p className="text-xs text-white/40 p-3">No pages yet. Press + to add one.</p>}
-        {ordered.map((page, i) => (
-          <div
-            key={page.id}
-            onClick={() => selectPage(page.id)}
-            className={cn(
-              'group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors',
-              selectedPageId === page.id ? 'bg-[#4C9AFF]/15 ring-1 ring-[#4C9AFF]/40' : 'hover:bg-white/5',
-            )}
-          >
-            <span className="text-[10px] font-mono text-white/30 w-4 text-center">{i + 1}</span>
+        {ordered.map((page, i) => {
+          const gate = gating.info.get(page.id)
+          const meta = gate ? PAGE_STATUS_META[gate.status] : null
+          // The page's art bitmap (if any) so the swatch previews it — a CSS
+          // background image displays regardless of Storage CORS.
+          const artSrc = page.elements.find(
+            (e): e is Extract<EditorElement, { type: 'image' }> => e.type === 'image' && !!e.src,
+          )?.src
+          return (
             <div
-              className="w-6 h-8 rounded-sm border border-[#333] shrink-0"
-              style={{ background: page.backgroundColor }}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-white truncate">{page.name}</div>
-              <div className="text-[10px] text-white/35 capitalize">{page.type}</div>
+              key={page.id}
+              onClick={() => { if (!gate?.locked) openPage(page.id) }}
+              aria-disabled={gate?.locked || undefined}
+              className={cn(
+                'group flex items-center gap-2 px-2 py-2 rounded-lg transition-colors',
+                gate?.locked ? 'cursor-not-allowed opacity-45' : 'cursor-pointer',
+                selectedPageId === page.id
+                  ? 'bg-[#4C9AFF]/15 ring-1 ring-[#4C9AFF]/40'
+                  : gate?.isCurrent
+                    ? 'ring-1 ring-[#A855F7]/40 bg-[#A855F7]/5 hover:bg-[#A855F7]/10'
+                    : !gate?.locked && 'hover:bg-white/5',
+              )}
+            >
+              <span className="text-[10px] font-mono text-white/30 w-4 text-center">{i + 1}</span>
+              <div className="relative shrink-0">
+                <div
+                  className="w-6 h-8 rounded-sm border border-[#333] bg-cover bg-center"
+                  style={artSrc ? { backgroundImage: `url("${artSrc}")` } : { background: page.backgroundColor }}
+                />
+                {meta && (
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-[#161616]"
+                    style={{ background: meta.dot }}
+                    title={meta.label}
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-white truncate">{page.name}</div>
+                {meta ? (
+                  <div className={cn('text-[10px] font-medium flex items-center gap-1', meta.text)}>
+                    {gate?.locked && <Lock size={9} aria-hidden="true" />}
+                    {gate?.locked ? 'Locked' : meta.label}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-white/35 capitalize">{page.type}</div>
+                )}
+              </div>
+              <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => { e.stopPropagation(); duplicatePage(page.id) }}
+                  aria-label="Duplicate page"
+                  className="w-6 h-6 flex items-center justify-center rounded text-white/50 hover:text-white hover:bg-white/10"
+                >
+                  <Copy size={12} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); removePage(page.id) }}
+                  aria-label="Delete page"
+                  className="w-6 h-6 flex items-center justify-center rounded text-white/50 hover:text-danger hover:bg-white/10"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
-            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={(e) => { e.stopPropagation(); duplicatePage(page.id) }}
-                aria-label="Duplicate page"
-                className="w-6 h-6 flex items-center justify-center rounded text-white/50 hover:text-white hover:bg-white/10"
-              >
-                <Copy size={12} />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); removePage(page.id) }}
-                aria-label="Delete page"
-                className="w-6 h-6 flex items-center justify-center rounded text-white/50 hover:text-danger hover:bg-white/10"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </>
   )
@@ -472,8 +531,62 @@ function CharactersPanel() {
   )
 }
 
+// The spec's staged pipeline, surfaced as a stepper so the AI Agents panel reads
+// as Brief → Plan → Pages → Paint instead of a set of unlabelled states.
+const WORKFLOW_STAGES = ['Brief', 'Plan', 'Pages', 'Paint'] as const
+
+function stageIndex(s: WorkflowState): number {
+  switch (s) {
+    case 'idle':
+    case 'error':
+    case 'generating_script':
+      return 0 // Step 1 · Chapter Brief
+    case 'review_script':
+    case 'generating_template':
+      return 1 // Step 2 · Story Plan
+    case 'review_template':
+      return 2 // Step 3 · Page Overview
+    case 'painting':
+    case 'done':
+      return 3 // Step 4 · Paint
+  }
+}
+
+function WorkflowStepper({ stage }: { stage: number }) {
+  return (
+    <div className="mb-3 flex items-center gap-1" aria-label={`Step ${stage + 1} of ${WORKFLOW_STAGES.length}: ${WORKFLOW_STAGES[stage]}`}>
+      {WORKFLOW_STAGES.map((label, i) => {
+        const active = i === stage
+        const done = i < stage
+        return (
+          <React.Fragment key={label}>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span
+                className={cn(
+                  'w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 transition-colors',
+                  done ? 'bg-[#22C55E] text-black' : active ? 'bg-[#A855F7] text-white' : 'bg-[#2A2A2A] text-white/40',
+                )}
+                aria-hidden="true"
+              >
+                {done ? <Check size={9} strokeWidth={3} /> : i + 1}
+              </span>
+              <span className={cn('text-[10px] font-medium truncate', active ? 'text-white' : done ? 'text-white/55' : 'text-white/35')}>
+                {label}
+              </span>
+            </div>
+            {i < WORKFLOW_STAGES.length - 1 && (
+              <div className={cn('flex-1 h-px transition-colors', done ? 'bg-[#22C55E]/50' : 'bg-[#2A2A2A]')} aria-hidden="true" />
+            )}
+          </React.Fragment>
+        )
+      })}
+    </div>
+  )
+}
+
 function AgentsPanel() {
   const [prompt, setPrompt] = useState('')
+  const setLeftTab = useEditorStore((s) => s.setLeftTab)
   const {
     workflowState,
     storyboardData,
@@ -516,34 +629,42 @@ function AgentsPanel() {
         ))}
       </div>
       <div className="p-3 border-t border-[#262626]">
+        <WorkflowStepper stage={stageIndex(workflowState)} />
+
         {workflowState === 'idle' || workflowState === 'error' || workflowState === 'generating_script' ? (
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.stopPropagation()}
-            disabled={running}
-            placeholder="Paste your script or scene here. The team storyboards it, lays out the dialogue as speech bubbles, then paints each panel into one long vertical webtoon."
-            className="w-full h-24 resize-none rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] focus:border-[#4C9AFF] outline-none p-2.5 text-xs text-white placeholder:text-white/30 disabled:opacity-60"
-          />
+          <>
+            <label htmlFor="chapter-brief" className="block mb-1.5 text-[10px] font-semibold text-white/50 uppercase tracking-widest">
+              Chapter Brief
+            </label>
+            <textarea
+              id="chapter-brief"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              disabled={running}
+              placeholder="Describe the chapter, or paste your script. e.g. “A lonely prince discovers an ancient dragon sleeping beneath his kingdom.” The team plans the story, lays out each page's panels and dialogue, then paints them one page at a time."
+              className="w-full h-24 resize-none rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] focus:border-[#4C9AFF] outline-none p-2.5 text-xs text-white placeholder:text-white/30 disabled:opacity-60"
+            />
+          </>
         ) : null}
 
         {workflowState === 'review_script' && storyboardData && (
           <div className="w-full bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg p-2.5 text-xs text-white/80">
-            <p className="font-semibold text-white mb-1">Storyboard Planned!</p>
-            <p><strong>Panels:</strong> {storyboardData.panels.length}</p>
+            <p className="font-semibold text-white mb-1">Story plan ready</p>
+            <p>The Story Director broke the chapter into <strong>{storyboardData.panels.length} pages</strong>.</p>
             <p className="mt-1 text-[10px] text-white/60"><strong>Character:</strong> {storyboardData.character}</p>
-            <p className="mt-2 text-[10px] text-[#4C9AFF]">Ready to build the layout on the canvas?</p>
+            <p className="mt-2 text-[10px] text-[#4C9AFF]">Build the page layout — panels &amp; dialogue — on the canvas?</p>
           </div>
         )}
 
         {workflowState === 'review_template' && (
           <div className="w-full bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg p-2.5 text-xs text-white/80">
-            <p className="font-semibold text-white mb-1">Layout Built!</p>
+            <p className="font-semibold text-white mb-1">Layout built — pages ready</p>
             <p className="text-[10px] text-white/60">
-              The storyboard artist has created the panels and speech bubbles on the canvas. 
-              You can adjust them now.
+              Every page now has its panels and speech bubbles laid out. The recommended way is
+              page-by-page: open each page, tweak its prompt, generate, review, then approve to
+              unlock the next — you only spend credits on pages you keep.
             </p>
-            <p className="mt-2 text-[10px] text-[#4C9AFF]">Approve to start painting the art?</p>
           </div>
         )}
 
@@ -571,10 +692,10 @@ function AgentsPanel() {
             {running ? (
               <>
                 <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-                Planning Script…
+                Planning story…
               </>
             ) : (
-              'Step 1: Plan Script'
+              'Generate Story Plan'
             )}
           </button>
         )}
@@ -593,37 +714,60 @@ function AgentsPanel() {
               onClick={approveScript}
               className="flex-1 py-2 rounded-lg bg-[#4C9AFF] text-white text-xs font-semibold hover:brightness-110 transition-all"
             >
-              Approve
+              Build page layout
             </button>
           </div>
         )}
 
         {(workflowState === 'review_template' || workflowState === 'generating_template') && (
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={reset}
-              disabled={running}
-              className="flex-1 py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-[#333] transition-all disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={approveTemplate}
-              disabled={running}
-              className="flex-1 py-2 rounded-lg bg-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
-            >
-              {running ? (
-                <>
-                  <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-                  Building…
-                </>
-              ) : (
-                'Approve'
-              )}
-            </button>
-          </div>
+          <>
+            {/* Primary path (spec's recommended flow): open the Page Overview and
+                generate → review → approve each page in turn. */}
+            {workflowState === 'review_template' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setLeftTab('pages')}
+                  className="mt-2 w-full py-2.5 rounded-lg bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
+                >
+                  <FileStack size={13} aria-hidden="true" />
+                  Review pages one-by-one
+                </button>
+                <p className="mt-1.5 text-[10px] text-white/40 text-center">
+                  Recommended — approve each page before spending on the next.
+                </p>
+              </>
+            )}
+
+            {/* Secondary "power" option: paint every page at once (uses the most
+                credits and can't be reviewed before it runs). */}
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={reset}
+                disabled={running}
+                className="flex-1 py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-[#333] transition-all disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={approveTemplate}
+                disabled={running}
+                title="Paints every page in one batch — uses the most credits"
+                className="flex-1 py-2 rounded-lg border border-[#A855F7]/40 bg-[#A855F7]/10 text-[#C084FC] text-xs font-semibold hover:bg-[#A855F7]/20 transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
+              >
+                {running ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                    Painting…
+                  </>
+                ) : (
+                  'Paint all pages'
+                )}
+              </button>
+            </div>
+          </>
         )}
 
         {(workflowState === 'painting' || workflowState === 'done') && (
