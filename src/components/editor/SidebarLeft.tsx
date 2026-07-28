@@ -472,10 +472,25 @@ function CharactersPanel() {
   )
 }
 
-// ---------------------------------------------------------------------------
 function AgentsPanel() {
   const [prompt, setPrompt] = useState('')
-  const { run, running, progress, result } = useAgentWorkflow()
+  const {
+    workflowState,
+    storyboardData,
+    progress,
+    result,
+    blankPanelCount,
+    generateScript,
+    approveScript,
+    approveTemplate,
+    paintCanvas,
+    reset,
+  } = useAgentWorkflow()
+
+  const running =
+    workflowState === 'generating_script' ||
+    workflowState === 'generating_template' ||
+    workflowState === 'painting'
 
   return (
     <>
@@ -501,40 +516,146 @@ function AgentsPanel() {
         ))}
       </div>
       <div className="p-3 border-t border-[#262626]">
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => e.stopPropagation()}
-          disabled={running}
-          placeholder="Paste your script or scene here. The team storyboards it, lays out the dialogue as speech bubbles, then paints each panel into one long vertical webtoon."
-          className="w-full h-24 resize-none rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] focus:border-[#4C9AFF] outline-none p-2.5 text-xs text-white placeholder:text-white/30 disabled:opacity-60"
-        />
+        {workflowState === 'idle' || workflowState === 'error' || workflowState === 'generating_script' ? (
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+            disabled={running}
+            placeholder="Paste your script or scene here. The team storyboards it, lays out the dialogue as speech bubbles, then paints each panel into one long vertical webtoon."
+            className="w-full h-24 resize-none rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] focus:border-[#4C9AFF] outline-none p-2.5 text-xs text-white placeholder:text-white/30 disabled:opacity-60"
+          />
+        ) : null}
+
+        {workflowState === 'review_script' && storyboardData && (
+          <div className="w-full bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg p-2.5 text-xs text-white/80">
+            <p className="font-semibold text-white mb-1">Storyboard Planned!</p>
+            <p><strong>Panels:</strong> {storyboardData.panels.length}</p>
+            <p className="mt-1 text-[10px] text-white/60"><strong>Character:</strong> {storyboardData.character}</p>
+            <p className="mt-2 text-[10px] text-[#4C9AFF]">Ready to build the layout on the canvas?</p>
+          </div>
+        )}
+
+        {workflowState === 'review_template' && (
+          <div className="w-full bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg p-2.5 text-xs text-white/80">
+            <p className="font-semibold text-white mb-1">Layout Built!</p>
+            <p className="text-[10px] text-white/60">
+              The storyboard artist has created the panels and speech bubbles on the canvas. 
+              You can adjust them now.
+            </p>
+            <p className="mt-2 text-[10px] text-[#4C9AFF]">Approve to start painting the art?</p>
+          </div>
+        )}
+
         {progress && (
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-[#4C9AFF]" role="status" aria-live="polite">
             <Loader2 size={12} className="animate-spin shrink-0" aria-hidden="true" />
             <span className="truncate">{progress}</span>
           </p>
         )}
+        
         {!running && result && (
           <p className="mt-2 text-[11px] leading-snug text-white/60 border border-[#2A2A2A] rounded-md p-2" role="status">
             {result}
           </p>
         )}
-        <button
-          type="button"
-          onClick={() => run(prompt)}
-          disabled={running}
-          className="mt-2 w-full py-2 rounded-lg bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
-        >
-          {running ? (
-            <>
-              <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-              Working…
-            </>
-          ) : (
-            'Run agent workflow'
+
+        {/* Buttons for each state */}
+        {(workflowState === 'idle' || workflowState === 'error' || workflowState === 'generating_script') && (
+          <button
+            type="button"
+            onClick={() => generateScript(prompt)}
+            disabled={running}
+            className="mt-2 w-full py-2 rounded-lg bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
+          >
+            {running ? (
+              <>
+                <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                Planning Script…
+              </>
+            ) : (
+              'Step 1: Plan Script'
+            )}
+          </button>
+        )}
+
+        {workflowState === 'review_script' && (
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={reset}
+              className="flex-1 py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-[#333] transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={approveScript}
+              className="flex-1 py-2 rounded-lg bg-[#4C9AFF] text-white text-xs font-semibold hover:brightness-110 transition-all"
+            >
+              Approve
+            </button>
+          </div>
+        )}
+
+        {(workflowState === 'review_template' || workflowState === 'generating_template') && (
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={reset}
+              disabled={running}
+              className="flex-1 py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-[#333] transition-all disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={approveTemplate}
+              disabled={running}
+              className="flex-1 py-2 rounded-lg bg-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
+            >
+              {running ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                  Building…
+                </>
+              ) : (
+                'Approve'
+              )}
+            </button>
+          </div>
+        )}
+
+        {(workflowState === 'painting' || workflowState === 'done') && (
+          <button
+            type="button"
+            onClick={reset}
+            className="mt-2 w-full py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-danger/80 transition-all flex items-center justify-center gap-1.5"
+          >
+            {workflowState === 'painting' ? (
+              <>
+                <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                Cancel Painting
+              </>
+            ) : (
+              'Start New Workflow'
+            )}
+          </button>
+        )}
+
+        {/* Continue painting the existing canvas — fills panels that came back
+            blank (timed out / failed) WITHOUT re-planning from scratch. */}
+        {(workflowState === 'idle' || workflowState === 'error' || workflowState === 'done') &&
+          blankPanelCount > 0 && (
+            <button
+              type="button"
+              onClick={paintCanvas}
+              className="mt-2 w-full py-2 rounded-lg border border-[#4C9AFF]/40 bg-[#4C9AFF]/10 text-[#7FB6FF] text-xs font-semibold hover:bg-[#4C9AFF]/20 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
+            >
+              <ImageIcon size={13} aria-hidden="true" />
+              Paint {blankPanelCount} blank panel{blankPanelCount === 1 ? '' : 's'}
+            </button>
           )}
-        </button>
       </div>
     </>
   )

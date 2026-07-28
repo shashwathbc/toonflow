@@ -25,7 +25,7 @@ const schema = z.object({
 })
 
 interface Bubble { kind: string; text: string }
-interface Panel { scene: string; bubbles: Bubble[] }
+interface Panel { scene: string; palette?: string; bubbles: Bubble[] }
 
 function asString(v: unknown, max: number): string {
   return typeof v === 'string' ? v.slice(0, max) : ''
@@ -46,9 +46,10 @@ function normalizePanels(json: unknown): Panel[] {
   const arr = Array.isArray(obj.panels) ? obj.panels : []
   const out: Panel[] = []
   for (const p of arr.slice(0, MAX_PANELS)) {
-    const panel = p && typeof p === 'object' ? (p as { scene?: unknown; bubbles?: unknown }) : {}
+    const panel = p && typeof p === 'object' ? (p as { scene?: unknown; palette?: unknown; bubbles?: unknown }) : {}
     const scene = asString(panel.scene, 600).trim()
     if (!scene) continue
+    const palette = asString(panel.palette, 100).trim()
     const bubblesArr = Array.isArray(panel.bubbles) ? panel.bubbles : []
     const bubbles: Bubble[] = []
     for (const b of bubblesArr.slice(0, 4)) {
@@ -58,13 +59,13 @@ function normalizePanels(json: unknown): Panel[] {
       const kind = typeof rb.kind === 'string' && (KINDS as readonly string[]).includes(rb.kind) ? rb.kind : 'speech'
       bubbles.push({ kind, text })
     }
-    out.push({ scene, bubbles })
+    out.push(palette ? { scene, palette, bubbles } : { scene, bubbles })
   }
   return out
 }
 
 function buildPrompt(script: string, target: number, title: string, synopsis: string): string {
-  return `You are the Story Director and Storyboard Artist for a premium Korean-style vertical-scroll webtoon (manhwa), in the vein of "Magic Emperor" or "I Am the Fated Villain".
+  return `You are the Story Director, Storyboard Artist AND Art Director for a premium Korean-style vertical-scroll webtoon (manhwa), in the vein of "Magic Emperor" or "I Am the Fated Villain".
 
 SERIES TITLE: ${title || '(untitled)'}
 SERIES PREMISE: ${synopsis || '(none provided)'}
@@ -72,16 +73,28 @@ CHAPTER BRIEF: ${script}
 
 Write a complete, engaging chapter and break it into exactly ${target} sequential panels, read top-to-bottom as one continuous vertical scroll. If the brief is short, invent a compelling chapter that fits the series premise, with a clear beginning, rising tension and a hook at the end.
 
+── CHARACTER LOCK ──
 Design ONE main character with a FIXED, specific look (hair, eyes, outfit, build). In every panel that character appears, repeat that same appearance description word-for-word so the art stays visually consistent across panels.
+
+── ART DIRECTION & COLOR BIBLE (locks the visual identity for ALL ${target} panels) ──
+Act as the Art Director and decide ONE cohesive visual identity for the whole chapter, then hold it identical across every panel — never randomly change the rendering style, saturation, lighting philosophy or color grading. Pick ONE cinematic color-grading reference (e.g. Solo Leveling, Arcane, Your Name, Demon Slayer, Blade Runner) and keep that grade throughout.
+Obey the professional 60/30/10 color balance in EVERY panel:
+• 60% DOMINANT → background, sky, environment, large surfaces
+• 30% SECONDARY → characters, foreground, key props, clothing
+• 10% ACCENT → eyes, magic, weapons, energy, fire, key story objects — the accent instantly draws the reader's eye and NEVER exceeds 10%.
+Color continuity is mandatory: if the hero's coat is blue it stays blue; if the magic is gold it stays gold; if sunset is orange it never turns purple. Shift the palette only to serve mood (night, flashback, combat, victory) while keeping the same core hues. Keep dialogue-bubble contrast high and readable; no oversaturated colors, no muddy shadows.
 
 For EACH panel provide:
 - "scene": one vivid image-generation prompt for that panel's manhwa art — the setting, the characters (with the fixed appearance), pose, expression, camera framing (wide establishing / close-up / low angle / over-the-shoulder), lighting and mood. Full-color premium manhwa webtoon panel art. Do NOT put any words, letters or captions in the image. 25–45 words.
+- "palette": this panel's colors in UNDER 16 words as "dominant <60% colour>, secondary <30% colour>, accent <10% colour>, <lighting + mood>" — obeying the 60/30/10 rule and staying inside the color bible above.
 - "bubbles": the dialogue and narration shown in that panel, as an array of { "kind", "text" } in reading order. "kind" MUST be one of: speech, thought, shout, scream, whisper, narration, electronic — pick the one matching the emotion. Keep each "text" to a line or two. A panel may have zero bubbles.
 
-Also return a top-level "character" string: the main character's FIXED appearance in ~25 words (hair colour & style, eye colour, exact outfit with colours, build, distinguishing features). This exact description is prepended to every panel's art prompt so the character looks the same throughout.
+Also return two top-level strings:
+- "character": the main character's FIXED appearance in ~25 words (hair colour & style, eye colour, exact outfit with colours, build, distinguishing features). Prepended to every panel's art prompt so the character looks the same throughout.
+- "style": the locked art direction in ~30 words — art style + the chosen cinematic color grading + the core dominant/secondary/accent hues + rendering (clean lineart, cel shading). Prepended to every panel so the whole chapter shares one consistent look and grade.
 
 Return ONLY valid minified JSON, no markdown, in exactly this shape:
-{"character":"...","panels":[{"scene":"...","bubbles":[{"kind":"narration","text":"..."}]}]}`
+{"character":"...","style":"...","panels":[{"scene":"...","palette":"...","bubbles":[{"kind":"narration","text":"..."}]}]}`
 }
 
 export async function POST(request: NextRequest) {
@@ -110,18 +123,20 @@ export async function POST(request: NextRequest) {
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [{ role: 'user', content: buildPrompt(script, target, title ?? '', synopsis ?? '') }],
     })
 
     const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
     let panels: Panel[] = []
     let character = ''
+    let style = ''
     try {
       const json = extractJson(text)
       panels = normalizePanels(json)
-      const obj = json && typeof json === 'object' ? (json as { character?: unknown }) : {}
+      const obj = json && typeof json === 'object' ? (json as { character?: unknown; style?: unknown }) : {}
       character = asString(obj.character, 300).trim()
+      style = asString(obj.style, 400).trim()
     } catch (e) {
       console.error('[/api/ai/storyboard] parse failed:', e)
       return NextResponse.json(
@@ -135,7 +150,7 @@ export async function POST(request: NextRequest) {
         { status: 422 },
       )
     }
-    return NextResponse.json({ character, panels })
+    return NextResponse.json({ character, style, panels })
   } catch (err) {
     console.error('[/api/ai/storyboard] Error:', err)
     return NextResponse.json({ error: 'Storyboard service temporarily unavailable' }, { status: 502 })

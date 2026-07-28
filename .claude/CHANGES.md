@@ -1998,3 +1998,43 @@ Batch of UX fixes requested together.
 - Fix: dataUrlToFile now DECODES data: URLs directly (atob → Uint8Array → Blob → File), no fetch(); keeps a fetch fallback only for blob: object URLs. No CSP change needed.
 - This also un-breaks paint-layer cloud persistence and canvas image drops that pass data: URLs (same code path).
 - Verified: tsc + eslint clean.
+
+## Agent workflow: Art Direction + 60/30/10 Color Bible baked into generation (2026-07-28)
+- Goal: make the one-shot "Run agent workflow" output look professionally art-directed instead of a set of unrelated AI images — without changing the UX (still one click, no new approval UI). Chosen scope: upgrade the generator, not the full staged-approval pipeline.
+- src/app/api/ai/storyboard/route.ts — buildPrompt now casts Claude as Story Director + Storyboard Artist + **Art Director**. It locks ONE cohesive visual identity for the whole chapter: pick one cinematic color-grading reference and hold it; obey the 60/30/10 color balance every panel (60% dominant/background, 30% secondary/characters, 10% accent/eyes-magic-fire that never exceeds 10%); enforce color continuity (hero's coat stays blue, gold magic stays gold, orange sunset never turns purple), shifting palette only for mood.
+- New output fields: top-level `style` (~30-word locked art direction + grade + core hues + rendering, prepended to every panel) and per-panel `palette` (<16 words: dominant/secondary/accent + lighting+mood, obeying 60/30/10). Parsed via normalizePanels (palette, ≤100 chars) + asString(obj.style, 400); returned as `{ character, style, panels }`. max_tokens 4096→8192 so the larger JSON can't truncate.
+- src/components/editor/useAgentWorkflow.ts — storyboardData now carries `style`; each panel's art prompt is assembled as `style. character. scene. Color: palette` (locked grade → locked character look → scene → per-panel 60/30/10), then MANHWA_STYLE is appended as before. So the same look/grade/palette discipline flows into every generate-image call.
+- Character identity lock (`character`) and manhwa style suffix are unchanged; this layers art-direction + color discipline on top.
+- Verified: tsc --noEmit clean.
+
+## Agent workflow: fix blank/gray panels + "Paint remaining panels" retry (2026-07-28)
+- Symptom: storyboard + template (bubbles) build fine but panels stay gray — no background art — and the only way to try again was "Start New Workflow", which clears the canvas and re-plans from scratch.
+- Root cause of the gray: the new Color-Bible prompts are long AND unique per panel, so they miss Pollinations' cache. A live A/B confirmed it — a cached short prompt returns in ~1.7s, a long unique one takes ~45s. The image route capped generation at a 55s AbortController (with maxDuration 60) and also DOUBLED the prompt (`${p}. ${p}…`, meant for tiny subjects like "bow"), lengthening the URL and slowing Flux further — so many panels were killed mid-generation → blank.
+- Fixes (src/app/api/ai/generate-image/route.ts):
+  - Skip the prompt-doubling when the incoming prompt is already long (>120 chars) — the agent's art-directed prompts don't need it; only short manual subjects do.
+  - Raised timeouts so ~45–60s generations survive: internal abort 55s→80s, maxDuration 60→90; client abort in the workflow 75s→95s (just above the server abort so its error can return).
+- New: continue/re-paint without starting over (the user's request "continue from panel 1, no need to start from scratch"):
+  - src/store/useEditorStore.ts — Page gains optional `artPrompt`; serializeProject already spreads `...p` and loadProject structuredClones, so the prompt persists across save/reload. Painted art is a Storage URL (not a data: URL) so it also survives.
+  - src/components/editor/useAgentWorkflow.ts — each built page now stores its `artPrompt`. Extracted a shared `paintBuilt(built)` painter; `approveTemplate` calls it for the fresh template; new `paintCanvas()` reads prompts back off the current canvas and paints ONLY panels that are still blank (no locked full-page image whose name ends " art") — no canvas wipe, no re-plan. Exposes `blankPanelCount` (reactive) + `paintCanvas`.
+  - src/components/editor/SidebarLeft.tsx — AgentsPanel shows a "Paint N blank panel(s)" button in idle/error/done whenever the canvas has agent-built panels still missing art. Retries/fills timed-out panels in place; count updates live and the button disappears at 0.
+- Verified: tsc --noEmit + eslint clean.
+
+## Agent workflow: speed up painting (concurrency 2 + 429 backoff) (2026-07-28)
+- Painting was serial (ART_CONCURRENCY 1) with a 3s gap per panel → ~15+ min for a 20-panel chapter at ~45–60s/panel.
+- ART_CONCURRENCY 1→2 (roughly halves wall-clock time). Inter-panel gap trimmed 3000ms→1200ms (START_STAGGER_MS), now only a small stagger so the two workers don't fire simultaneously (generation itself naturally spaces requests ~48s apart).
+- generatePanel now backs off + retries on 429 (3s, then 6s; up to 3 attempts) instead of dropping the panel — so running 2-wide doesn't blank panels when the keyless upstream throttles. Transient network/timeout errors still get one immediate retry.
+- Added sleepCancellable(ms, cancelled) helper (500ms slices) reused for both the stagger and the backoff so cancellation stays responsive.
+- Did NOT trim MANHWA_STYLE / prompt length for "cache hits": chapter prompts are unique per panel by design (Color Bible), so caching can't help and trimming would only weaken the locked look.
+- Verified: tsc --noEmit + eslint clean.
+
+## Per-page AI art edit: regenerate a single panel from an edited prompt (2026-07-28)
+- Request: after page-wise generation, let the user SELECT a panel and edit its art via an AI prompt (tool-based editing of bubbles/paint already works on top).
+- New shared module src/lib/editor/panelArt.ts — one source of truth for painting a webtoon panel, used by BOTH the batch workflow and the new per-page edit:
+  - MANHWA_STYLE, ART_NAME_SUFFIX, pageHasArt, sleepCancellable (moved here from useAgentWorkflow).
+  - generatePanelImage(prompt, isCancelled) → structured result with retry + 429 backoff (3 attempts, 3s/6s), 95s client abort.
+  - placePanelArt(pageId, url) → if the page already has an art layer, swaps that layer's src IN PLACE (keeps z-order + locked state); else adds a full-page locked image and sends it behind the bubbles. use-image reloads on src change, so the canvas updates.
+  - regeneratePanelArt(pageId, prompt) → generate → upload → placePanelArt → persist the edited prompt back onto page.artPrompt.
+- useAgentWorkflow.ts refactored to import from panelArt (removed the duplicated MANHWA_STYLE / ART_NAME_SUFFIX / pageHasArt / sleepCancellable / inline generatePanel); paintBuilt now calls generatePanelImage + placePanelArt. Behaviour unchanged (concurrency 2, stagger, cancel, counts, messaging).
+- SidebarRight.tsx — new PanelArtSection shown in Properties for any agent-built panel (page.artPrompt set), in BOTH the element-selected branch (keyed by the owning page) and the page-selected branch. Textarea prefilled with the page's artPrompt; "Regenerate this panel" (or "Paint this panel" if still blank) regenerates just that page's background, leaving bubbles/edits on top. Loading + error (role="alert") states; toast on done.
+- Bubbles and manual paint/text stay on top because art is always the locked back layer. The edited prompt persists (page.artPrompt) so re-edits and reloads keep working.
+- Verified: tsc --noEmit + eslint clean.

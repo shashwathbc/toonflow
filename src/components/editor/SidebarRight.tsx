@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import {
   SlidersHorizontal,
   Sparkles,
@@ -19,6 +20,7 @@ import {
   MessageSquareText,
   ScanText,
   Palette,
+  Loader2,
 } from 'lucide-react'
 import {
   useEditorStore,
@@ -26,8 +28,10 @@ import {
   type EditorElement,
   type TextElement,
   type ShapeElement,
+  type Page,
 } from '@/store/useEditorStore'
 import { exportPagePng, exportProjectJson } from '@/lib/editor/exportProject'
+import { regeneratePanelArt, pageHasArt } from '@/lib/editor/panelArt'
 import { cn } from '@/lib/utils/cn'
 
 const TABS: { id: RightTab; icon: typeof SlidersHorizontal; label: string }[] = [
@@ -171,6 +175,82 @@ function ColorField({
 }
 
 // ---------------------------------------------------------------------------
+/**
+ * Per-page AI art editing. Shown for any agent-built webtoon panel (a page that
+ * carries an `artPrompt`). Edit the prompt and regenerate JUST this panel's
+ * background art — it's swapped in behind the bubbles, so the dialogue and any
+ * manual edits on top are left untouched.
+ */
+function PanelArtSection({ page }: { page: Page }) {
+  // The parent keys this component by page id, so it remounts (and re-seeds the
+  // prompt from that page's artPrompt) whenever the selection moves to a
+  // different panel — no reset effect needed.
+  const pageId = page.id
+  const [prompt, setPrompt] = useState(page.artPrompt ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const hasArt = pageHasArt(page)
+
+  const run = async () => {
+    const p = prompt.trim()
+    if (p.length < 4) {
+      setError('Describe the panel art first.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const res = await regeneratePanelArt(pageId, p)
+    setBusy(false)
+    if (res.ok) {
+      toast.success('Panel art updated')
+    } else {
+      setError(res.error)
+      toast.error(`Couldn't regenerate: ${res.error}`)
+    }
+  }
+
+  return (
+    <Section title="AI art">
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={(e) => e.stopPropagation()}
+        disabled={busy}
+        rows={5}
+        placeholder="Describe this panel's art — camera, characters, setting, lighting, colours…"
+        className="w-full resize-none rounded-md bg-[#1E1E1E] border border-[#2E2E2E] focus:border-[#4C9AFF] outline-none p-2.5 text-[11px] leading-relaxed text-white placeholder:text-white/30 disabled:opacity-60"
+      />
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="w-full py-2 rounded-md bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
+      >
+        {busy ? (
+          <>
+            <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+            Painting… (~1 min)
+          </>
+        ) : (
+          <>
+            <Wand2 size={13} aria-hidden="true" />
+            {hasArt ? 'Regenerate this panel' : 'Paint this panel'}
+          </>
+        )}
+      </button>
+      {error && (
+        <p className="text-[10px] text-danger leading-snug" role="alert">
+          {error}
+        </p>
+      )}
+      <p className="text-[10px] text-white/40 leading-snug">
+        Edit the description, then regenerate. Your speech bubbles and edits stay on top.
+      </p>
+    </Section>
+  )
+}
+
+// ---------------------------------------------------------------------------
 function PropertiesTab() {
   const pages = useEditorStore((s) => s.pages)
   const selIds = useEditorStore((s) => s.selectedElementIds)
@@ -301,6 +381,10 @@ function PropertiesTab() {
             </button>
           </div>
         </Section>
+
+        {/* The panel this element sits on is an agent-built webtoon page — let the
+            user re-paint its art from an edited prompt without leaving selection. */}
+        {page.artPrompt && <PanelArtSection key={page.id} page={page} />}
       </div>
     )
   }
@@ -332,6 +416,7 @@ function PropertiesTab() {
         <Section title="Background">
           <ColorField label="Fill" value={page.backgroundColor} onChange={(v) => updatePage(page.id, { backgroundColor: v }, false)} />
         </Section>
+        {page.artPrompt && <PanelArtSection key={page.id} page={page} />}
       </div>
     )
   }

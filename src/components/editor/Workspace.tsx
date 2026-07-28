@@ -101,7 +101,7 @@ function BubbleNode({
 // Image node — loads its bitmap through use-image so Konva can paint it.
 // ---------------------------------------------------------------------------
 function ImageNode({ el, common }: { el: ImageElement; common: Record<string, unknown> }) {
-  const [img] = useImage(el.src, 'anonymous')
+  const [img] = useImage(el.src, el.src?.startsWith('data:') ? undefined : 'anonymous')
   return (
     <Rect
       {...common}

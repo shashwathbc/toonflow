@@ -109,6 +109,13 @@ export interface Page {
   isLocked: boolean
   isHidden: boolean
   elements: EditorElement[]
+  /**
+   * The agent-workflow art prompt that paints this panel's background. Stored on
+   * the page (and persisted with the project) so the user can re-paint / fill in
+   * panels that came back blank WITHOUT re-running the whole storyboard from
+   * scratch. Only set on pages the agent workflow built.
+   */
+  artPrompt?: string
 }
 
 export interface Viewport {

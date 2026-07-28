@@ -6,8 +6,10 @@ import { bodyTooLarge } from '@/lib/api/guard'
 import { aiRateLimited } from '@/lib/api/aiRateLimit'
 
 export const runtime = 'nodejs'
-// Flux generation can take 20–40s; give the route room beyond the default.
-export const maxDuration = 60
+// Flux generation of long, UNIQUE prompts (e.g. the agent workflow's per-panel
+// art-directed prompts) misses Pollinations' cache and can take 45–60s+; give
+// the route generous room so those don't get killed mid-generation.
+export const maxDuration = 90
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -131,11 +133,16 @@ Return ONLY the image prompt text.`,
       const { width, height } =
         imageType === 'cover' ? { width: 768, height: 1152 } : { width: 1280, height: 720 }
 
-      // Repeat the incoming prompt up front and mark it as the main subject, so
-      // a short subject ("bow") stays dominant over the style descriptors instead
-      // of being swamped and mis-rendered. Verified against the live Flux service:
-      // this reliably renders the actual subject for both objects and characters.
-      const styledPrompt = `${prompt}. ${prompt}, as the main subject of the image${STYLE_SUFFIX}`
+      // For a SHORT subject ("bow"), repeat it up front and mark it as the main
+      // subject so it stays dominant over the style descriptors instead of being
+      // swamped and mis-rendered (verified against the live Flux service). But an
+      // already-long, detailed prompt (the agent workflow's art-directed panel
+      // prompts) needs NO doubling — repeating it only lengthens the URL and slows
+      // generation, which pushed panels past the timeout and left them blank.
+      const styledPrompt =
+        prompt.length <= 120
+          ? `${prompt}. ${prompt}, as the main subject of the image${STYLE_SUFFIX}`
+          : `${prompt}${STYLE_SUFFIX}`
 
       const seed = Math.floor(Math.random() * 1_000_000)
       const url =
@@ -143,8 +150,10 @@ Return ONLY the image prompt text.`,
         `?width=${width}&height=${height}&model=flux&nologo=true&seed=${seed}`
 
       // Cap the wait so the request can't hang forever if the service stalls.
+      // Long unique prompts routinely take 45–60s, so allow up to 80s (still
+      // inside maxDuration); the client aborts its own request a little after.
       const controller = new AbortController()
-      const abortTimer = setTimeout(() => controller.abort(), 55_000)
+      const abortTimer = setTimeout(() => controller.abort(), 80_000)
       try {
         const response = await fetch(url, {
           signal: controller.signal,
