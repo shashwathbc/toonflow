@@ -5,7 +5,12 @@ import { useEditorStore } from '@/store/useEditorStore'
 import { BUBBLE_DEFS, type BubbleKind } from '@/lib/editor/bubbles'
 import { cn } from '@/lib/utils/cn'
 
-const ICONS: Record<BubbleKind, typeof Type> = {
+// Icons for the emotion bubble picker. `bubbles.ts` defines ~30 BubbleKinds;
+// the ones without a bespoke icon fall back to a generic speech icon at the
+// call site (see `ICONS[d.kind] ?? MessageSquare` below), so this map can stay
+// Partial and grow as designers assign per-emotion icons without breaking the
+// exhaustive-type contract.
+const ICONS: Partial<Record<BubbleKind, typeof Type>> = {
   speech: MessageSquare,
   thought: Cloud,
   shout: Zap,
@@ -53,7 +58,7 @@ export function TextToolMenu({ onPick }: { onPick: () => void }) {
 
       <div className="grid grid-cols-2 gap-1.5">
         {BUBBLE_DEFS.map((d) => {
-          const Icon = ICONS[d.kind]
+          const Icon = ICONS[d.kind] ?? MessageSquare
           const sel = pending === d.kind
           return (
             <button

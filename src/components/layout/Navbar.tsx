@@ -106,7 +106,11 @@ function Navbar() {
             <Tooltip label="Messages">
               <Link
                 href="/messages"
-                className="relative btn-ghost p-2 rounded-lg"
+                className={cn(
+                  'relative btn-ghost p-2 rounded-lg',
+                  messagesActive && 'bg-bg-elevated text-text'
+                )}
+                aria-current={messagesActive ? 'page' : undefined}
                 aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
               >
                 <MessagesSquare size={18} aria-hidden="true" />

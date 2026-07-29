@@ -8,8 +8,17 @@ import { getWebtoonById } from '@/lib/firebase/firestore'
 import type { BubbleKind } from '@/lib/editor/bubbles'
 import { generatePanelImage, placePanelArt, pageHasArt, sleepCancellable } from '@/lib/editor/panelArt'
 
-interface StoryBubble { kind: BubbleKind; text: string }
-export interface StoryPanel { scene: string; palette?: string; bubbles: StoryBubble[] }
+// `position` is one of nine placement zones the storyboard picks so dialogue
+// lands in the panel's negative space instead of over the art (see BubblePos).
+interface StoryBubble { kind: BubbleKind; text: string; position?: string }
+export interface StoryPanel { scene: string; palette?: string; motion?: string; bubbles: StoryBubble[] }
+
+// Storyboard placement zone → fractional center on the page (0–1).
+const BUBBLE_POS: Record<string, { x: number; y: number }> = {
+  'top-left': { x: 0.3, y: 0.18 },   'top-center': { x: 0.5, y: 0.18 },   'top-right': { x: 0.7, y: 0.18 },
+  'mid-left': { x: 0.3, y: 0.5 },    center: { x: 0.5, y: 0.5 },          'mid-right': { x: 0.7, y: 0.5 },
+  'bottom-left': { x: 0.3, y: 0.82 },'bottom-center': { x: 0.5, y: 0.82 },'bottom-right': { x: 0.7, y: 0.82 },
+}
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 const TARGET_PANELS = 20
@@ -147,8 +156,16 @@ export function useAgentWorkflow() {
         if (!page) continue
         const n = panel.bubbles.length || 1
         panel.bubbles.forEach((b, idx) => {
-          const cy = page.height * (0.16 + (0.68 * (idx + 0.5)) / n)
-          const id = store.addBubble(pageId, b.kind, page.width / 2, cy)
+          const zone = b.position ? BUBBLE_POS[b.position] : undefined
+          // Reading-order fallback keeps un-positioned bubbles legible top→bottom.
+          const fallbackY = 0.16 + (0.68 * (idx + 0.5)) / n
+          const xFrac = zone ? zone.x : 0.5
+          // Bias toward the chosen zone but spread stacked bubbles by index so two
+          // bubbles sharing a zone don't overlap; clamp inside the safe band.
+          const yFrac = zone
+            ? Math.max(0.14, Math.min(0.86, zone.y + (idx - (n - 1) / 2) * 0.14))
+            : fallbackY
+          const id = store.addBubble(pageId, b.kind, page.width * xFrac, page.height * yFrac)
           if (id) useEditorStore.getState().updateElement(pageId, id, { text: b.text }, false)
         })
         built.push({ pageId, prompt: artPrompt })

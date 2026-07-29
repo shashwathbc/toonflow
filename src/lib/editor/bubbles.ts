@@ -9,13 +9,11 @@
 // ---------------------------------------------------------------------------
 
 export type BubbleKind =
-  | 'speech'
-  | 'thought'
-  | 'shout'
-  | 'scream'
-  | 'whisper'
-  | 'narration'
-  | 'electronic'
+  | 'speech' | 'thought' | 'shout' | 'scream' | 'whisper' | 'narration' | 'electronic'
+  | 'angry' | 'explosive' | 'flashback' | 'weak' | 'love' | 'cold' | 'robot'
+  | 'announcement' | 'phone' | 'tv' | 'demon' | 'divine' | 'cursed' | 'telepathy'
+  | 'echo' | 'sarcastic' | 'crying' | 'panic' | 'embarrassed' | 'evil_laugh'
+  | 'secret' | 'sleep_talking' | 'alien' | 'battle'
 
 export interface BubbleDef {
   kind: BubbleKind
@@ -32,13 +30,37 @@ export interface BubbleDef {
 
 // Each preset carries the emotion it conveys and sample text to match.
 export const BUBBLE_DEFS: BubbleDef[] = [
-  { kind: 'speech',     label: 'Speech',     emotion: 'Neutral',       defaultText: 'Hello there!',        fill: '#FFFFFF', stroke: '#111111', textColor: '#111111', fontFamily: 'Inter',       fontStyle: 'normal', dashed: false },
-  { kind: 'thought',    label: 'Thought',    emotion: 'Pensive',       defaultText: 'Hmm… I wonder.',      fill: '#FFFFFF', stroke: '#111111', textColor: '#333333', fontFamily: 'Inter',       fontStyle: 'italic', dashed: false },
-  { kind: 'shout',      label: 'Shout',      emotion: 'Anger / Shock', defaultText: 'WHAT?!',              fill: '#FFFFFF', stroke: '#111111', textColor: '#111111', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
-  { kind: 'scream',     label: 'Scream',     emotion: 'Terror',        defaultText: 'AAAAH!!',             fill: '#FFF7F7', stroke: '#8E1616', textColor: '#8E1616', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
-  { kind: 'whisper',    label: 'Whisper',    emotion: 'Quiet',         defaultText: '(psst… over here)',   fill: '#FFFFFF', stroke: '#7A7A7A', textColor: '#555555', fontFamily: 'Inter',       fontStyle: 'italic', dashed: true },
-  { kind: 'narration',  label: 'Narration',  emotion: 'Caption',       defaultText: 'Later that night…',   fill: '#0B0B0B', stroke: '#0B0B0B', textColor: '#F2F2F2', fontFamily: 'Georgia',     fontStyle: 'italic', dashed: false },
-  { kind: 'electronic', label: 'Electronic', emotion: 'Robotic',       defaultText: 'BZZT— signal lost',   fill: '#F4F7FF', stroke: '#1B3A6B', textColor: '#1B3A6B', fontFamily: 'Courier New', fontStyle: 'normal', dashed: false },
+  { kind: 'speech',        label: 'Speech',         emotion: 'Normal conversation',   defaultText: 'Hello there!',            fill: '#FFFFFF', stroke: '#111111', textColor: '#111111', fontFamily: 'Inter',       fontStyle: 'normal', dashed: false },
+  { kind: 'thought',       label: 'Thought',        emotion: 'Internal thoughts',     defaultText: 'Hmm… I wonder.',          fill: '#FFFFFF', stroke: '#111111', textColor: '#333333', fontFamily: 'Inter',       fontStyle: 'italic', dashed: false },
+  { kind: 'shout',         label: 'Shout',          emotion: 'Anger / Shock',         defaultText: 'WHAT?!',                  fill: '#FFFFFF', stroke: '#111111', textColor: '#111111', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
+  { kind: 'scream',        label: 'Scream',         emotion: 'Terror',                defaultText: 'AAAAH!!',                 fill: '#FFF7F7', stroke: '#8E1616', textColor: '#8E1616', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
+  { kind: 'whisper',       label: 'Whisper',        emotion: 'Quiet voice',           defaultText: '(psst… over here)',       fill: '#FFFFFF', stroke: '#7A7A7A', textColor: '#555555', fontFamily: 'Inter',       fontStyle: 'italic', dashed: true },
+  { kind: 'narration',     label: 'Narration',      emotion: 'Story narration',       defaultText: 'Later that night…',       fill: '#0B0B0B', stroke: '#0B0B0B', textColor: '#F2F2F2', fontFamily: 'Georgia',     fontStyle: 'italic', dashed: false },
+  { kind: 'electronic',    label: 'Electronic',     emotion: 'Robotic',               defaultText: 'BZZT— signal lost',       fill: '#F4F7FF', stroke: '#1B3A6B', textColor: '#1B3A6B', fontFamily: 'Courier New', fontStyle: 'normal', dashed: false },
+  { kind: 'angry',         label: 'Angry',          emotion: 'Shouting, rage',        defaultText: 'HOW DARE YOU!',           fill: '#FFEEEE', stroke: '#CC0000', textColor: '#CC0000', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
+  { kind: 'explosive',     label: 'Explosive',      emotion: 'Screaming, battle cry', defaultText: 'DIE!!',                   fill: '#FFE4B5', stroke: '#FF4500', textColor: '#FF0000', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
+  { kind: 'flashback',     label: 'Flashback',      emotion: 'Memories',              defaultText: 'It was 10 years ago...',  fill: '#F0F0F0', stroke: '#AAAAAA', textColor: '#555555', fontFamily: 'Georgia',     fontStyle: 'italic', dashed: false },
+  { kind: 'weak',          label: 'Weak Voice',     emotion: 'Sick, exhausted',       defaultText: 'h-help me...',            fill: '#FFFFFF', stroke: '#999999', textColor: '#777777', fontFamily: 'Inter',       fontStyle: 'italic', dashed: false },
+  { kind: 'love',          label: 'Love',           emotion: 'Romantic',              defaultText: 'I love you~',             fill: '#FFF0F5', stroke: '#FF69B4', textColor: '#FF1493', fontFamily: 'Georgia',     fontStyle: 'normal', dashed: false },
+  { kind: 'cold',          label: 'Cold',           emotion: 'Emotionless',           defaultText: 'I don\'t care.',          fill: '#F0F8FF', stroke: '#4682B4', textColor: '#000080', fontFamily: 'Inter',       fontStyle: 'normal', dashed: false },
+  { kind: 'robot',         label: 'Robot',          emotion: 'AI, machine',           defaultText: 'AFFIRMATIVE.',            fill: '#E6E6FA', stroke: '#4B0082', textColor: '#4B0082', fontFamily: 'Courier New', fontStyle: 'bold',   dashed: false },
+  { kind: 'announcement',  label: 'Announcement',   emotion: 'Loudspeaker, PA',       defaultText: 'ATTENTION ALL PASSENGERS',fill: '#FFFFE0', stroke: '#B8860B', textColor: '#8B4500', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
+  { kind: 'phone',         label: 'Phone',          emotion: 'Telephone call',        defaultText: 'Are you there?',          fill: '#F5FFFA', stroke: '#2E8B57', textColor: '#006400', fontFamily: 'Inter',       fontStyle: 'normal', dashed: true },
+  { kind: 'tv',            label: 'TV / Radio',     emotion: 'Electronic audio',      defaultText: 'BREAKING NEWS',           fill: '#F0FFF0', stroke: '#00FA9A', textColor: '#008000', fontFamily: 'Courier New', fontStyle: 'normal', dashed: false },
+  { kind: 'demon',         label: 'Demon',          emotion: 'Evil voice',            defaultText: 'YOUR SOUL IS MINE.',      fill: '#000000', stroke: '#8B0000', textColor: '#FFFFFF', fontFamily: 'Georgia',     fontStyle: 'bold',   dashed: false },
+  { kind: 'divine',        label: 'Divine',         emotion: 'Holy voice',            defaultText: 'FEAR NOT, CHILD.',        fill: '#FFFFF0', stroke: '#FFD700', textColor: '#DAA520', fontFamily: 'Georgia',     fontStyle: 'normal', dashed: false },
+  { kind: 'cursed',        label: 'Cursed',         emotion: 'Horror',                defaultText: 'l-e-a-v-e...',            fill: '#2F4F4F', stroke: '#000000', textColor: '#A9A9A9', fontFamily: 'Georgia',     fontStyle: 'italic', dashed: false },
+  { kind: 'telepathy',     label: 'Telepathy',      emotion: 'Mind communication',    defaultText: '(I can hear you.)',       fill: '#F8F8FF', stroke: '#9370DB', textColor: '#8A2BE2', fontFamily: 'Inter',       fontStyle: 'italic', dashed: false },
+  { kind: 'echo',          label: 'Echo',           emotion: 'Large cave, memory',    defaultText: 'hello... hello...',       fill: '#FFFFFF', stroke: '#D3D3D3', textColor: '#A9A9A9', fontFamily: 'Inter',       fontStyle: 'italic', dashed: false },
+  { kind: 'sarcastic',     label: 'Sarcastic',      emotion: 'Dry humor',             defaultText: 'Oh, brilliant idea.',     fill: '#FFFFFF', stroke: '#111111', textColor: '#111111', fontFamily: 'Inter',       fontStyle: 'italic', dashed: false },
+  { kind: 'crying',        label: 'Crying',         emotion: 'Emotional',             defaultText: 'WAAAH!!',                 fill: '#F0FFFF', stroke: '#00CED1', textColor: '#008B8B', fontFamily: 'Inter',       fontStyle: 'normal', dashed: false },
+  { kind: 'panic',         label: 'Panic',          emotion: 'Shock',                 defaultText: 'WHAT DO WE DO?!',         fill: '#FFFAFA', stroke: '#DC143C', textColor: '#DC143C', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
+  { kind: 'embarrassed',   label: 'Embarrassed',    emotion: 'Shy',                   defaultText: 'u-um... hi...',           fill: '#FFF0F5', stroke: '#DB7093', textColor: '#C71585', fontFamily: 'Inter',       fontStyle: 'normal', dashed: false },
+  { kind: 'evil_laugh',    label: 'Evil Laugh',     emotion: 'Villain',               defaultText: 'MUAHAHAHA!',              fill: '#000000', stroke: '#FF00FF', textColor: '#FF00FF', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
+  { kind: 'secret',        label: 'Secret',         emotion: 'Confidential',          defaultText: 'don\'t tell anyone...',   fill: '#FFFFFF', stroke: '#C0C0C0', textColor: '#808080', fontFamily: 'Inter',       fontStyle: 'italic', dashed: true },
+  { kind: 'sleep_talking', label: 'Sleep Talking',  emotion: 'Dream',                 defaultText: 'zzzz...',                 fill: '#F0F8FF', stroke: '#6495ED', textColor: '#4169E1', fontFamily: 'Inter',       fontStyle: 'normal', dashed: false },
+  { kind: 'alien',         label: 'Alien',          emotion: 'Strange language',      defaultText: '⍙⟒ ☊⍜⋔⟒ ⟟⋏ ⌿⟒⏃☊⟒',       fill: '#F5FFFA', stroke: '#00FF7F', textColor: '#008080', fontFamily: 'Courier New', fontStyle: 'normal', dashed: false },
+  { kind: 'battle',        label: 'Battle',         emotion: 'Intense combat',        defaultText: 'TAKE THIS!',              fill: '#FFF5EE', stroke: '#FF8C00', textColor: '#B22222', fontFamily: 'Inter',       fontStyle: 'bold',   dashed: false },
 ]
 
 export function getBubbleDef(kind: BubbleKind): BubbleDef {
@@ -53,6 +75,16 @@ function tailHeight(kind: BubbleKind, h: number): number {
     case 'speech':
     case 'whisper':
     case 'electronic':
+    case 'weak':
+    case 'love':
+    case 'robot':
+    case 'phone':
+    case 'tv':
+    case 'crying':
+    case 'embarrassed':
+    case 'secret':
+    case 'sleep_talking':
+    case 'alien':
       return clamp(h * 0.16, 12, 32)
     case 'thought':
       return clamp(h * 0.22, 16, 46)
@@ -71,12 +103,21 @@ export function bubbleTextRect(
   const bodyH = h - tailHeight(kind, h)
   switch (kind) {
     case 'shout':
+    case 'angry':
+    case 'evil_laugh':
+    case 'battle':
       return { x: w * 0.22, y: h * 0.26, width: w * 0.56, height: h * 0.46 }
     case 'scream':
+    case 'explosive':
+    case 'panic':
+    case 'demon':
       return { x: w * 0.24, y: h * 0.28, width: w * 0.52, height: h * 0.42 }
     case 'thought':
+    case 'sleep_talking':
       return { x: w * 0.16, y: bodyH * 0.14, width: w * 0.68, height: bodyH * 0.7 }
     case 'narration':
+    case 'flashback':
+    case 'announcement':
       return { x: pad, y: pad, width: w - 2 * pad, height: h - 2 * pad }
     default:
       return { x: pad, y: pad, width: w - 2 * pad, height: bodyH - 2 * pad }
@@ -209,29 +250,53 @@ function pathBurst(ctx: PathCtx, w: number, h: number, spikes: number, innerRati
 /** Build the bubble outline path for `kind` within the box (0,0,w,h). */
 export function pathBubble(ctx: PathCtx, kind: BubbleKind, w: number, h: number) {
   switch (kind) {
-    case 'speech': {
-      const t = tailHeight('speech', h)
+    case 'speech':
+    case 'weak':
+    case 'love':
+    case 'divine':
+    case 'echo':
+    case 'crying':
+    case 'embarrassed':
+    case 'alien':
+    case 'sarcastic':
+    case 'cursed': {
+      const t = tailHeight(kind, h)
       pathRoundTail(ctx, w, h, t, Math.min(24, (h - t) * 0.28), 0.28)
       break
     }
-    case 'whisper': {
-      const t = tailHeight('whisper', h)
+    case 'whisper':
+    case 'secret':
+    case 'phone': {
+      const t = tailHeight(kind, h)
       pathRoundTail(ctx, w, h, t, Math.min(28, (h - t) * 0.42), 0.3)
       break
     }
     case 'electronic':
-      pathElectronic(ctx, w, h, tailHeight('electronic', h))
+    case 'robot':
+    case 'tv':
+    case 'cold':
+    case 'telepathy':
+      pathElectronic(ctx, w, h, tailHeight(kind, h))
       break
     case 'thought':
-      pathThought(ctx, w, h, tailHeight('thought', h))
+    case 'sleep_talking':
+      pathThought(ctx, w, h, tailHeight(kind, h))
       break
     case 'shout':
+    case 'angry':
+    case 'evil_laugh':
+    case 'battle':
       pathBurst(ctx, w, h, 12, 0.72)
       break
     case 'scream':
+    case 'explosive':
+    case 'panic':
+    case 'demon':
       pathBurst(ctx, w, h, 18, 0.64)
       break
     case 'narration':
+    case 'flashback':
+    case 'announcement':
     default:
       pathRoundRect(ctx, w, h, Math.min(10, h * 0.12))
   }
@@ -261,11 +326,20 @@ export interface BubbleSpec {
 function heightRatio(kind: BubbleKind): number {
   switch (kind) {
     case 'narration':
+    case 'flashback':
+    case 'announcement':
       return 0.42
     case 'shout':
     case 'scream':
+    case 'angry':
+    case 'explosive':
+    case 'panic':
+    case 'demon':
+    case 'evil_laugh':
+    case 'battle':
       return 0.95
     case 'thought':
+    case 'sleep_talking':
       return 0.82
     default:
       return 0.72

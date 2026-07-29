@@ -61,6 +61,9 @@ export function ImportReviewModal({ open, onOpenChange, images, onConfirm }: Imp
               {images.map((img) => (
                 <div key={img.id} className="relative group flex flex-col gap-2">
                   <div className="relative aspect-[1080/1920] bg-black rounded overflow-hidden border border-[#333] group-hover:border-accent transition-colors">
+                    {/* Local blob/object-URL preview of a just-imported panel (pre-upload).
+                        next/image can't optimize blob: URLs, so a plain <img> is correct here. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={img.src} alt={img.originalName} className="object-cover w-full h-full" />
                     {img.isSliced && (
                       <div className="absolute top-2 right-2 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow">

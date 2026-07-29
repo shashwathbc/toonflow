@@ -49,7 +49,12 @@ jobs:
         run: npm test
 
       - name: Security audit
-        run: npm audit --audit-level=high
+        # Fails on any high/critical advisory except a small, documented
+        # allowlist (see scripts/audit-gate.mjs). Replaces the blunt
+        # `npm audit --audit-level=high`, which couldn't distinguish a real
+        # advisory from npm's over-broad brace-expansion range that flags
+        # already-patched transitive copies.
+        run: npm run security:audit
 
       # Build is NOT run in the verify step because next build needs Firebase
       # Admin SDK credentials (FIREBASE_PRIVATE_KEY) that aren't available in
