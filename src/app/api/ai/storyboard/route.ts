@@ -145,9 +145,15 @@ Return ONLY valid minified JSON, no markdown, in exactly this shape:
 }
 
 function buildCalculatePrompt(script: string): string {
-  return `You are a Webtoon Story Director. Read the following chapter script/brief and calculate the ideal number of vertical scroll panels (pages) needed to tell this story with proper pacing, dialog alignment, and emotional weight.
-  
+  return `You are a Webtoon Story Director sizing a chapter for a seamless vertical-scroll webtoon where consecutive panels flow into one another as ONE continuous camera move.
+
 CHAPTER BRIEF: ${script}
+
+Decide how many scroll SHOTS (panels) this chapter should have, weighted by the STORY, not the word count:
+• Break the brief into its distinct story beats (establishing shot, rising action, reveals, emotional peaks, action climax, closing hook).
+• Weight each beat: a big reveal, a fight, or a dramatic entrance earns 2–3 shots so the camera can push in gradually (wide → detail → close-up); a quiet transition or a line of dialogue earns 1.
+• Sum the weighted beats. More dramatic/action-heavy or eventful chapters get more shots; a short, calm scene gets fewer.
+• Clamp the total to between 6 and ${MAX_PANELS}.
 
 Return ONLY valid minified JSON, no markdown, in exactly this shape:
 {"panels": 15}`
@@ -177,14 +183,17 @@ export async function POST(request: NextRequest) {
 
     if (action === 'calculate') {
       const response = await client.messages.create({
-        model: 'claude-3-5-haiku-20241022',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         messages: [{ role: 'user', content: buildCalculatePrompt(script) }],
       })
       const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
       try {
         const json = extractJson(text) as { panels: number }
-        return NextResponse.json({ panels: json.panels || 10 })
+        // Clamp to the same [6, MAX_PANELS] band the prompt asks for, in case the
+        // model returns something out of range.
+        const panels = Math.max(6, Math.min(MAX_PANELS, Math.round(json.panels) || 10))
+        return NextResponse.json({ panels })
       } catch {
         return NextResponse.json({ panels: 10 }) // fallback
       }
@@ -193,7 +202,7 @@ export async function POST(request: NextRequest) {
     const target = parsed.data.panels ?? (pageIndex ? 1 : Math.max(6, Math.min(MAX_PANELS, Math.round(script.length / 220))))
 
     const response = await client.messages.create({
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 8192,
       messages: [{ role: 'user', content: buildPrompt(script, target, title ?? '', synopsis ?? '', pageIndex, totalPages, prevBottom) }],
     })
