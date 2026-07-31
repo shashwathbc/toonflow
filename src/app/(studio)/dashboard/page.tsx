@@ -22,7 +22,7 @@ import { REVENUE_CONFIG } from '@/lib/revenue/config'
 import CreatorAnalyticsSection from '@/components/dashboard/CreatorAnalyticsSection'
 import CreatorMonetization, { type MonetizationStats } from '@/components/dashboard/CreatorMonetization'
 import { formatCount } from '@/lib/utils/formatters'
-import { COIN_PACKAGES, FEATURE_FLAGS } from '@/lib/utils/constants'
+import { COIN_PACKAGES, FEATURE_FLAGS, canUseWebtoonStudio } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel, Webtoon, Transaction, Withdrawal, WithdrawalMethod } from '@/types'
@@ -521,6 +521,7 @@ function WithdrawModal({ open, onClose, availableInr, onSuccess }: {
 
 export default function DashboardPage() {
   const { firebaseUser, userProfile, loading: authLoading } = useAuth()
+  const canUseWebtoon = canUseWebtoonStudio(firebaseUser?.email)
   const [novels, setNovels] = useState<Novel[]>([])
   const [webtoons, setWebtoons] = useState<Webtoon[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -647,9 +648,11 @@ export default function DashboardPage() {
           <Link href="/create/novel" className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-bg-elevated text-text hover:bg-bg-card border border-bg-border transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none">
             <Plus size={14} aria-hidden="true" /> Novel
           </Link>
-          <Link href="/create/webtoon" className="btn-accent flex items-center gap-1.5 text-sm">
-            <Plus size={14} aria-hidden="true" /> Webtoon
-          </Link>
+          {canUseWebtoon && (
+            <Link href="/create/webtoon" className="btn-accent flex items-center gap-1.5 text-sm">
+              <Plus size={14} aria-hidden="true" /> Webtoon
+            </Link>
+          )}
         </div>
       </div>
 
@@ -740,7 +743,7 @@ export default function DashboardPage() {
             <p className="text-sm">No content yet</p>
             <div className="flex gap-3 mt-1">
               <Link href="/create/novel" className="text-xs text-accent hover:underline">Write a novel →</Link>
-              <Link href="/create/webtoon" className="text-xs text-accent hover:underline">Create a webtoon →</Link>
+              {canUseWebtoon && <Link href="/create/webtoon" className="text-xs text-accent hover:underline">Create a webtoon →</Link>}
             </div>
           </div>
         ) : (

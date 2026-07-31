@@ -17,24 +17,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === '' ? 1 : 0.7,
   }))
 
-  // Best-effort: include published novels. Never let a Firestore/credential
-  // failure break the sitemap — fall back to the static routes.
+  // Best-effort: include published novels AND webtoons. Webtoons were omitted
+  // before, so half the catalog was never submitted for indexing. Never let a
+  // Firestore/credential failure break the sitemap — fall back to static routes.
   try {
     const { adminDb } = await import('@/lib/firebase/serverApp')
-    const snap = await adminDb()
-      .collection('novels')
-      .where('status', 'in', ['published', 'ongoing', 'completed'])
-      .select('updatedAt')
-      .limit(5000)
-      .get()
-    for (const doc of snap.docs) {
-      const updated = doc.data().updatedAt
-      routes.push({
-        url: `${APP_URL}/novel/${doc.id}`,
-        lastModified: updated?.toDate?.() ?? now,
-        changeFrequency: 'weekly',
-        priority: 0.6,
-      })
+    const db = adminDb()
+    const PUBLISHED = ['published', 'ongoing', 'completed']
+    const [novelSnap, webtoonSnap] = await Promise.all([
+      db.collection('novels').where('status', 'in', PUBLISHED).select('updatedAt').limit(5000).get(),
+      db.collection('webtoons').where('status', 'in', PUBLISHED).select('updatedAt').limit(5000).get(),
+    ])
+    for (const [prefix, snap] of [['/novel', novelSnap], ['/webtoon', webtoonSnap]] as const) {
+      for (const doc of snap.docs) {
+        const updated = doc.data().updatedAt
+        routes.push({
+          url: `${APP_URL}${prefix}/${doc.id}`,
+          lastModified: updated?.toDate?.() ?? now,
+          changeFrequency: 'weekly',
+          priority: 0.6,
+        })
+      }
     }
   } catch {
     // static routes only

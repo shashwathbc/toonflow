@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     const { action, script, title, synopsis, pageIndex, totalPages, prevBottom } = parsed.data
 
-    const limited = aiRateLimited(uid, 'text')
+    const limited = await aiRateLimited(uid, 'text')
     if (limited) return limited
 
     if (action === 'calculate') {

@@ -11,6 +11,7 @@ import {
 import { YoutubeIcon, InstagramIcon } from '@/components/ui/BrandIcons'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
+import { canUseWebtoonStudio } from '@/lib/utils/constants'
 import {
   getUserProfile, getNovelsByAuthor, getWebtoonsByAuthor,
   getUserBookmarks,
@@ -631,7 +632,7 @@ export function ProfilePageClient({ uid }: { uid: string }) {
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <ImageIcon size={36} className="text-white/20 mb-4" aria-hidden="true" />
               <p className="text-white/50 text-sm">{isOwnProfile ? 'You haven\'t created any webtoons yet.' : 'No published webtoons yet.'}</p>
-              {isOwnProfile && <Link href="/create/webtoon" className="btn-accent mt-4 text-sm">Create a Webtoon</Link>}
+              {isOwnProfile && canUseWebtoonStudio(firebaseUser?.email) && <Link href="/create/webtoon" className="btn-accent mt-4 text-sm">Create a Webtoon</Link>}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-8">

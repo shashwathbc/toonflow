@@ -2123,3 +2123,45 @@ Batch of UX fixes requested together.
 - src/lib/views/botDetection.test.ts (14 tests): detectBot (browser pass; missing/short UA; bot & automation UAs incl. python-requests/HeadlessChrome; prefetch/prerender via sec-purpose + next-router-prefetch; unexpected sec-fetch-mode; missing accept-language; navigator.webdriver); isSameOrigin (Origin / Referer / x-forwarded-host accept, cross-site + no-origin reject); getClientIp (x-forwarded-for first hop / x-real-ip / "unknown").
 - Validation: vitest 52/52 (was 26); tsc --noEmit clean; eslint 0 errors (2 pre-existing CreateWebtoonModal warnings).
 - H4 remainder (needs an infra decision, not sandbox-runnable): Firestore-rules tests need the Firebase emulator (Java) in a separate `test:emulator` job; webhook idempotency + chargeTokens atomicity touch the Admin SDK (emulator or a firebase-admin mock harness). Flagged for the next checkpoint rather than adding unverifiable code.
+
+## Distributed rate limiting — wire the async Upstash path (audit finding H1) (2026-07-31)
+- Audit finding H1: rate limiting was in-memory + per-process while Cloud Run runs maxInstances 100 / minInstances 0, so AI vendor-spend caps and view/support abuse caps were effectively multiplied by the live instance count and reset on every cold start. The Upstash-backed `checkRateLimitAsync` already existed but no caller used it.
+- Migrated every runtime caller from sync `checkRateLimit` to `await checkRateLimitAsync(...)`:
+  • src/lib/api/aiRateLimit.ts — `aiRateLimited` is now async (Promise<NextResponse | null>).
+  • src/app/api/ai/generate-image (×2: text + image), storyboard, novel-content, novel-assist — callers now `await aiRateLimited(...)`.
+  • src/app/api/views/route.ts — begin-phase check + the complete-phase per-IP/visitor/session loop now await checkRateLimitAsync.
+  • src/app/api/support/route.ts — per-IP throttle now awaits.
+- Safe to merge now: `checkRateLimitAsync` transparently falls back to the same in-memory counter (per process) when UPSTASH_REDIS_REST_URL/_TOKEN are unset — behavior is identical to before until Upstash is configured.
+- Deliberately did NOT touch apphosting.yaml: per its own note, re-adding the UPSTASH secret refs before the secrets exist in Secret Manager hard-fails every Cloud Build. ACTION TO ACTIVATE cluster-wide limiting: `firebase apphosting:secrets:set UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN --project toonflow-studio-paint-f76d5`, then uncomment their two blocks in apphosting.yaml.
+- Also refreshed the now-stale migration note + `checkRateLimit` JSDoc in src/lib/views/rateLimit.ts (callers migrated; sync version retained for unit tests).
+- Validation: tsc --noEmit clean (proves no missed await — a missing one would surface `null` in a NextResponse return type); eslint 0 errors (2 pre-existing CreateWebtoonModal warnings); vitest 52/52.
+
+## Webhook packageId guard (M8) + Sentry placeholder guard (M4 code) + sitemap webtoons (M3) (2026-07-31)
+- M8 — src/app/api/webhooks/route.ts: payment.captured no longer falls back to `Math.floor(payment.amount / 100)` for an unknown packageId. Unknown packageId now logs and returns {received:true} (acks so Razorpay stops retrying) while crediting ZERO coins — /api/payments/create-order always sets a catalog packageId, so an unknown one means the order didn't originate from us. Coins/description now derive from the guaranteed-present pkg.
+- M4 (code side) — Sentry no longer initialises against the committed example DSN:
+  • New src/sentry.shared.ts exports SENTRY_DSN (undefined when unset OR equal to the example placeholder) + SENTRY_ENABLED (real DSN && not test), and warns once server/edge-side (not the browser) when tracking is disabled.
+  • src/sentry.{client,server,edge}.config.ts import these instead of `... || 'https://examplePublicKey@...'`, so a placeholder DSN cleanly disables Sentry rather than silently failing transport to a fake project.
+  • ACTION TO FINISH M4: `firebase apphosting:secrets:set NEXT_PUBLIC_SENTRY_DSN` with the real DSN, redeploy, trigger a test error, confirm it lands. Until then Sentry is intentionally off and logs that it is.
+- M3 — src/app/sitemap.ts: now includes published WEBTOONS as well as novels (novels + webtoons queried in parallel; one shared row-builder). Webtoons were entirely absent before, so half the catalog was never submitted for indexing. Deliberately did NOT add /profile/[uid] — at scale that bloats the sitemap with many low-value/empty profiles; revisit as a filtered (creators-only) feed if wanted.
+- Validation: tsc --noEmit clean; eslint 0 errors (2 pre-existing CreateWebtoonModal warnings); vitest 52/52 (unaffected — sitemap/webhook/sentry have no unit tests yet).
+
+## Webtoon Studio allowlist gate + Node 22 runtime pin (2026-07-31)
+- Feature request: lock the Webtoon Studio for everyone except toonflowstudiopaint@gmail.com (temporary release gate).
+  • src/lib/utils/constants.ts: FEATURE_FLAGS.webtoonStudio → false; new WEBTOON_STUDIO_ALLOWED_EMAILS = ['toonflowstudiopaint@gmail.com'] + canUseWebtoonStudio(email) as the single source of truth (open to all when the flag is true, OR email on the allowlist). UX/release gate only — webtoon data access is governed independently by Firestore rules.
+  • Enforcement — src/proxy.ts: the /create/webtoon* deep-link gate redirects to /coming-soon unless canUseWebtoonStudio(email cookie). This covers EVERY entry point regardless of which link/CTA was used.
+  • Surfaces updated so non-allowlisted users see no dead-click CTAs:
+    - src/app/(main)/create/page.tsx — now an async server component reading the email cookie; Webtoon card shows "Open Studio" for allowlisted, "Coming Soon" (locked) otherwise.
+    - src/components/layout/StudioSidebar.tsx — "Webtoon Studio" nav item gated (new webtoonGated flag; firebaseUser.email via useAuth).
+    - src/app/(studio)/dashboard/page.tsx — header "Webtoon" create button + empty-state "Create a webtoon" link gated.
+    - src/app/(main)/profile/[uid]/ProfilePageClient.tsx — own-profile "Create a Webtoon" CTA gated.
+  • Reopen to everyone: set FEATURE_FLAGS.webtoonStudio = true. Add people: extend WEBTOON_STUDIO_ALLOWED_EMAILS.
+- Deploy blocker — package.json: added `"engines": { "node": "22" }`. App Hosting reported "Node 24 is decommissioned … update your runtime version to resume deployments"; with no engines field it had fallen back to a now-removed runtime. Node 22 is Active LTS, App Hosting-supported, and matches CI (NODE_VERSION: 22). No project .nvmrc/.node-version existed to conflict. NOTE: a redeploy (new rollout) is required to clear the banner; if the App Hosting console shows its own runtime selector, set it to 22 there too.
+- Validation: tsc --noEmit clean; eslint 0 errors (2 pre-existing CreateWebtoonModal warnings); vitest 52/52; package.json parses (engines.node=22).
+
+## Grid covers: graceful fallback for broken/slow cover images (2026-07-31)
+- Report: some browse/originals cards showed the browser broken-image glyph and covers loaded slowly. Root cause: seeded/placeholder content uses picsum.photos covers (src/app/(novel)/create/seed/page.tsx COVER_URL) — a flaky third-party image service that rate-limits/times out — AND NovelCard/WebtoonCard rendered next/image with NO onError handler, so a failed cover showed the raw glyph instead of the clean placeholder. Real Firebase Storage covers (Karna, Shadow Island, Ravana, …) load fine.
+- New src/components/content/CoverImage.tsx ('use client'): a next/image wrapper that falls back to the existing "No Cover" placeholder on error OR null src. Isolated as a small client component so NovelCard/WebtoonCard stay Server Components.
+- src/components/content/{NovelCard,WebtoonCard}.tsx: now use <CoverImage> (removed the inline next/image + duplicated fallback; dropped the now-unused Image / ImageOff imports).
+- Effect: a broken/dead cover renders the clean placeholder immediately instead of a broken glyph or hanging forever on a URL that never resolves.
+- Slowness (not fully code-fixable here): picsum covers are slow even when they DO eventually load — onError catches failures, not slowness. Remedies: re-upload real covers for the affected titles; stop seeding with picsum; and/or cut Cloud Run cold starts (apphosting minInstances is 0). The same <CoverImage> can be dropped into the profile/dashboard ContentCard, which shares the pattern.
+- Validation: tsc --noEmit clean; eslint 0 errors (2 pre-existing CreateWebtoonModal warnings); vitest 52/52.

@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     // still required above (verifiedUid) so usage stays tied to a real account,
     // and a per-user hourly cap bounds Anthropic spend. Full-chapter generation
     // (Opus, long output) is the priciest tier, so it's capped tighter than chat.
-    const limited = aiRateLimited(uid, mode === 'write-chapter' ? 'assistChapter' : 'assistChat')
+    const limited = await aiRateLimited(uid, mode === 'write-chapter' ? 'assistChapter' : 'assistChat')
     if (limited) return limited
 
     // Previous chapters power the consistency engine — cap total size to protect the context window

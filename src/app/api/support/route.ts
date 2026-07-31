@@ -7,7 +7,7 @@ import nodemailer from 'nodemailer'
 import { adminAuth, adminDb } from '@/lib/firebase/serverApp'
 import { AUTH_COOKIE_NAME, APP_NAME, SUPPORT_EMAIL } from '@/lib/utils/constants'
 import { bodyTooLarge, escapeHtml } from '@/lib/api/guard'
-import { checkRateLimit } from '@/lib/views/rateLimit'
+import { checkRateLimitAsync } from '@/lib/views/rateLimit'
 import { getClientIp } from '@/lib/views/botDetection'
 
 export const runtime = 'nodejs'
@@ -100,7 +100,7 @@ async function handleSupportRequest(req: NextRequest): Promise<NextResponse> {
   // Per-IP throttle in front of the per-email cap (an attacker can rotate emails
   // but not their source IP as cheaply): 8 submissions / 10 min.
   const ip = getClientIp(req)
-  if (!checkRateLimit(`support:ip:${ip}`, 8, 10 * 60 * 1000).allowed) {
+  if (!(await checkRateLimitAsync(`support:ip:${ip}`, 8, 10 * 60 * 1000)).allowed) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 

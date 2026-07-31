@@ -10,10 +10,29 @@ export const EMAIL_COOKIE_NAME = 'toonflow-user-email'
  * Flip to true when the feature is ready to ship.
  */
 export const FEATURE_FLAGS = {
-  webtoonStudio: true, // /create/webtoon/** — Webtoon Studio (locked → Coming Soon)
+  webtoonStudio: false, // /create/webtoon/** — GATED: allowlist-only (see WEBTOON_STUDIO_ALLOWED_EMAILS). Set true to open to everyone.
   wallet: false, // /wallet/** — token purchases & payouts (locked in place)
   buyCoins: false, // dashboard "+ Buy" coins — temporarily locked
 } as const
+
+/**
+ * Temporary release gate: while FEATURE_FLAGS.webtoonStudio is false, the
+ * Webtoon Studio is locked for everyone EXCEPT these emails. Flip the flag to
+ * true to open it to all users (this allowlist then becomes a no-op).
+ */
+export const WEBTOON_STUDIO_ALLOWED_EMAILS: readonly string[] = ['toonflowstudiopaint@gmail.com']
+
+/**
+ * Whether the given account email may enter the Webtoon Studio. Single source of
+ * truth shared by the middleware (deep-link gate) and the /create hub card, so
+ * they can never disagree. `email` comes from the server-set email cookie /
+ * verified session — this gate is UX/release only (data access to webtoons is
+ * governed independently by Firestore rules).
+ */
+export function canUseWebtoonStudio(email: string | null | undefined): boolean {
+  if (FEATURE_FLAGS.webtoonStudio) return true
+  return !!email && WEBTOON_STUDIO_ALLOWED_EMAILS.includes(email)
+}
 
 export const APP_NAME = 'Toonflow Studio Paint'
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://toonflowstudiopaint.com'

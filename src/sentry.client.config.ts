@@ -1,9 +1,10 @@
 // Sentry client-side configuration — runs in the browser.
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 import * as Sentry from '@sentry/nextjs'
+import { SENTRY_DSN, SENTRY_ENABLED } from './sentry.shared'
 
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN || 'https://examplePublicKey@o0.ingest.sentry.io/0',
+  dsn: SENTRY_DSN,
 
   // Performance tracing sample rate:
   // - Production: sample 25% of transactions (balance of cost vs insight)
@@ -13,6 +14,6 @@ Sentry.init({
   // Don't send PII to Sentry.
   sendDefaultPii: false,
 
-  // Disable in test environment.
-  enabled: process.env.NODE_ENV !== 'test',
+  // Off under tests and when no real DSN is configured (see sentry.shared).
+  enabled: SENTRY_ENABLED,
 })

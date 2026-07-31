@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Free to users, but every call spends on Anthropic — cap per account.
-  const limited = aiRateLimited(uid, 'text')
+  const limited = await aiRateLimited(uid, 'text')
   if (limited) return limited
 
   try {

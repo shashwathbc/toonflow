@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { canUseWebtoonStudio } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 
@@ -22,11 +23,13 @@ interface SidebarItem {
   label: string
   icon: React.ReactNode
   superAdminOnly?: boolean
+  /** Hidden unless the account may use the Webtoon Studio (temporary release gate). */
+  webtoonGated?: boolean
 }
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   { href: '/create/novel', label: 'Novel Studio', icon: <BookOpen size={18} /> },
-  { href: '/create/webtoon', label: 'Webtoon Studio', icon: <ImageIcon size={18} /> },
+  { href: '/create/webtoon', label: 'Webtoon Studio', icon: <ImageIcon size={18} />, webtoonGated: true },
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { href: '/wallet', label: 'Wallet', icon: <Wallet size={18} /> },
   { href: '/admin/super', label: 'Super Admin', icon: <Star size={18} />, superAdminOnly: true },
@@ -41,10 +44,11 @@ interface StudioSidebarProps {
 
 export default function StudioSidebar({ onClose, onNavigate }: StudioSidebarProps) {
   const pathname = usePathname()
-  const { isSuperAdmin } = useAuth()
+  const { isSuperAdmin, firebaseUser } = useAuth()
 
   const visibleItems = SIDEBAR_ITEMS.filter((item) => {
     if (item.superAdminOnly) return isSuperAdmin
+    if (item.webtoonGated) return canUseWebtoonStudio(firebaseUser?.email)
     return true
   })
 

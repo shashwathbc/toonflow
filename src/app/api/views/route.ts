@@ -19,7 +19,7 @@ import {
   signViewToken, verifyViewToken,
 } from '@/lib/views/crypto'
 import { detectBot, isSameOrigin, getClientIp } from '@/lib/views/botDetection'
-import { checkRateLimit } from '@/lib/views/rateLimit'
+import { checkRateLimitAsync } from '@/lib/views/rateLimit'
 import { recordView, logSuspiciousActivity } from '@/lib/views/viewService'
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants'
 
@@ -102,7 +102,7 @@ async function handleBegin(req: NextRequest, body: unknown, ip: string) {
   }
 
   const { beginPerIp } = VIEW_CONFIG.rateLimits
-  if (!checkRateLimit(`begin:ip:${ip}`, beginPerIp.limit, beginPerIp.windowMs).allowed) {
+  if (!(await checkRateLimitAsync(`begin:ip:${ip}`, beginPerIp.limit, beginPerIp.windowMs)).allowed) {
     return notCounted()
   }
 
@@ -164,7 +164,7 @@ async function handleComplete(req: NextRequest, body: unknown, ip: string, ua: s
     [`complete:ses:${data.sessionId}`, rl.completePerSession],
   ]
   for (const [key, { limit, windowMs }] of limits) {
-    const result = checkRateLimit(key, limit, windowMs)
+    const result = await checkRateLimitAsync(key, limit, windowMs)
     if (!result.allowed) {
       if (result.blocked) {
         logSuspiciousActivity({

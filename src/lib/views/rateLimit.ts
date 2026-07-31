@@ -9,14 +9,14 @@
 // distributed, persistent rate limiting. Without those env vars it falls back
 // to the same in-memory logic as the sync version.
 //
-// Upgrade path for multi-instance:
-//   1. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in Secret Manager.
-//   2. Refactor each `checkRateLimit(...)` call site to
-//      `await checkRateLimitAsync(...)` and mark the handler `async`.
-//      There are exactly 3 callers (search `checkRateLimit`):
-//        - src/app/api/views/route.ts      (lines 94, 156)
-//        - src/app/api/support/route.ts    (line 103)
-//        - src/lib/api/aiRateLimit.ts      (line 37)
+// Distributed rate limiting (audit H1): every runtime caller now uses
+// `await checkRateLimitAsync(...)` — src/app/api/views/route.ts,
+// src/app/api/support/route.ts, and src/lib/api/aiRateLimit.ts — so the limiter
+// becomes per-cluster the moment Upstash is configured. To activate it:
+//   Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in Secret Manager and
+//   uncomment their references in apphosting.yaml. Until then, checkRateLimitAsync
+//   transparently falls back to the in-memory counter below (per process).
+// The synchronous `checkRateLimit` is retained only for unit tests / sync callers.
 //
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
@@ -155,13 +155,9 @@ async function recordViolationInRedis(key: string): Promise<void> {
 // ────────────────────────────────────────────────────────────
 
 /**
- * Synchronous rate-limit check (in-memory, single-instance safe).
- *
- * For multi-instance deployments, refactor callers to use
- * `await checkRateLimitAsync(...)` instead and set the
- * UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN env vars.
- *
- * See the migration note at the top of this file.
+ * Synchronous rate-limit check (in-memory, single-instance). Retained for unit
+ * tests and any sync-only caller; runtime request handlers use
+ * `checkRateLimitAsync` (see the note at the top of this file).
  */
 export function checkRateLimit(key: string, limit: number, windowMs: number): RateResult {
   return inMemoryCheck(key, limit, windowMs)

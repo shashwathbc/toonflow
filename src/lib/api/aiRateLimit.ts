@@ -9,7 +9,7 @@
 // limiter in '@/lib/views/rateLimit' — swap that one file for Redis when the app
 // runs multi-instance (its counters are per-process).
 import { NextResponse } from 'next/server'
-import { checkRateLimit } from '@/lib/views/rateLimit'
+import { checkRateLimitAsync } from '@/lib/views/rateLimit'
 
 const HOUR = 60 * 60 * 1000
 
@@ -37,9 +37,9 @@ export type AiBucket = keyof typeof AI_LIMITS
  * otherwise `null` (proceed). Call after verifiedUid and before contacting the
  * provider.
  */
-export function aiRateLimited(uid: string, bucket: AiBucket): NextResponse | null {
+export async function aiRateLimited(uid: string, bucket: AiBucket): Promise<NextResponse | null> {
   const { limit, windowMs } = AI_LIMITS[bucket]
-  if (checkRateLimit(`ai:${bucket}:${uid}`, limit, windowMs).allowed) return null
+  if ((await checkRateLimitAsync(`ai:${bucket}:${uid}`, limit, windowMs)).allowed) return null
   return NextResponse.json(
     { error: "You've reached the AI usage limit for now. Please try again in a little while." },
     { status: 429 }

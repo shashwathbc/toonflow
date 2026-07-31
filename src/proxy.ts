@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { AUTH_COOKIE_NAME, EMAIL_COOKIE_NAME, SUPER_ADMIN_EMAIL, FEATURE_FLAGS } from '@/lib/utils/constants'
+import { AUTH_COOKIE_NAME, EMAIL_COOKIE_NAME, SUPER_ADMIN_EMAIL, canUseWebtoonStudio } from '@/lib/utils/constants'
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -15,9 +15,10 @@ export function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Release gate — Webtoon Studio deep links redirect to Coming Soon.
-  // (/create hub stays reachable: its Webtoon card renders locked; /wallet renders its own in-place lock.)
-  if (!FEATURE_FLAGS.webtoonStudio && pathname.startsWith('/create/webtoon')) {
+  // Release gate — Webtoon Studio deep links are allowlist-only while gated
+  // (see canUseWebtoonStudio). Non-allowlisted visitors redirect to Coming Soon.
+  // (/create hub stays reachable: its Webtoon card renders locked for them.)
+  if (pathname.startsWith('/create/webtoon') && !canUseWebtoonStudio(userEmail)) {
     const url = new URL('/coming-soon', request.url)
     url.searchParams.set('feature', 'studio')
     return NextResponse.redirect(url)

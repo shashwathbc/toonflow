@@ -11,8 +11,8 @@
 // v2 (2026-07-20): purges the previous icon cache. The old /icons/* files were
 // JPEGs mis-named .png; bumping this is the ONLY eviction mechanism this SW has
 // (see the activate handler below), so it is required whenever a cached asset
-// changes at a path that isn't content-hashed.
-const CACHE_VERSION = 'v2'
+// v3 (2026-07-31): Fallback to cache on 5xx server errors in addition to network failures.
+const CACHE_VERSION = 'v3'
 const STATIC_CACHE = `tf-static-${CACHE_VERSION}`
 const PAGE_CACHE = `tf-pages-${CACHE_VERSION}`
 const KNOWN_CACHES = [STATIC_CACHE, PAGE_CACHE]
@@ -91,6 +91,10 @@ self.addEventListener('fetch', (event) => {
           if (response.ok) {
             const cache = await caches.open(PAGE_CACHE)
             cache.put(request, response.clone())
+          } else if (response.status >= 500) {
+            // Server error: fallback to cache if available
+            const cached = await caches.match(request)
+            if (cached) return cached
           }
           return response
         } catch {

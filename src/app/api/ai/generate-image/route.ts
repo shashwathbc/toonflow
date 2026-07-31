@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
       // AI image prompt generation is free for all users — no token charge.
       // Auth (above) + a per-user hourly cap keep vendor spend bounded.
-      const limited = aiRateLimited(uid, 'text')
+      const limited = await aiRateLimited(uid, 'text')
       if (limited) return limited
 
       const isCover = imageType === 'cover'
@@ -125,7 +125,7 @@ Return ONLY the image prompt text.`,
       // a keyless, no-billing image service — so there are no credits to run out
       // of. Auth (above) + a per-user hourly cap bound how fast one account can
       // hammer the upstream service.
-      const limited = aiRateLimited(uid, 'image')
+      const limited = await aiRateLimited(uid, 'image')
       if (limited) return limited
 
       // Flux-friendly dimensions (multiples of 64). Cover = 2:3 portrait,

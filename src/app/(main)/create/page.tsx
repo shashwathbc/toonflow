@@ -1,13 +1,19 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { BookOpen, ImageIcon, Wallet, LayoutDashboard, ArrowRight, Sparkles, Lock } from 'lucide-react'
-import { FEATURE_FLAGS } from '@/lib/utils/constants'
+import { cookies } from 'next/headers'
+import { FEATURE_FLAGS, EMAIL_COOKIE_NAME, canUseWebtoonStudio } from '@/lib/utils/constants'
 
 export const metadata: Metadata = {
   title: 'Create — Studio Hub',
 }
 
-export default function CreateHubPage() {
+export default async function CreateHubPage() {
+  // Server-set email cookie (from the verified session) — same source the
+  // middleware gate uses, so the card and the /create/webtoon gate always agree.
+  const email = (await cookies()).get(EMAIL_COOKIE_NAME)?.value
+  const canUseWebtoon = canUseWebtoonStudio(email)
+
   return (
     <div className="relative min-h-[calc(100vh-4rem)] overflow-hidden">
       {/* Ambient background glows */}
@@ -59,8 +65,8 @@ export default function CreateHubPage() {
             </div>
           </Link>
 
-          {/* Webtoon Studio */}
-          {FEATURE_FLAGS.webtoonStudio ? (
+          {/* Webtoon Studio — allowlist-gated (see canUseWebtoonStudio) */}
+          {canUseWebtoon ? (
             <Link
               href="/create/webtoon"
               className="group relative card p-8 lg:p-12 flex flex-col gap-5 overflow-hidden hover:border-accent/40 hover:-translate-y-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"

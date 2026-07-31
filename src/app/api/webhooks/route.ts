@@ -89,9 +89,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true })
       }
 
-      // Coins are derived from the trusted package catalog, not the payment amount.
+      // Coins come ONLY from the trusted package catalog — never from the raw
+      // payment amount. Every order we create (/api/payments/create-order) sets a
+      // valid packageId, so an unknown one means the order didn't originate from
+      // us: ack the webhook to stop Razorpay retries, but credit nothing.
       const pkg = COIN_PACKAGES.find((p) => p.id === packageId)
-      const coins = pkg ? pkg.coins + pkg.bonus : Math.floor(payment.amount / 100)
+      if (!pkg) {
+        console.warn('[/api/webhooks] payment.captured with unknown packageId:', packageId, '— crediting nothing. payment id:', payment.id)
+        return NextResponse.json({ received: true })
+      }
+      const coins = pkg.coins + pkg.bonus
 
       const db = adminDb()
       const userRef = db.doc(`users/${userId}`)
@@ -115,7 +122,7 @@ export async function POST(request: NextRequest) {
           type: 'coin_purchase',
           amount: payment.amount,
           coins,
-          description: pkg ? `Purchased ${pkg.coins} tokens${pkg.bonus > 0 ? ` (+${pkg.bonus} bonus)` : ''}` : `Purchased ${coins} tokens`,
+          description: `Purchased ${pkg.coins} tokens${pkg.bonus > 0 ? ` (+${pkg.bonus} bonus)` : ''}`,
           razorpayPaymentId: payment.id,
           razorpayOrderId: payment.order_id,
           createdAt: FieldValue.serverTimestamp(),
