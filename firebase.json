@@ -14,8 +14,12 @@
     "ignore": [
       "node_modules",
       ".git",
+      ".next",
+      ".firebase",
+      ".env.local",
       "firebase-debug.log",
       "firebase-debug.*.log",
+      "*.log",
       "functions"
     ],
     "alwaysDeployFromSource": true
