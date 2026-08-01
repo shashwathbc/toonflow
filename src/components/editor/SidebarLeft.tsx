@@ -531,24 +531,21 @@ function CharactersPanel() {
   )
 }
 
-// The spec's staged pipeline, surfaced as a stepper so the AI Agents panel reads
-// as Brief → Plan → Pages → Paint instead of a set of unlabelled states.
-const WORKFLOW_STAGES = ['Brief', 'Plan', 'Pages', 'Paint'] as const
+// The page-wise pipeline, surfaced as a stepper so the AI Agents panel reads as
+// Brief → Story Plan → Generate Pages. There is no separate "template" step:
+// Generate Story Plan plans the chapter AND lays out every page, then the creator
+// generates each page's art one at a time from the right sidebar.
+const WORKFLOW_STAGES = ['Brief', 'Story Plan', 'Generate Pages'] as const
 
 function stageIndex(s: WorkflowState): number {
   switch (s) {
     case 'idle':
     case 'error':
-    case 'generating_script':
       return 0 // Step 1 · Chapter Brief
-    case 'review_script':
-    case 'generating_template':
-      return 1 // Step 2 · Story Plan
-    case 'review_template':
-      return 2 // Step 3 · Page Overview
-    case 'painting':
-    case 'done':
-      return 3 // Step 4 · Paint
+    case 'planning':
+      return 1 // Step 2 · Planning + laying out pages
+    case 'ready':
+      return 2 // Step 3 · Generate each page
   }
 }
 
@@ -589,21 +586,15 @@ function AgentsPanel() {
   const setLeftTab = useEditorStore((s) => s.setLeftTab)
   const {
     workflowState,
-    storyboardData,
     progress,
     result,
-    blankPanelCount,
-    generateScript,
-    approveScript,
-    approveTemplate,
-    paintCanvas,
+    pageCount,
+    character,
+    generatePlan,
     reset,
   } = useAgentWorkflow()
 
-  const running =
-    workflowState === 'generating_script' ||
-    workflowState === 'generating_template' ||
-    workflowState === 'painting'
+  const running = workflowState === 'planning'
 
   return (
     <>
@@ -631,7 +622,7 @@ function AgentsPanel() {
       <div className="p-3 border-t border-[#262626]">
         <WorkflowStepper stage={stageIndex(workflowState)} />
 
-        {workflowState === 'idle' || workflowState === 'error' || workflowState === 'generating_script' ? (
+        {workflowState !== 'ready' ? (
           <>
             <label htmlFor="chapter-brief" className="block mb-1.5 text-[10px] font-semibold text-white/50 uppercase tracking-widest">
               Chapter Brief
@@ -642,28 +633,17 @@ function AgentsPanel() {
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}
               disabled={running}
-              placeholder="Describe the chapter, or paste your script. e.g. “A lonely prince discovers an ancient dragon sleeping beneath his kingdom.” The team plans the story, lays out each page's panels and dialogue, then paints them one page at a time."
+              placeholder="Describe the chapter, or paste your script. e.g. “A lonely prince discovers an ancient dragon sleeping beneath his kingdom.” The team plans the story and lays out every page — its panel art prompt and dialogue — so you can generate each page's art one at a time."
               className="w-full h-24 resize-none rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] focus:border-[#4C9AFF] outline-none p-2.5 text-xs text-white placeholder:text-white/30 disabled:opacity-60"
             />
           </>
-        ) : null}
-
-        {workflowState === 'review_script' && storyboardData && (
+        ) : (
           <div className="w-full bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg p-2.5 text-xs text-white/80">
-            <p className="font-semibold text-white mb-1">Story plan ready</p>
-            <p>The Story Director broke the chapter into <strong>{storyboardData.panels.length} pages</strong>.</p>
-            <p className="mt-1 text-[10px] text-white/60"><strong>Character:</strong> {storyboardData.character}</p>
-            <p className="mt-2 text-[10px] text-[#4C9AFF]">Build the page layout — panels &amp; dialogue — on the canvas?</p>
-          </div>
-        )}
-
-        {workflowState === 'review_template' && (
-          <div className="w-full bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg p-2.5 text-xs text-white/80">
-            <p className="font-semibold text-white mb-1">Layout built — pages ready</p>
-            <p className="text-[10px] text-white/60">
-              Every page now has its panels and speech bubbles laid out. The recommended way is
-              page-by-page: open each page, tweak its prompt, generate, review, then approve to
-              unlock the next — you only spend credits on pages you keep.
+            <p className="font-semibold text-white mb-1">Pages ready — generate one at a time</p>
+            <p>The Story Director laid out <strong>{pageCount} pages</strong>, each with its art prompt and dialogue in place.</p>
+            {character && <p className="mt-1 text-[10px] text-white/60"><strong>Cast:</strong> {character} · saved to your roster</p>}
+            <p className="mt-2 text-[10px] text-[#4C9AFF]">
+              Open a page, then press “Generate this page” in the right sidebar. Approve it to unlock the next.
             </p>
           </div>
         )}
@@ -674,7 +654,7 @@ function AgentsPanel() {
             <span className="truncate">{progress}</span>
           </p>
         )}
-        
+
         {!running && result && (
           <p className="mt-2 text-[11px] leading-snug text-white/60 border border-[#2A2A2A] rounded-md p-2" role="status">
             {result}
@@ -682,17 +662,17 @@ function AgentsPanel() {
         )}
 
         {/* Buttons for each state */}
-        {(workflowState === 'idle' || workflowState === 'error' || workflowState === 'generating_script') && (
+        {workflowState !== 'ready' && (
           <button
             type="button"
-            onClick={() => generateScript(prompt)}
+            onClick={() => generatePlan(prompt)}
             disabled={running}
             className="mt-2 w-full py-2 rounded-lg bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
           >
             {running ? (
               <>
                 <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-                Planning story…
+                Planning &amp; laying out pages…
               </>
             ) : (
               'Generate Story Plan'
@@ -700,106 +680,25 @@ function AgentsPanel() {
           </button>
         )}
 
-        {workflowState === 'review_script' && (
-          <div className="mt-2 flex gap-2">
+        {workflowState === 'ready' && (
+          <>
+            <button
+              type="button"
+              onClick={() => setLeftTab('pages')}
+              className="mt-2 w-full py-2.5 rounded-lg bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
+            >
+              <FileStack size={13} aria-hidden="true" />
+              Open pages to generate
+            </button>
             <button
               type="button"
               onClick={reset}
-              className="flex-1 py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-[#333] transition-all"
+              className="mt-2 w-full py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-[#333] transition-all"
             >
-              Cancel
+              Start new chapter
             </button>
-            <button
-              type="button"
-              onClick={approveScript}
-              className="flex-1 py-2 rounded-lg bg-[#4C9AFF] text-white text-xs font-semibold hover:brightness-110 transition-all"
-            >
-              Build page layout
-            </button>
-          </div>
-        )}
-
-        {(workflowState === 'review_template' || workflowState === 'generating_template') && (
-          <>
-            {/* Primary path (spec's recommended flow): open the Page Overview and
-                generate → review → approve each page in turn. */}
-            {workflowState === 'review_template' && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setLeftTab('pages')}
-                  className="mt-2 w-full py-2.5 rounded-lg bg-gradient-to-r from-[#4C9AFF] to-[#A855F7] text-white text-xs font-semibold hover:brightness-110 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
-                >
-                  <FileStack size={13} aria-hidden="true" />
-                  Review pages one-by-one
-                </button>
-                <p className="mt-1.5 text-[10px] text-white/40 text-center">
-                  Recommended — approve each page before spending on the next.
-                </p>
-              </>
-            )}
-
-            {/* Secondary "power" option: paint every page at once (uses the most
-                credits and can't be reviewed before it runs). */}
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={reset}
-                disabled={running}
-                className="flex-1 py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-[#333] transition-all disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={approveTemplate}
-                disabled={running}
-                title="Paints every page in one batch — uses the most credits"
-                className="flex-1 py-2 rounded-lg border border-[#A855F7]/40 bg-[#A855F7]/10 text-[#C084FC] text-xs font-semibold hover:bg-[#A855F7]/20 transition-all disabled:opacity-60 flex items-center justify-center gap-1.5"
-              >
-                {running ? (
-                  <>
-                    <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-                    Painting…
-                  </>
-                ) : (
-                  'Paint all pages'
-                )}
-              </button>
-            </div>
           </>
         )}
-
-        {(workflowState === 'painting' || workflowState === 'done') && (
-          <button
-            type="button"
-            onClick={reset}
-            className="mt-2 w-full py-2 rounded-lg bg-[#2A2A2A] text-white/80 text-xs font-semibold hover:bg-danger/80 transition-all flex items-center justify-center gap-1.5"
-          >
-            {workflowState === 'painting' ? (
-              <>
-                <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-                Cancel Painting
-              </>
-            ) : (
-              'Start New Workflow'
-            )}
-          </button>
-        )}
-
-        {/* Continue painting the existing canvas — fills panels that came back
-            blank (timed out / failed) WITHOUT re-planning from scratch. */}
-        {(workflowState === 'idle' || workflowState === 'error' || workflowState === 'done') &&
-          blankPanelCount > 0 && (
-            <button
-              type="button"
-              onClick={paintCanvas}
-              className="mt-2 w-full py-2 rounded-lg border border-[#4C9AFF]/40 bg-[#4C9AFF]/10 text-[#7FB6FF] text-xs font-semibold hover:bg-[#4C9AFF]/20 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF] flex items-center justify-center gap-1.5"
-            >
-              <ImageIcon size={13} aria-hidden="true" />
-              Paint {blankPanelCount} blank panel{blankPanelCount === 1 ? '' : 's'}
-            </button>
-          )}
       </div>
     </>
   )

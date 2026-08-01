@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -112,7 +112,7 @@ function SortableThumb({ page, index, boxH }: { page: Page; index: number; boxH:
   )
 }
 
-export function TimelineBottom() {
+export function TimelineBottom({ fill = false }: { fill?: boolean }) {
   const pages = useEditorStore((s) => s.pages)
   const order = useEditorStore((s) => s.timelineOrder)
   const reorderPages = useEditorStore((s) => s.reorderPages)
@@ -172,19 +172,42 @@ export function TimelineBottom() {
 
   const ordered = order.map((id) => pages.find((p) => p.id === id)).filter(Boolean) as Page[]
 
-  // Height available to a thumbnail = panel height minus the header, the page
-  // name label + gap, and row padding. Keeps the row from ever clipping.
-  const thumbBoxH = Math.max(30, Math.min(150, timelineHeight - 66))
+  // When docked (fill), the parent slot owns the size, so measure the scroll row
+  // directly to size thumbnails — this makes the timeline work in ANY slot
+  // (bottom = short & wide, or a side = tall & narrow). When free-standing (mobile
+  // bottom-sheet) it sizes itself from timelineHeight as before.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [measuredH, setMeasuredH] = useState(0)
+  useEffect(() => {
+    if (!fill) return
+    const el = scrollRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => setMeasuredH(entries[0].contentRect.height))
+    ro.observe(el)
+    setMeasuredH(el.clientHeight)
+    return () => ro.disconnect()
+  }, [fill])
+
+  // Height available to a thumbnail = row height minus the page name label + gaps.
+  const rowH = fill ? measuredH : timelineHeight - 36
+  const thumbBoxH = Math.max(30, Math.min(150, rowH - 30))
   const showAddLabel = thumbBoxH >= 64
 
   return (
-    <div className="bg-[#141414] border-t border-[#262626] w-full flex flex-col shrink-0" style={{ height: timelineHeight }}>
+    <div
+      className={cn('bg-[#141414] w-full flex flex-col shrink-0', fill ? 'h-full min-h-0' : 'border-t border-[#262626]')}
+      style={fill ? undefined : { height: timelineHeight }}
+    >
       <div className="h-9 px-3 flex items-center justify-between border-b border-[#222] shrink-0">
         <div className="flex items-center gap-2">
-          <button onClick={toggleTimeline} aria-label="Collapse timeline" className="text-white/40 hover:text-white">
-            <ChevronDown size={15} />
-          </button>
-          <h2 className="text-[11px] font-semibold text-white/70 uppercase tracking-widest">Story Timeline</h2>
+          {!fill && (
+            <>
+              <button onClick={toggleTimeline} aria-label="Collapse timeline" className="text-white/40 hover:text-white">
+                <ChevronDown size={15} />
+              </button>
+              <h2 className="text-[11px] font-semibold text-white/70 uppercase tracking-widest">Story Timeline</h2>
+            </>
+          )}
           <span className="text-[10px] text-white/30">{ordered.length} pages</span>
         </div>
         <div className="flex items-center gap-1">
@@ -203,7 +226,7 @@ export function TimelineBottom() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-x-auto overflow-y-hidden flex items-center gap-3 px-4 scrollbar-thin scrollbar-thumb-[#333]">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex items-center gap-3 px-4 scrollbar-thin scrollbar-thumb-[#333]">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={order} strategy={horizontalListSortingStrategy}>
             <div className="flex items-center gap-3">

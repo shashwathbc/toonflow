@@ -34,7 +34,8 @@ import {
   type Page,
 } from '@/store/useEditorStore'
 import { exportPagePng, exportProjectJson } from '@/lib/editor/exportProject'
-import { regeneratePanelArt, pageHasArt } from '@/lib/editor/panelArt'
+import { regeneratePanelArt, pageHasArt, buildPagePromptBlock, applyPromptLinesToPage } from '@/lib/editor/panelArt'
+import { parsePagePrompt } from '@/lib/editor/promptFormat'
 import { pageGating, effectiveStatus, PAGE_STATUS_META } from '@/lib/editor/pageWorkflow'
 import { cn } from '@/lib/utils/cn'
 
@@ -191,7 +192,10 @@ function PanelArtSection({ page }: { page: Page }) {
   // prompt from that page's artPrompt) whenever the selection moves to a
   // different panel — no reset effect needed.
   const pageId = page.id
-  const [prompt, setPrompt] = useState(page.artPrompt ?? '')
+  // The editable field is the canonical PROMPT / TEXT block: the art-only prompt
+  // plus this page's dialogue/SFX projected as [TAG] rows. Seeded once (the parent
+  // keys this by page id, so it re-seeds when selection moves to another page).
+  const [prompt, setPrompt] = useState(() => buildPagePromptBlock(page))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -208,16 +212,21 @@ function PanelArtSection({ page }: { page: Page }) {
   const meta = PAGE_STATUS_META[status]
 
   const run = async () => {
-    const p = prompt.trim()
-    if (p.length < 4) {
-      setError('Describe the panel art first.')
+    // Split the block: the PROMPT paints the art; the TEXT rows rewrite the
+    // on-canvas dialogue/SFX (never sent to the image model).
+    const { art, lines } = parsePagePrompt(prompt)
+    if (art.trim().length < 4) {
+      setError('Describe the panel art under PROMPT first.')
       return
     }
     const wasCompleted = status === 'completed'
     setBusy(true)
     setError(null)
     setPageStatus(pageId, 'generating')
-    const res = await regeneratePanelArt(pageId, p)
+    const res = await regeneratePanelArt(pageId, art)
+    // Apply the edited TEXT block to the bubbles regardless of art outcome — the
+    // dialogue edit is independent of whether the image request succeeded.
+    applyPromptLinesToPage(pageId, lines)
     setBusy(false)
     if (res.ok) {
       // Keep an already-approved page approved after a tweak; otherwise it now
@@ -272,10 +281,15 @@ function PanelArtSection({ page }: { page: Page }) {
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => e.stopPropagation()}
         disabled={busy}
-        rows={5}
-        placeholder="Describe this panel's art — camera, characters, setting, lighting, colours…"
-        className="w-full resize-none rounded-md bg-[#1E1E1E] border border-[#2E2E2E] focus:border-[#4C9AFF] outline-none p-2.5 text-[11px] leading-relaxed text-white placeholder:text-white/30 disabled:opacity-60"
+        rows={11}
+        spellCheck={false}
+        placeholder={'PROMPT\nEnvironment, any characters present, camera, cinematic style. Color: dominant …, secondary …, accent …\n\nTEXT\n[SFX] DONG. DONG.\n[NARRATION] A forgotten age had ended.'}
+        className="w-full resize-none rounded-md bg-[#1E1E1E] border border-[#2E2E2E] focus:border-[#4C9AFF] outline-none p-2.5 text-[11px] leading-relaxed font-mono text-white placeholder:text-white/30 disabled:opacity-60"
       />
+      <p className="text-[10px] text-white/40 leading-snug">
+        <strong className="text-white/55">PROMPT</strong> paints the art (never printed on the page).{' '}
+        <strong className="text-white/55">TEXT</strong> rows become emotion-matched speech bubbles — <code className="text-white/50">[SHOUT]</code>, <code className="text-white/50">[WHISPER]</code>, <code className="text-white/50">[NARRATION]</code>, <code className="text-white/50">[SFX]</code>.
+      </p>
       <button
         type="button"
         onClick={run}

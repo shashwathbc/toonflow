@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const decoded = await adminAuth().verifyIdToken(idToken)
+    const decoded = await adminAuth().verifySessionCookie(idToken, true)
     if (decoded.email !== SUPER_ADMIN_EMAIL) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

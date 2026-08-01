@@ -129,6 +129,17 @@ export interface Page {
    */
   artPrompt?: string
   /**
+   * Camera shot type for an agent-built panel (see webtoonFormat.ts). Sets the
+   * page's aspect ratio and is reused when the panel is regenerated so the strip
+   * stays consistent. Only set on agent-built webtoon panels.
+   */
+  artShot?: string
+  /**
+   * Per-chapter image seed shared by every panel so the whole strip renders with
+   * one coherent look/lighting. Only set on agent-built webtoon panels.
+   */
+  artSeed?: number
+  /**
    * Page-by-page workflow status. Only set on agent-built pages; absent on
    * hand-made pages and on projects created before the gated workflow existed
    * (effectiveStatus() in pageWorkflow.ts derives a sensible value for those).
@@ -162,6 +173,17 @@ export interface AssetContext {
 
 export type LeftTab = 'pages' | 'layers' | 'assets' | 'characters' | 'ai'
 export type RightTab = 'properties' | 'assistant' | 'export'
+
+// ---------------------------------------------------------------------------
+// Dockable panels — the three editor panels (navigator = the Pages/Layers/…
+// sidebar, inspector = Properties/Assistant/Export, timeline = Story Timeline)
+// can be dragged between the three physical slots (left, right, bottom). Slot
+// SIZE + open/collapsed state live per SLOT (leftWidth/rightWidth/timelineHeight,
+// leftOpen/rightOpen/timelineOpen) — independent of which panel currently
+// occupies it — while `panelSlots` records the panel↔slot assignment.
+// ---------------------------------------------------------------------------
+export type DockSlot = 'left' | 'right' | 'bottom'
+export type DockPanelId = 'navigator' | 'inspector' | 'timeline'
 
 // ---------------------------------------------------------------------------
 // Page presets — every page type ships production-correct dimensions.
@@ -221,6 +243,12 @@ interface EditorState {
   leftWidth: number
   rightWidth: number
   timelineHeight: number
+  // Which panel occupies each physical slot (drag-to-rearrange). Always a
+  // bijection — exactly one panel per slot — kept so by movePanelToSlot swapping.
+  panelSlots: Record<DockPanelId, DockSlot>
+  // Ephemeral drag state while a panel is being dragged to a new slot.
+  dockDrag: DockPanelId | null
+  dockOverSlot: DockSlot | null
   // Floating brush settings panel — user can close it to clear the canvas.
   brushPanelOpen: boolean
 
@@ -262,6 +290,10 @@ interface EditorState {
   setLeftWidth: (w: number) => void
   setRightWidth: (w: number) => void
   setTimelineHeight: (h: number) => void
+  movePanelToSlot: (panel: DockPanelId, slot: DockSlot) => void
+  setDockDrag: (panel: DockPanelId | null) => void
+  setDockOverSlot: (slot: DockSlot | null) => void
+  resetDockLayout: () => void
   setBrushPanelOpen: (v: boolean) => void
   toggleBrushPanel: () => void
 
@@ -442,6 +474,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   leftWidth: 264,
   rightWidth: 288,
   timelineHeight: 168,
+  panelSlots: { navigator: 'left', inspector: 'right', timeline: 'bottom' },
+  dockDrag: null,
+  dockOverSlot: null,
   brushPanelOpen: true,
 
   undoStack: [],
@@ -590,6 +625,35 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setLeftWidth: (w) => set({ leftWidth: Math.max(200, Math.min(w, 460)) }),
   setRightWidth: (w) => set({ rightWidth: Math.max(220, Math.min(w, 460)) }),
   setTimelineHeight: (h) => set({ timelineHeight: Math.max(96, Math.min(h, 360)) }),
+  // Assign `panel` to `slot`. To keep exactly one panel per slot, the panel that
+  // currently sits in `slot` is swapped back into the moved panel's old slot.
+  movePanelToSlot: (panel, slot) =>
+    set((s) => {
+      const from = s.panelSlots[panel]
+      if (from === slot) return {}
+      const displaced = (Object.keys(s.panelSlots) as DockPanelId[]).find((p) => s.panelSlots[p] === slot)
+      const next = { ...s.panelSlots, [panel]: slot }
+      if (displaced) next[displaced] = from
+      return { panelSlots: next, dockDrag: null, dockOverSlot: null }
+    }),
+  setDockDrag: (dockDrag) => set({ dockDrag }),
+  setDockOverSlot: (dockOverSlot) => set({ dockOverSlot }),
+  // Restore the whole workspace layout to factory defaults — panel placement,
+  // sizes, collapsed state AND the active tabs. Does not touch canvas content.
+  resetDockLayout: () =>
+    set({
+      panelSlots: { navigator: 'left', inspector: 'right', timeline: 'bottom' },
+      leftWidth: 264,
+      rightWidth: 288,
+      timelineHeight: 168,
+      leftOpen: true,
+      rightOpen: true,
+      timelineOpen: true,
+      leftTab: 'pages',
+      rightTab: 'properties',
+      dockDrag: null,
+      dockOverSlot: null,
+    }),
   setBrushPanelOpen: (v) => set({ brushPanelOpen: v }),
   toggleBrushPanel: () => set((s) => ({ brushPanelOpen: !s.brushPanelOpen })),
 

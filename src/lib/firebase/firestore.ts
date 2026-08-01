@@ -873,6 +873,16 @@ export async function createCharacter(webtoonId: string, data: Partial<Character
   return ref.id
 }
 
+/**
+ * One-shot read of a webtoon's character roster. Used by the agent workflow to
+ * dedupe before auto-creating cast members (the live UI uses the
+ * subscribeToCharacters listener instead).
+ */
+export async function listCharacters(webtoonId: string): Promise<Character[]> {
+  const snaps = await getDocs(collection(db, 'webtoons', webtoonId, 'characters'))
+  return snaps.docs.map((d) => ({ id: d.id, ...d.data() } as Character))
+}
+
 export async function updateCharacter(
   webtoonId: string,
   characterId: string,

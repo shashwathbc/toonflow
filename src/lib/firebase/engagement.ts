@@ -106,51 +106,29 @@ export interface RatingResult {
   userRating: number | null
 }
 
-/** Set (or update) the user's 1–5 star rating. Re-selecting the same value clears it. */
+/**
+ * Set (or update) the user's 1–5 star rating. Re-selecting the same value clears
+ * it. The aggregate is now computed SERVER-SIDE (POST /api/ratings) with the
+ * Admin SDK, keyed to the verified session, so the content doc's rating can't be
+ * tampered with from the client (audit M3). Signature is unchanged so callers
+ * don't move; the server ignores any client-claimed uid and uses the session.
+ */
 export async function setRating(
-  uid: string,
+  _uid: string,
   contentType: 'novel' | 'webtoon',
   contentId: string,
   value: number,
 ): Promise<RatingResult> {
-  const ratingRef = doc(db, 'ratings', ratingDocId(uid, contentType, contentId))
-  const cRef = doc(db, contentType === 'novel' ? 'novels' : 'webtoons', contentId)
-
-  return runTransaction(db, async (tx) => {
-    const [rSnap, cSnap] = await Promise.all([tx.get(ratingRef), tx.get(cRef)])
-    if (!cSnap.exists()) throw new Error('Content not found')
-
-    const count = (cSnap.data().ratingCount as number) ?? 0
-    let sum = ((cSnap.data().rating as number) ?? 0) * count
-    let newCount = count
-    let userRating: number | null = value
-
-    if (rSnap.exists()) {
-      const prev = (rSnap.data().value as number) ?? 0
-      if (prev === value) {
-        // Same star clicked again → remove the rating
-        tx.delete(ratingRef)
-        sum -= prev
-        newCount = Math.max(0, count - 1)
-        userRating = null
-      } else {
-        tx.update(ratingRef, { value, updatedAt: serverTimestamp() })
-        sum += value - prev
-      }
-    } else {
-      tx.set(ratingRef, {
-        uid, contentType, contentId, value,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-      sum += value
-      newCount = count + 1
-    }
-
-    const rating = newCount > 0 ? Math.round((sum / newCount) * 10) / 10 : 0
-    tx.update(cRef, { rating, ratingCount: newCount })
-    return { rating, ratingCount: newCount, userRating }
+  const res = await fetch('/api/ratings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contentType, contentId, value }),
   })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? 'Could not save your rating. Please try again.')
+  }
+  return (await res.json()) as RatingResult
 }
 
 export async function getUserRating(

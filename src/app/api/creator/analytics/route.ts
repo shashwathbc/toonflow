@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
   let uid: string
   try {
-    uid = (await adminAuth().verifyIdToken(idToken)).uid
+    uid = (await adminAuth().verifySessionCookie(idToken, true)).uid
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

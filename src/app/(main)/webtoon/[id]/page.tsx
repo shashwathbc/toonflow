@@ -15,6 +15,8 @@ import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import AuthorCard from '@/components/social/AuthorCard'
 import { cn } from '@/lib/utils/cn'
+import JsonLd from '@/components/seo/JsonLd'
+import { APP_URL } from '@/lib/utils/constants'
 import type { Webtoon, Episode } from '@/types'
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
@@ -74,8 +76,32 @@ export default function WebtoonDetailPage() {
   const displaySynopsis = showExpand && !synopsisExpanded ? synopsis.slice(0, 280) + '…' : synopsis
   const firstEpisode = episodes[0]
 
+  // schema.org ComicSeries for rich results (L4). aggregateRating only when real.
+  const webtoonJsonLd: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'ComicSeries',
+    name: toTitleCase(webtoon.title),
+    url: `${APP_URL}/webtoon/${id}`,
+    ...(synopsis ? { description: synopsis } : {}),
+    ...(webtoon.coverURL ? { image: webtoon.coverURL } : {}),
+    ...(webtoon.authorName ? { author: { '@type': 'Person', name: webtoon.authorName } } : {}),
+    ...(webtoon.genres?.length ? { genre: webtoon.genres } : {}),
+    ...((webtoon.rating ?? 0) > 0 && (webtoon.ratingCount ?? 0) > 0
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: webtoon.rating,
+            ratingCount: webtoon.ratingCount,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
+  }
+
   return (
     <div className="max-w-screen-lg mx-auto px-4 py-8 space-y-10">
+      <JsonLd data={webtoonJsonLd} />
       {/* Hero */}
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="w-40 sm:w-48 aspect-[2/3] rounded-2xl bg-bg-elevated flex-shrink-0 overflow-hidden shadow-xl self-start">

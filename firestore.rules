@@ -34,24 +34,11 @@ service cloud.firestore {
             || request.resource.data.likeCount == resource.data.get('likeCount', 0) - 1);
     }
 
-    // A signed-in user may update the rating aggregate ONLY as the setRating
-    // transaction does: the average stays in [0,5] and ratingCount moves by at
-    // most ±1 (add / change / remove one rating). This blocks the catastrophic
-    // manipulation the old unbounded rule allowed (e.g. rating=1, ratingCount=1e5
-    // on a rival's work). NOTE: this bounds the *shape* of the write, not its
-    // truthfulness — a scripted client could still cast/withdraw one fake vote.
-    // Full tamper-proofing requires moving aggregation to an Admin-SDK route
-    // (tracked as the P1 rating-integrity follow-up).
-    function ratingAdjusted() {
-      return onlyUpdates(['rating', 'ratingCount'])
-        && request.resource.data.rating is number
-        && request.resource.data.rating >= 0 && request.resource.data.rating <= 5
-        && request.resource.data.ratingCount is int
-        && request.resource.data.ratingCount >= 0
-        && (request.resource.data.ratingCount == resource.data.get('ratingCount', 0)
-            || request.resource.data.ratingCount == resource.data.get('ratingCount', 0) + 1
-            || request.resource.data.ratingCount == resource.data.get('ratingCount', 0) - 1);
-    }
+    // Rating aggregation moved SERVER-SIDE (Admin SDK via /api/ratings) — audit
+    // M3. The content doc's rating/ratingCount are now written only by that route
+    // (which bypasses these rules and is keyed to the verified session), so the
+    // old shape-bounding client rule (ratingAdjusted) is retired: no client may
+    // write the aggregate at all.
 
     // Public content — anyone can read published novels/webtoons
     match /novels/{novelId} {
@@ -62,10 +49,11 @@ service cloud.firestore {
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.viewCount == 0
         && request.resource.data.likeCount == 0;
-      // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it.
-      // like/rating bumps are delta-bounded (see likeCountBumped/ratingAdjusted).
+      // viewCount AND the rating aggregate are server-managed (Admin SDK via
+      // /api/views and /api/ratings) — clients may not touch them. Only the
+      // likeCount bump stays client-side and delta-bounded (see likeCountBumped).
       allow update: if isOwner(resource.data.authorId) || isAdmin()
-        || likeCountBumped() || ratingAdjusted();
+        || likeCountBumped();
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /chapters/{chapterId} {
@@ -82,10 +70,11 @@ service cloud.firestore {
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.viewCount == 0
         && request.resource.data.likeCount == 0;
-      // viewCount is server-managed (Admin SDK via /api/views) — clients may not touch it.
-      // like/rating bumps are delta-bounded (see likeCountBumped/ratingAdjusted).
+      // viewCount AND the rating aggregate are server-managed (Admin SDK via
+      // /api/views and /api/ratings) — clients may not touch them. Only the
+      // likeCount bump stays client-side and delta-bounded (see likeCountBumped).
       allow update: if isOwner(resource.data.authorId) || isAdmin()
-        || likeCountBumped() || ratingAdjusted();
+        || likeCountBumped();
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /episodes/{episodeId} {
@@ -300,16 +289,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Ratings — signed-in users manage their own 1–5 star ratings
+    // Ratings — written ONLY by the Admin SDK via /api/ratings, which recomputes
+    // the content aggregate in the same transaction (audit M3). Public read so a
+    // signed-in user can see their own star; clients never write here.
     match /ratings/{ratingId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid
-        && request.resource.data.value is int
-        && request.resource.data.value >= 1 && request.resource.data.value <= 5;
-      allow update: if isSignedIn() && resource.data.uid == request.auth.uid
-        && request.resource.data.value is int
-        && request.resource.data.value >= 1 && request.resource.data.value <= 5;
-      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
     }
 
     // Likes — signed-in users manage their own likes (uid bound to caller so a

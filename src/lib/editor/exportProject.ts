@@ -97,18 +97,50 @@ export async function exportMergedStripBlob(order: string[], targetWidth = 1080)
   }
   if (!slices.length) return null
 
+  // Feathered cross-fade at every seam so the merged strip reads as ONE
+  // continuous scroll instead of stacked rectangles: each slice (after the first)
+  // overlaps the previous by BLEND px, and its top BLEND px fade in over the
+  // slice above, melting the tonal jump between two independently-rendered panels.
+  const BLEND = Math.max(0, Math.round(targetWidth * 0.02))
+  const stackedH = totalH - BLEND * (slices.length - 1)
+
   const out = document.createElement('canvas')
   out.width = targetWidth
-  out.height = totalH
+  out.height = Math.max(1, stackedH)
   const ctx = out.getContext('2d')
   if (!ctx) return null
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, out.width, out.height)
   let y = 0
-  for (const c of slices) {
-    ctx.drawImage(c, 0, y)
-    y += c.height
-  }
+  slices.forEach((c, i) => {
+    if (i === 0 || BLEND === 0) {
+      ctx.drawImage(c, 0, y)
+    } else {
+      // Mask the slice's top BLEND rows to a 0→1 vertical alpha ramp so the panel
+      // above shows through the seam, then fade to fully opaque below it.
+      const tmp = document.createElement('canvas')
+      tmp.width = c.width
+      tmp.height = c.height
+      const tctx = tmp.getContext('2d')
+      if (!tctx) {
+        ctx.drawImage(c, 0, y)
+      } else {
+        tctx.drawImage(c, 0, 0)
+        tctx.globalCompositeOperation = 'destination-in'
+        const g = tctx.createLinearGradient(0, 0, 0, BLEND)
+        g.addColorStop(0, 'rgba(0,0,0,0)')
+        g.addColorStop(1, 'rgba(0,0,0,1)')
+        tctx.fillStyle = g
+        tctx.fillRect(0, 0, tmp.width, BLEND)
+        tctx.fillStyle = 'rgba(0,0,0,1)'
+        tctx.fillRect(0, BLEND, tmp.width, tmp.height - BLEND)
+        tctx.globalCompositeOperation = 'source-over'
+        ctx.drawImage(tmp, 0, y)
+      }
+    }
+    // Next slice starts BLEND px up so it overlaps this one (except after the last).
+    y += c.height - (i < slices.length - 1 ? BLEND : 0)
+  })
   return canvasToBlob(out)
 }
 

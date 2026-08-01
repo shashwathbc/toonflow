@@ -129,7 +129,7 @@ async function handleSupportRequest(req: NextRequest): Promise<NextResponse> {
   const idToken = req.cookies.get(AUTH_COOKIE_NAME)?.value
   if (idToken) {
     try {
-      userId = (await adminAuth().verifyIdToken(idToken)).uid
+      userId = (await adminAuth().verifySessionCookie(idToken, true)).uid
     } catch { /* anonymous submission is fine */ }
   }
 

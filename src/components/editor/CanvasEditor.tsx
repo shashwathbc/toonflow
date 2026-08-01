@@ -21,6 +21,7 @@ import {
   Download,
   Type,
   Layers,
+  RotateCcw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { SidebarLeft } from '@/components/editor/SidebarLeft'
@@ -32,9 +33,11 @@ import { CommandPalette } from '@/components/editor/CommandPalette'
 import { ResizeHandle } from '@/components/editor/ResizeHandle'
 import { BrandingMetaDialog } from '@/components/editor/BrandingMetaDialog'
 import { MobileEditorChrome } from '@/components/editor/MobileEditorChrome'
+import { DockBar, DockOverlay, DOCK_META } from '@/components/editor/DockLayout'
 import { useEditorShortcuts } from '@/components/editor/useEditorShortcuts'
 import { usePaintPersistence } from '@/components/editor/usePaintPersistence'
-import { useEditorStore } from '@/store/useEditorStore'
+import { useEditorLayoutPersistence } from '@/components/editor/useEditorLayoutPersistence'
+import { useEditorStore, type DockSlot, type DockPanelId } from '@/store/useEditorStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useEpisodes } from '@/hooks/useEpisodes'
@@ -105,12 +108,17 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
   const timelineOpen = useEditorStore((s) => s.timelineOpen)
   const leftWidth = useEditorStore((s) => s.leftWidth)
   const rightWidth = useEditorStore((s) => s.rightWidth)
-  const setLeftWidth = useEditorStore((s) => s.setLeftWidth)
-  const setRightWidth = useEditorStore((s) => s.setRightWidth)
-  const setTimelineHeight = useEditorStore((s) => s.setTimelineHeight)
+  const timelineHeight = useEditorStore((s) => s.timelineHeight)
   const toggleLeft = useEditorStore((s) => s.toggleLeft)
   const toggleRight = useEditorStore((s) => s.toggleRight)
   const toggleTimeline = useEditorStore((s) => s.toggleTimeline)
+  const resetDockLayout = useEditorStore((s) => s.resetDockLayout)
+  const panelSlots = useEditorStore((s) => s.panelSlots)
+  // While a divider is being dragged, suspend the width/height CSS transition so
+  // resizing stays 1:1 with the cursor; the transition only smooths collapse.
+  const [resizing, setResizing] = useState(false)
+  // Load saved layout (slots/sizes/open flags/tabs) on mount + persist changes.
+  useEditorLayoutPersistence()
 
   useEditorShortcuts()
   usePaintPersistence()
@@ -429,6 +437,20 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
   const toggleBtn =
     'w-8 h-8 flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]'
 
+  // ── Dockable panels ──────────────────────────────────────────────────────
+  // `panelSlots` is always a bijection, so exactly one panel sits in each slot.
+  const panelInSlot = (slot: DockSlot): DockPanelId =>
+    (Object.keys(panelSlots) as DockPanelId[]).find((p) => panelSlots[p] === slot) ?? 'navigator'
+  const renderPanelContent = (panel: DockPanelId) =>
+    panel === 'navigator' ? <SidebarLeft /> : panel === 'inspector' ? <SidebarRight /> : <TimelineBottom fill />
+  // Resize by reading live state (not a render-closure width) so drags never drift.
+  const growLeft = (d: number) => { const s = useEditorStore.getState(); s.setLeftWidth(s.leftWidth + d) }
+  const growRight = (d: number) => { const s = useEditorStore.getState(); s.setRightWidth(s.rightWidth - d) }
+  const growBottom = (d: number) => { const s = useEditorStore.getState(); s.setTimelineHeight(s.timelineHeight + d) }
+  // Static class strings (Tailwind JIT can't see dynamically-built ones).
+  const transitionCls = (dim: 'width' | 'height') =>
+    resizing ? '' : dim === 'width' ? 'transition-[width] duration-200 ease-out' : 'transition-[height] duration-200 ease-out'
+
   const saveLabel =
     saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : 'Autosaved'
 
@@ -524,6 +546,15 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
             <button onClick={toggleRight} aria-label="Toggle right panel" aria-pressed={rightOpen} className={cn(toggleBtn, rightOpen ? 'text-white bg-white/10' : 'text-white/45 hover:text-white hover:bg-white/5')}>
               <PanelRight size={16} aria-hidden="true" />
             </button>
+            <div className="w-px h-5 bg-[#2A2A2A] mx-0.5" aria-hidden="true" />
+            <button
+              onClick={resetDockLayout}
+              aria-label="Reset panels to default layout"
+              title="Reset panels to default layout"
+              className={cn(toggleBtn, 'text-white/45 hover:text-white hover:bg-white/5')}
+            >
+              <RotateCcw size={15} aria-hidden="true" />
+            </button>
           </div>
 
           {/* Actions — secondary buttons collapse away on small screens */}
@@ -551,39 +582,88 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
           </div>
         </header>
 
-        {/* Body */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Desktop: inline resizable left panel. Mobile: it's a drawer instead. */}
+        {/* Body — three dockable panels (navigator / inspector / timeline) live in
+            the left, right and bottom slots; a panel can be dragged between slots. */}
+        <div className="relative flex-1 flex overflow-hidden">
+          {/* Left slot */}
           {!isMobile && leftOpen && (
             <>
-              <div style={{ width: leftWidth }} className="h-full shrink-0">
-                <SidebarLeft />
+              <div
+                style={{ width: leftWidth }}
+                className={cn(
+                  'h-full shrink-0 flex flex-col overflow-hidden bg-[#141414] animate-in fade-in slide-in-from-left-4 duration-200',
+                  transitionCls('width'),
+                )}
+              >
+                <DockBar panel={panelInSlot('left')} slot="left" />
+                <div className="flex-1 min-h-0 overflow-hidden">{renderPanelContent(panelInSlot('left'))}</div>
               </div>
-              <ResizeHandle orientation="vertical" onDelta={(d) => setLeftWidth(leftWidth + d)} />
+              <ResizeHandle
+                orientation="vertical"
+                onDelta={growLeft}
+                onStart={() => setResizing(true)}
+                onEnd={() => setResizing(false)}
+                onReset={() => useEditorStore.getState().setLeftWidth(264)}
+              />
             </>
           )}
 
+          {/* Center canvas */}
           <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
             <TopToolbar />
             <WorkspaceDynamic />
           </div>
 
+          {/* Right slot */}
           {!isMobile && rightOpen && (
             <>
-              <ResizeHandle orientation="vertical" invert onDelta={(d) => setRightWidth(rightWidth - d)} />
-              <div style={{ width: rightWidth }} className="h-full shrink-0">
-                <SidebarRight />
+              <ResizeHandle
+                orientation="vertical"
+                invert
+                onDelta={growRight}
+                onStart={() => setResizing(true)}
+                onEnd={() => setResizing(false)}
+                onReset={() => useEditorStore.getState().setRightWidth(288)}
+              />
+              <div
+                style={{ width: rightWidth }}
+                className={cn(
+                  'h-full shrink-0 flex flex-col overflow-hidden bg-[#141414] animate-in fade-in slide-in-from-right-4 duration-200',
+                  transitionCls('width'),
+                )}
+              >
+                <DockBar panel={panelInSlot('right')} slot="right" />
+                <div className="flex-1 min-h-0 overflow-hidden">{renderPanelContent(panelInSlot('right'))}</div>
               </div>
             </>
           )}
+
+          {/* Drag-to-dock drop zones — only visible while a panel is being dragged. */}
+          {!isMobile && <DockOverlay />}
         </div>
 
-        {/* Timeline — desktop only inline; on mobile it opens as a bottom sheet */}
+        {/* Bottom slot — desktop only inline; on mobile it opens as a bottom sheet */}
         {!isMobile &&
           (timelineOpen ? (
             <>
-              <ResizeHandle orientation="horizontal" invert onDelta={(d) => setTimelineHeight(useEditorStore.getState().timelineHeight + d)} />
-              <TimelineBottom />
+              <ResizeHandle
+                orientation="horizontal"
+                invert
+                onDelta={growBottom}
+                onStart={() => setResizing(true)}
+                onEnd={() => setResizing(false)}
+                onReset={() => useEditorStore.getState().setTimelineHeight(168)}
+              />
+              <div
+                style={{ height: timelineHeight }}
+                className={cn(
+                  'w-full shrink-0 flex flex-col overflow-hidden border-t border-[#262626] bg-[#141414] animate-in fade-in slide-in-from-bottom-4 duration-200',
+                  transitionCls('height'),
+                )}
+              >
+                <DockBar panel={panelInSlot('bottom')} slot="bottom" />
+                <div className="flex-1 min-h-0 overflow-hidden">{renderPanelContent(panelInSlot('bottom'))}</div>
+              </div>
             </>
           ) : (
             <button
@@ -591,7 +671,7 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
               className="h-7 bg-[#141414] border-t border-[#262626] flex items-center gap-2 px-3 text-white/45 hover:text-white transition-colors shrink-0"
             >
               <ChevronUp size={13} aria-hidden="true" />
-              <span className="text-[11px] font-semibold uppercase tracking-widest">Story Timeline</span>
+              <span className="text-[11px] font-semibold uppercase tracking-widest">{DOCK_META[panelInSlot('bottom')].title}</span>
             </button>
           ))}
 

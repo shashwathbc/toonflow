@@ -15,6 +15,7 @@ import {
 } from '@/store/useEditorStore'
 import { registerStage } from '@/lib/editor/exportProject'
 import { PageContextMenu } from '@/components/editor/PageContextMenu'
+import { ZoomControls } from '@/components/editor/ZoomControls'
 import { BrushEngine, type InputSample } from '@/lib/editor/brush/engine'
 import { getPaintCanvas, reconcilePaintCanvas, markPaintSrc } from '@/lib/editor/brush/bitmaps'
 import { pathBubble, bubbleTextRect } from '@/lib/editor/bubbles'
@@ -467,6 +468,11 @@ export function Workspace() {
       }
     }
 
+    // iOS gesture* pinch state (see the iOS Safari note below where these fire).
+    let iosGesture = false
+    let gStartScale = 1
+    let gFocal = { x: 0, y: 0 }
+
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length >= 2) {
         e.preventDefault()
@@ -475,6 +481,9 @@ export function Workspace() {
       }
     }
     const onTouchMove = (e: TouchEvent) => {
+      // iOS drives the pinch through its gesture* events (below); ignore the
+      // parallel touchmove there so the two paths don't fight and jitter.
+      if (iosGesture) return
       const g = pinchRef.current
       if (!g || e.touches.length < 2) return
       e.preventDefault()
@@ -493,15 +502,56 @@ export function Workspace() {
       if (e.touches.length < 2) pinchRef.current = null
     }
 
+    // --- iOS Safari pinch ---------------------------------------------------
+    // On iPhone/iPad, `touch-action:none` does NOT stop Safari's own pinch: it
+    // consumes the two-finger gesture and emits non-standard gesture* events
+    // instead of firing multi-touch `touchmove`, so the handler above never
+    // runs. We preventDefault those events and drive the same zoom from
+    // `e.scale` (cumulative factor vs. gesture start), anchored at its centroid.
+    interface GestureEvt extends Event { scale: number; clientX: number; clientY: number }
+    const onGestureStart = (ev: Event) => {
+      const e = ev as GestureEvt
+      e.preventDefault()
+      abortSingleFinger()
+      iosGesture = true
+      const vp = useEditorStore.getState().viewport
+      const r = host.getBoundingClientRect()
+      const mx = e.clientX - r.left
+      const my = e.clientY - r.top
+      gStartScale = vp.scale
+      gFocal = { x: (mx - vp.x) / vp.scale, y: (my - vp.y) / vp.scale }
+    }
+    const onGestureChange = (ev: Event) => {
+      if (!iosGesture) return
+      const e = ev as GestureEvt
+      e.preventDefault()
+      const r = host.getBoundingClientRect()
+      const mx = e.clientX - r.left
+      const my = e.clientY - r.top
+      const scale = Math.max(ZMIN, Math.min(gStartScale * e.scale, ZMAX))
+      useEditorStore.getState().setViewport({ x: mx - gFocal.x * scale, y: my - gFocal.y * scale, scale })
+    }
+    const onGestureEnd = (ev: Event) => {
+      ev.preventDefault()
+      iosGesture = false
+      pinchRef.current = null
+    }
+
     host.addEventListener('touchstart', onTouchStart, { passive: false })
     host.addEventListener('touchmove', onTouchMove, { passive: false })
     host.addEventListener('touchend', onTouchEnd)
     host.addEventListener('touchcancel', onTouchEnd)
+    host.addEventListener('gesturestart', onGestureStart, { passive: false })
+    host.addEventListener('gesturechange', onGestureChange, { passive: false })
+    host.addEventListener('gestureend', onGestureEnd, { passive: false })
     return () => {
       host.removeEventListener('touchstart', onTouchStart)
       host.removeEventListener('touchmove', onTouchMove)
       host.removeEventListener('touchend', onTouchEnd)
       host.removeEventListener('touchcancel', onTouchEnd)
+      host.removeEventListener('gesturestart', onGestureStart)
+      host.removeEventListener('gesturechange', onGestureChange)
+      host.removeEventListener('gestureend', onGestureEnd)
     }
   }, [])
 
@@ -1174,6 +1224,10 @@ export function Workspace() {
           onRename={startRename}
         />
       )}
+
+      {/* on-screen zoom widget — reliable zoom on touch where pinch can be
+          swallowed by the browser; also handy on desktop */}
+      <ZoomControls />
     </div>
   )
 }

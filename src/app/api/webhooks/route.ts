@@ -98,6 +98,21 @@ export async function POST(request: NextRequest) {
         console.warn('[/api/webhooks] payment.captured with unknown packageId:', packageId, '— crediting nothing. payment id:', payment.id)
         return NextResponse.json({ received: true })
       }
+
+      // Defence-in-depth (audit L1): the price for a package is fixed in the
+      // catalog and /api/payments/create-order always charges pkg.priceInr*100
+      // paise. If the captured amount doesn't match, this capture didn't come
+      // from an order we issued — ack to stop retries, but credit nothing.
+      const expectedPaise = pkg.priceInr * 100
+      if (payment.amount !== expectedPaise) {
+        console.warn(
+          '[/api/webhooks] amount mismatch for package', packageId,
+          '— expected', expectedPaise, 'paise, got', payment.amount,
+          '— crediting nothing. payment id:', payment.id,
+        )
+        return NextResponse.json({ received: true })
+      }
+
       const coins = pkg.coins + pkg.bonus
 
       const db = adminDb()

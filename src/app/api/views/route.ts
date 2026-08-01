@@ -47,15 +47,20 @@ const completeSchema = z.object({
   webdriver: z.boolean().optional(),
 })
 
-/** Verify the Firebase ID token from the auth cookie; anonymous on any failure. */
+/** Verify the Firebase session cookie from the auth cookie; anonymous on any
+ *  failure. checkRevoked is deliberately FALSE here (unlike the sensitive
+ *  AI/payment surface): view tracking is very high volume, and a revoked session
+ *  merely attributing a view for up to its 7-day lifetime is a negligible risk
+ *  next to an Admin lookup on every single view. Raise to `true` if that ever
+ *  matters. */
 async function getVerifiedUid(req: NextRequest): Promise<string | null> {
-  const idToken = req.cookies.get(AUTH_COOKIE_NAME)?.value
-  if (!idToken) return null
+  const sessionCookie = req.cookies.get(AUTH_COOKIE_NAME)?.value
+  if (!sessionCookie) return null
   try {
-    const decoded = await adminAuth().verifyIdToken(idToken)
+    const decoded = await adminAuth().verifySessionCookie(sessionCookie, false)
     return decoded.uid
   } catch {
-    return null // expired/invalid token → treat as anonymous, never trust it
+    return null // expired/invalid cookie → treat as anonymous, never trust it
   }
 }
 

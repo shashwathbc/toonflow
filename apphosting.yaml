@@ -11,8 +11,15 @@
 
 runConfig:
   cpu: 1
-  memoryMiB: 512
-  minInstances: 0
+  # 1 GiB gives headroom for the AI image route, which buffers a full generated
+  # image into memory as base64 before returning it; 512 MiB at concurrency 80
+  # risked memory pressure on bursts of concurrent generations (audit M5).
+  memoryMiB: 1024
+  # One warm instance in production removes the Cloud Run cold-start penalty on
+  # the first request after idle, which was the dominant real-world LCP hit for
+  # visitors landing on browse/reader pages (audit M6). Costs one always-on
+  # instance; scale-up to maxInstances is unchanged.
+  minInstances: 1
   maxInstances: 100
   concurrency: 80
 
@@ -89,9 +96,9 @@ env:
   - variable: ANTHROPIC_API_KEY
     secret: ANTHROPIC_API_KEY
     availability: [RUNTIME]
-  - variable: STABILITY_API_KEY
-    secret: STABILITY_API_KEY
-    availability: [RUNTIME]
+  # NOTE: STABILITY_API_KEY was removed (audit L3) — image generation runs on
+  # Pollinations (see src/lib/ai/imageProvider.ts), so the Stability secret was
+  # dead config. When a managed provider is adopted (audit H1), add its key here.
   - variable: RAZORPAY_KEY_SECRET
     secret: RAZORPAY_KEY_SECRET
     availability: [RUNTIME]

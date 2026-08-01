@@ -17,6 +17,8 @@ import RatingControl from '@/components/reader/RatingControl'
 import AuthorCard from '@/components/social/AuthorCard'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
+import JsonLd from '@/components/seo/JsonLd'
+import { APP_URL } from '@/lib/utils/constants'
 import type { Novel } from '@/types'
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
@@ -129,8 +131,34 @@ export default function NovelDetailPage() {
   const publishedYear = novel.publishedAt ? fromTimestamp(novel.publishedAt).getFullYear() : null
   const remaining = visibleChapters.length - 20
 
+  // schema.org Book for rich results (L4). Only include an aggregateRating when
+  // there are real ratings, or Google flags an empty/zero rating.
+  const novelJsonLd: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Book',
+    name: toTitleCase(novel.title),
+    bookFormat: 'https://schema.org/EBook',
+    url: `${APP_URL}/novel/${id}`,
+    ...(synopsis ? { description: synopsis } : {}),
+    ...(novel.coverURL ? { image: novel.coverURL } : {}),
+    ...(novel.authorName ? { author: { '@type': 'Person', name: novel.authorName } } : {}),
+    ...(novel.genres?.length ? { genre: novel.genres } : {}),
+    ...((novel.rating ?? 0) > 0 && (novel.ratingCount ?? 0) > 0
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: novel.rating,
+            ratingCount: novel.ratingCount,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
+  }
+
   return (
     <div>
+      <JsonLd data={novelJsonLd} />
       {/* Hero banner — cover art backdrop with title overlay */}
       <section className="relative" aria-label="Novel overview">
         {heroImage && (
