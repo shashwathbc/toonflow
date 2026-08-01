@@ -4,16 +4,14 @@ import { useCallback, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { useEditorStore } from '@/store/useEditorStore'
 import { getWebtoonById, listCharacters, createCharacter } from '@/lib/firebase/firestore'
-import { layoutPanelDialogue } from '@/lib/editor/bubbleLayout'
-import type { BubbleKind } from '@/lib/editor/bubbles'
 import { panelSize } from '@/lib/editor/webtoonFormat'
 
-// `position` is one of nine placement zones the storyboard picks so dialogue
-// lands in the panel's negative space instead of over the art (see BubblePos).
-interface StoryBubble { kind: BubbleKind; text: string; position?: string }
-// `cast` names the characters present so only their looks are prepended to this
-// panel's art prompt; `sfx` are onomatopoeia rendered as big caption lettering.
-export interface StoryPanel { scene: string; shot?: string; palette?: string; motion?: string; cast?: string[]; sfx?: string[]; bubbles: StoryBubble[] }
+// A page is ONE simple image prompt (`scene`) that already contains its setting,
+// characters, any EMPTY speech bubbles (the creator letters them afterwards) and
+// its palette/fade continuity — no separate bubble/SFX planning. `cast` names the
+// characters present so only their locked looks are prepended to this page's
+// prompt; `shot` sets the page height.
+export interface StoryPanel { scene: string; shot?: string; cast?: string[] }
 // A named cast member with a locked look, saved to the character roster.
 interface StoryCharacter { name: string; look: string }
 
@@ -54,11 +52,12 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' }
 const TARGET_PANELS = 20
 
 // One-shot, page-wise workflow: Generate Story Plan → the Story Director plans
-// the chapter AND we immediately lay out every page (its art prompt + speech
-// bubbles) on the canvas. No separate "template" build step and no batch paint —
-// the creator then generates each page's art ONE AT A TIME from the right
-// sidebar (see PanelArtSection / regeneratePanelArt), reviewing/approving each
-// before spending on the next.
+// the chapter AND we immediately create every page, each holding ONE simple image
+// prompt (setting + characters + any EMPTY speech bubbles + page-to-page color
+// continuity). No separate "template" build step, no overlay bubbles and no batch
+// paint — the creator then generates each page's image ONE AT A TIME from the
+// right sidebar (see PanelArtSection / regeneratePanelArt), letters the dialogue
+// into the empty bubbles, and approves each before spending on the next.
 export type WorkflowState = 'idle' | 'planning' | 'ready' | 'error'
 
 export function useAgentWorkflow() {
@@ -172,9 +171,11 @@ export function useAgentWorkflow() {
             ? `${castLooks.join('. ')}. `
             : ''
           : legacyCharacterPrefix
-        // style (locked grade) → cast (locked looks) → scene → 60/30/10 palette
-        const palette = panel.palette ? `. Color: ${panel.palette}` : ''
-        const artPrompt = stylePrefix + castPrefix + panel.scene + palette
+        // style (locked look) → cast (locked looks) → scene. The scene already
+        // carries the setting, mood, palette/fade continuity and any EMPTY
+        // speech bubbles drawn into the image, so nothing is overlaid on the
+        // canvas — the creator letters the bubbles afterwards.
+        const artPrompt = stylePrefix + castPrefix + panel.scene
         // Size the page to the shot so establishing shots are tall and reaction
         // beats short — the varying height is what gives the scroll its rhythm and
         // the page matches the render aspect exactly so art fills it edge-to-edge.
@@ -188,19 +189,6 @@ export function useAgentWorkflow() {
           'webtoon',
         )
         if (!firstPageId) firstPageId = pageId
-        const page = useEditorStore.getState().pages.find((p) => p.id === pageId)
-        if (!page) continue
-        // Size every bubble/SFX to its text and flow them down the panel's safe
-        // area with a guaranteed gap — no fixed-size boxes, no overlaps (see
-        // layoutPanelDialogue). Each placed spec carries its own final geometry.
-        const placed = layoutPanelDialogue(
-          { width: page.width, height: page.height },
-          panel.bubbles.map((b) => ({ kind: b.kind, text: b.text, zone: b.position })),
-          panel.sfx ?? [],
-        )
-        for (const item of placed) {
-          store.addElement(pageId, { ...item.spec, x: item.x, y: item.y })
-        }
       }
 
       useEditorStore.getState().clearSelection()

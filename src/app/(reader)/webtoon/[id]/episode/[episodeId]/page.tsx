@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, ImageIcon, Loader2, Home, List } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { getWebtoonById, getEpisodesByWebtoon, upsertReadingHistory } from '@/lib/firebase/firestore'
+import { getWebtoonById, getEpisodesByWebtoon, upsertReadingHistory, getUserProfile } from '@/lib/firebase/firestore'
 import { useViewTracking } from '@/hooks/useViewTracking'
 import { useReaderChrome } from '@/hooks/useReaderChrome'
 import { cn } from '@/lib/utils/cn'
@@ -24,6 +24,9 @@ export default function EpisodeReaderPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [episode, setEpisode] = useState<Episode | null>(null)
   const [loading, setLoading] = useState(true)
+  // Author's CURRENT profile display name for the outro follow label — the
+  // authorName denormalized on the webtoon doc can be stale after a rename.
+  const [authorName, setAuthorName] = useState<string | null>(null)
 
   // Immersive chrome (top bar + floating episode nav) — hides while reading,
   // reveals on scroll-up or a tap. Shared with the novel chapter reader.
@@ -49,6 +52,12 @@ export default function EpisodeReaderPage() {
         published.sort((a, b) => (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0))
         setEpisodes(published)
         setEpisode(published.find((e) => e.id === episodeId) ?? null)
+        // Resolve the author's live profile name for the follow label.
+        if (w?.authorId) {
+          getUserProfile(w.authorId)
+            .then((prof) => { if (prof?.displayName) setAuthorName(prof.displayName) })
+            .catch(() => {})
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -160,7 +169,7 @@ export default function EpisodeReaderPage() {
           </div>
         )}
 
-        {webtoon && <EpisodeOutroPage webtoon={webtoon} episode={episode} />}
+        {webtoon && <EpisodeOutroPage webtoon={webtoon} episode={episode} authorNameOverride={authorName ?? undefined} />}
 
         {/* Navigation */}
         <nav aria-label="Episode navigation" className="flex items-center justify-between gap-4 px-4 py-8 border-t border-bg-border">

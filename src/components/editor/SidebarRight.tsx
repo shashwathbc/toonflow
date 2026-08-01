@@ -34,8 +34,7 @@ import {
   type Page,
 } from '@/store/useEditorStore'
 import { exportPagePng, exportProjectJson } from '@/lib/editor/exportProject'
-import { regeneratePanelArt, pageHasArt, buildPagePromptBlock, applyPromptLinesToPage } from '@/lib/editor/panelArt'
-import { parsePagePrompt } from '@/lib/editor/promptFormat'
+import { regeneratePanelArt, pageHasArt } from '@/lib/editor/panelArt'
 import { pageGating, effectiveStatus, PAGE_STATUS_META } from '@/lib/editor/pageWorkflow'
 import { cn } from '@/lib/utils/cn'
 
@@ -182,20 +181,21 @@ function ColorField({
 // ---------------------------------------------------------------------------
 /**
  * Per-page AI art + gated page-by-page workflow. Shown for any agent-built
- * webtoon panel (a page that carries an `artPrompt`). Edit the prompt and
- * generate JUST this panel's background art (swapped in behind the bubbles, so
- * dialogue and manual edits stay on top), then Approve the page — which locks it
- * in and unlocks the next page in reading order.
+ * webtoon page (one that carries an `artPrompt`). Edit the single, simple scene
+ * prompt — setting + characters + any EMPTY speech bubbles drawn INTO the image
+ * (the creator letters them afterwards with the text tool) — and generate this
+ * page, then Approve it, which locks it in and unlocks the next page in reading
+ * order.
  */
 function PanelArtSection({ page }: { page: Page }) {
   // The parent keys this component by page id, so it remounts (and re-seeds the
   // prompt from that page's artPrompt) whenever the selection moves to a
-  // different panel — no reset effect needed.
+  // different page — no reset effect needed.
   const pageId = page.id
-  // The editable field is the canonical PROMPT / TEXT block: the art-only prompt
-  // plus this page's dialogue/SFX projected as [TAG] rows. Seeded once (the parent
-  // keys this by page id, so it re-seeds when selection moves to another page).
-  const [prompt, setPrompt] = useState(() => buildPagePromptBlock(page))
+  // The editable field is the page's whole image prompt: setting, characters and
+  // any EMPTY speech bubbles. Seeded once (the parent keys this by page id, so
+  // it re-seeds when selection moves to another page).
+  const [prompt, setPrompt] = useState(() => page.artPrompt ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -212,21 +212,17 @@ function PanelArtSection({ page }: { page: Page }) {
   const meta = PAGE_STATUS_META[status]
 
   const run = async () => {
-    // Split the block: the PROMPT paints the art; the TEXT rows rewrite the
-    // on-canvas dialogue/SFX (never sent to the image model).
-    const { art, lines } = parsePagePrompt(prompt)
-    if (art.trim().length < 4) {
-      setError('Describe the panel art under PROMPT first.')
+    // The whole prompt IS the image prompt — setting, characters and any speech
+    // bubbles are all drawn into the single generated image.
+    if (prompt.trim().length < 4) {
+      setError('Describe this page first.')
       return
     }
     const wasCompleted = status === 'completed'
     setBusy(true)
     setError(null)
     setPageStatus(pageId, 'generating')
-    const res = await regeneratePanelArt(pageId, art)
-    // Apply the edited TEXT block to the bubbles regardless of art outcome — the
-    // dialogue edit is independent of whether the image request succeeded.
-    applyPromptLinesToPage(pageId, lines)
+    const res = await regeneratePanelArt(pageId, prompt)
     setBusy(false)
     if (res.ok) {
       // Keep an already-approved page approved after a tweak; otherwise it now
@@ -283,12 +279,11 @@ function PanelArtSection({ page }: { page: Page }) {
         disabled={busy}
         rows={11}
         spellCheck={false}
-        placeholder={'PROMPT\nEnvironment, any characters present, camera, cinematic style. Color: dominant …, secondary …, accent …\n\nTEXT\n[SFX] DONG. DONG.\n[NARRATION] A forgotten age had ended.'}
+        placeholder={'Describe the whole page in plain words: the setting (mountains, city, space, castle…), the characters and mood, and — where someone speaks — an EMPTY white speech bubble with a black outline near them (you letter it afterwards).'}
         className="w-full resize-none rounded-md bg-[#1E1E1E] border border-[#2E2E2E] focus:border-[#4C9AFF] outline-none p-2.5 text-[11px] leading-relaxed font-mono text-white placeholder:text-white/30 disabled:opacity-60"
       />
       <p className="text-[10px] text-white/40 leading-snug">
-        <strong className="text-white/55">PROMPT</strong> paints the art (never printed on the page).{' '}
-        <strong className="text-white/55">TEXT</strong> rows become emotion-matched speech bubbles — <code className="text-white/50">[SHOUT]</code>, <code className="text-white/50">[WHISPER]</code>, <code className="text-white/50">[NARRATION]</code>, <code className="text-white/50">[SFX]</code>.
+        One simple prompt for the whole page — the <strong className="text-white/55">setting</strong>, the <strong className="text-white/55">characters</strong>, and any <strong className="text-white/55">empty speech bubbles</strong> drawn into the image. Type your dialogue in afterwards with the text tool.
       </p>
       <button
         type="button"
@@ -336,7 +331,7 @@ function PanelArtSection({ page }: { page: Page }) {
         </p>
       )}
       <p className="text-[10px] text-white/40 leading-snug">
-        Edit the description, then generate. Your speech bubbles and edits stay on top.
+        Edit the description, then generate. Anything you add on top of the image stays on top.
       </p>
     </Section>
   )

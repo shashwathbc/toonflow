@@ -34,9 +34,9 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' }
 // the prompt) still renders the character.
 export const MANHWA_STYLE =
   ', clean sharp digital lineart, cel shading, screentone, vibrant colors,' +
-  ' cinematic dramatic lighting,' +
+  ' cinematic dramatic lighting, cinematic composition, subtle film grain,' +
   FULLBLEED_STYLE +
-  ' professional studio quality, highly detailed'
+  ' professional studio quality, masterpiece, highly detailed'
 
 // A painted panel background is a locked, full-page image layer whose name ends
 // with this suffix. Used to find/replace a panel's art and to tell blanks apart.

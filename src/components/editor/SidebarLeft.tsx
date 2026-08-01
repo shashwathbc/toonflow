@@ -633,14 +633,14 @@ function AgentsPanel() {
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}
               disabled={running}
-              placeholder="Describe the chapter, or paste your script. e.g. “A lonely prince discovers an ancient dragon sleeping beneath his kingdom.” The team plans the story and lays out every page — its panel art prompt and dialogue — so you can generate each page's art one at a time."
+              placeholder="Describe the chapter, or paste your script. e.g. “A lonely prince discovers an ancient dragon sleeping beneath his kingdom.” The team plans the story and writes a simple prompt for every page — setting, characters and empty speech bubbles in one image — so you can generate each page one at a time and letter the dialogue afterwards."
               className="w-full h-24 resize-none rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] focus:border-[#4C9AFF] outline-none p-2.5 text-xs text-white placeholder:text-white/30 disabled:opacity-60"
             />
           </>
         ) : (
           <div className="w-full bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg p-2.5 text-xs text-white/80">
             <p className="font-semibold text-white mb-1">Pages ready — generate one at a time</p>
-            <p>The Story Director laid out <strong>{pageCount} pages</strong>, each with its art prompt and dialogue in place.</p>
+            <p>The Story Director wrote <strong>{pageCount} pages</strong>, each with a simple image prompt — setting, characters, empty speech bubbles and matching page-to-page colors — ready to generate.</p>
             {character && <p className="mt-1 text-[10px] text-white/60"><strong>Cast:</strong> {character} · saved to your roster</p>}
             <p className="mt-2 text-[10px] text-[#4C9AFF]">
               Open a page, then press “Generate this page” in the right sidebar. Approve it to unlock the next.

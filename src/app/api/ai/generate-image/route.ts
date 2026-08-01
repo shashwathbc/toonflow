@@ -48,6 +48,19 @@ const STYLE_SUFFIX =
   ' ultra detailed, high quality,' +
   ' no text, no typography, no letters, no watermark, no logo'
 
+// Webtoon PANELS differ from covers/banners: their prompts may describe EMPTY
+// speech bubbles / narration boxes drawn INTO the image (see the storyboard
+// route), which the creator letters afterwards in the editor. So this suffix
+// keeps the strict no-text guard (baked-in lettering comes out garbled) while
+// explicitly allowing blank bubble SHAPES when the prompt asks for them. It does
+// NOT mention bubbles itself — otherwise every scenery page would grow random
+// bubbles it never asked for.
+const WEBTOON_STYLE_SUFFIX =
+  ', premium digital illustration, cinematic dramatic lighting,' +
+  ' highly detailed, rich cinematic color grading, sharp focus, high quality,' +
+  ' any speech bubbles and narration boxes are completely blank and empty,' +
+  ' no text, no letters, no words, no typography, no watermark, no logo'
+
 const promptSchema = z.object({
   action: z.literal('prompt'),
   novelTitle: z.string().max(300),
@@ -56,7 +69,11 @@ const promptSchema = z.object({
 })
 const generateSchema = z.object({
   action: z.literal('generate'),
-  prompt: z.string().min(1).max(2000),
+  // Webtoon page prompts are assembled from several capped parts (locked style +
+  // each present character's look + the scene, which now also carries baked-in
+  // speech-bubble dialogue) + MANHWA_STYLE, so allow generous headroom before the
+  // longest pages would trip validation. Still well under MAX_BODY_BYTES.
+  prompt: z.string().min(1).max(2600),
   imageType: z.enum(['cover', 'banner', 'webtoon']),
   // Webtoon panels only: the camera framing (sets the tall aspect ratio) and an
   // optional per-chapter seed so every panel shares one coherent look/lighting.
@@ -163,6 +180,10 @@ Return ONLY the image prompt text.`,
             ? { width: 768, height: 1152 }
             : { width: 1280, height: 720 }
 
+      // Webtoon panels may draw EMPTY speech bubbles into the art, so they use
+      // the bubble-aware suffix; covers/banners keep the plain "no text" one.
+      const suffix = imageType === 'webtoon' ? WEBTOON_STYLE_SUFFIX : STYLE_SUFFIX
+
       // For a SHORT subject ("bow"), repeat it up front and mark it as the main
       // subject so it stays dominant over the style descriptors instead of being
       // swamped and mis-rendered (verified against the live Flux service). But an
@@ -171,8 +192,8 @@ Return ONLY the image prompt text.`,
       // generation, which pushed panels past the timeout and left them blank.
       const styledPrompt =
         prompt.length <= 120
-          ? `${prompt}. ${prompt}, as the main subject of the image${STYLE_SUFFIX}`
-          : `${prompt}${STYLE_SUFFIX}`
+          ? `${prompt}. ${prompt}, as the main subject of the image${suffix}`
+          : `${prompt}${suffix}`
 
       // A per-chapter seed (passed by the agent workflow) keeps every panel's
       // global lighting/line-weight coherent, so stacked panels don't jump in

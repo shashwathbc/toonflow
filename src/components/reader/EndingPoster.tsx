@@ -17,13 +17,16 @@ const ENGAGEMENT_CUES = [
 interface EndingPosterProps {
   novel: Novel
   chapter?: Chapter // Make it optional for backwards compatibility
+  // Author's current profile display name; overrides the (possibly stale)
+  // authorName denormalized on the novel doc for the follow label.
+  authorNameOverride?: string
 }
 
-export function EndingPoster({ novel, chapter }: EndingPosterProps) {
+export function EndingPoster({ novel, chapter, authorNameOverride }: EndingPosterProps) {
   const message = 'Thank You for Reading'
   const teaser = 'Next chapter coming soon'
   const year = new Date().getFullYear()
-  const authorDisplay = novel.authorName
+  const authorDisplay = authorNameOverride || novel.authorName
 
   return (
     <section

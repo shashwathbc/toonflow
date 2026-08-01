@@ -12,6 +12,7 @@ import {
   getNovelById,
   getChaptersByNovel,
   upsertReadingHistory,
+  getUserProfile,
 } from '@/lib/firebase/firestore'
 import { useViewTracking } from '@/hooks/useViewTracking'
 import { useReaderChrome } from '@/hooks/useReaderChrome'
@@ -44,6 +45,9 @@ export default function ChapterReaderPage() {
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [chapter, setChapter]   = useState<Chapter | null>(null)
   const [loading, setLoading]   = useState(true)
+  // Author's CURRENT profile display name for the ending follow label — the
+  // authorName denormalized on the novel doc can be stale after a rename.
+  const [authorName, setAuthorName] = useState<string | null>(null)
 
   // Reader settings
   const [fontIdx, setFontIdx]   = useState(1)
@@ -93,6 +97,12 @@ export default function ChapterReaderPage() {
           .sort((a, b) => (a.chapterNumber ?? 0) - (b.chapterNumber ?? 0))
         setChapters(published)
         setChapter(published.find((c) => c.id === chapterId) ?? null)
+        // Resolve the author's live profile name for the follow label.
+        if (n?.authorId) {
+          getUserProfile(n.authorId)
+            .then((prof) => { if (!cancelled && prof?.displayName) setAuthorName(prof.displayName) })
+            .catch(() => {})
+        }
       })
       .catch((e) => { if (!cancelled) console.error(e) })
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -411,7 +421,7 @@ export default function ChapterReaderPage() {
       </main>
 
       {/* ── Cinematic ending — shown after every chapter ─── */}
-      <EndingPoster novel={novel} chapter={chapter ?? undefined} />
+      <EndingPoster novel={novel} chapter={chapter ?? undefined} authorNameOverride={authorName ?? undefined} />
 
       {/* ── Floating chapter nav (mobile) ────────────────── */}
       {/* Prev/Next always shown; the boundary side is a disabled button rather

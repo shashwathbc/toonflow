@@ -163,6 +163,11 @@ export function Workspace() {
   const [coarsePointer, setCoarsePointer] = useState(false)
   const startRef = useRef<{ x: number; y: number } | null>(null)
   const midPan = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null)
+  // Single-finger touch pan (swipe to scroll the canvas up/down/left/right).
+  // Anchored from the gesture start so it never drifts as the viewport
+  // re-renders; `moved` distinguishes a pan from a tap (a tap still selects the
+  // page / clears selection on pointer-up).
+  const touchPan = useRef<{ sx: number; sy: number; vx: number; vy: number; moved: boolean; pageId: string | null } | null>(null)
   const spaceRef = useRef(false)
   // Active brush stroke (paint tools use native pointer events, not Konva mouse).
   // `pointerId` locks the stroke to one finger/pen so a resting palm or a second
@@ -450,6 +455,7 @@ export function Workspace() {
       endActiveStrokeRef.current?.()
       startRef.current = null
       midPan.current = null
+      touchPan.current = null
       setDraft(null)
       setMarquee(null)
       setGuides([])
@@ -669,6 +675,21 @@ export function Workspace() {
 
     // select tool: marquee from empty space, page-select from artboard bg
     if (activeTool === 'select') {
+      // On touch, a single finger PANS the canvas (swipe to scroll around) — the
+      // natural phone gesture. Marquee-drag and page-drag are pointer-precise
+      // desktop gestures; on a finger they'd fight the pan, so here one finger
+      // just pans and a tap (no movement) still selects on pointer-up.
+      if (e.evt.pointerType === 'touch' && (targetIsStage || onArtboard)) {
+        touchPan.current = {
+          sx: pointer.x,
+          sy: pointer.y,
+          vx: viewport.x,
+          vy: viewport.y,
+          moved: false,
+          pageId: onArtboard ? e.target.id() : null,
+        }
+        return
+      }
       if (targetIsStage) {
         clearSelection()
         selectPage(null)
@@ -687,6 +708,17 @@ export function Workspace() {
     const pointer = stage.getPointerPosition()
     if (!pointer) return
     if (pinchRef.current) return
+    // Single-finger swipe pans the canvas. A small dead-zone lets a stationary
+    // finger register as a tap (select) rather than a jittery 1px pan.
+    if (touchPan.current) {
+      const p = touchPan.current
+      const dx = pointer.x - p.sx
+      const dy = pointer.y - p.sy
+      if (!p.moved && Math.hypot(dx, dy) < 6) return
+      p.moved = true
+      setViewport({ x: p.vx + dx, y: p.vy + dy, scale: viewport.scale })
+      return
+    }
     if (midPan.current) {
       setViewport({
         x: midPan.current.vx + (pointer.x - midPan.current.sx),
@@ -710,6 +742,17 @@ export function Workspace() {
   }
 
   const handleMouseUp = () => {
+    // End a single-finger pan; if the finger never moved, treat it as a tap that
+    // selects the page under it (or clears selection on empty stage).
+    if (touchPan.current) {
+      const p = touchPan.current
+      touchPan.current = null
+      if (!p.moved) {
+        if (p.pageId) selectPage(p.pageId)
+        else { clearSelection(); selectPage(null) }
+      }
+      return
+    }
     if (draft) {
       if (draft.w > 4 && draft.h > 4) {
         addElement(draft.pageId, {
@@ -1085,7 +1128,10 @@ export function Workspace() {
           <Layer>
             {visiblePages.map((page) => {
               const selPage = selectedPageId === page.id
-              const movable = activeTool === 'select' && selPage && !page.isLocked && !panning
+              // On touch, a page is NOT canvas-draggable — a one-finger drag pans
+              // the viewport instead (page reorder is done via the timeline). This
+              // keeps swipe-to-pan reliable even when a page fills the screen.
+              const movable = activeTool === 'select' && selPage && !page.isLocked && !panning && !coarsePointer
               const hasAbove = columnEdges.above.has(page.id)
               const hasBelow = columnEdges.below.has(page.id)
               const inColumn = hasAbove || hasBelow
