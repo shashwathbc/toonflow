@@ -31,10 +31,12 @@ import { TopToolbar } from '@/components/editor/TopToolbar'
 import { CommandPalette } from '@/components/editor/CommandPalette'
 import { ResizeHandle } from '@/components/editor/ResizeHandle'
 import { BrandingMetaDialog } from '@/components/editor/BrandingMetaDialog'
+import { MobileEditorChrome } from '@/components/editor/MobileEditorChrome'
 import { useEditorShortcuts } from '@/components/editor/useEditorShortcuts'
 import { usePaintPersistence } from '@/components/editor/usePaintPersistence'
 import { useEditorStore } from '@/store/useEditorStore'
 import { useAuth } from '@/hooks/useAuth'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { useEpisodes } from '@/hooks/useEpisodes'
 import { useTransientState } from '@/hooks/useTransientState'
 import {
@@ -74,6 +76,7 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
   const router = useRouter()
   const { firebaseUser, loading: authLoading } = useAuth()
   const { episodes, loading: episodesLoading } = useEpisodes(webtoonId)
+  const isMobile = useIsMobile()
 
   const [webtoon, setWebtoon] = useState<Webtoon | null>(null)
   const [fetchedId, setFetchedId] = useState<string | null>(null)
@@ -510,8 +513,8 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
             </div>
           </div>
 
-          {/* Panel toggles */}
-          <div className="flex items-center gap-1">
+          {/* Panel toggles — desktop only (mobile uses the bottom tab bar) */}
+          <div className="hidden lg:flex items-center gap-1">
             <button onClick={toggleLeft} aria-label="Toggle left panel" aria-pressed={leftOpen} className={cn(toggleBtn, leftOpen ? 'text-white bg-white/10' : 'text-white/45 hover:text-white hover:bg-white/5')}>
               <PanelLeft size={16} aria-hidden="true" />
             </button>
@@ -523,34 +526,35 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
             </button>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            <span className="hidden md:flex items-center gap-1 text-[10px] text-white/35" aria-live="polite">
+          {/* Actions — secondary buttons collapse away on small screens */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <span className="hidden lg:flex items-center gap-1 text-[10px] text-white/35" aria-live="polite">
               {saveState === 'saving' && <Loader2 size={11} className="animate-spin" aria-hidden="true" />}
               {saveLabel}
             </span>
-            <span className="hidden sm:flex items-center gap-1 text-[10px] text-white/35 border border-[#2A2A2A] rounded-md px-1.5 py-1">
+            <span className="hidden lg:flex items-center gap-1 text-[10px] text-white/35 border border-[#2A2A2A] rounded-md px-1.5 py-1">
               <Command size={11} aria-hidden="true" /> K
             </span>
-            <button onClick={flushSave} className="h-8 px-2.5 flex items-center gap-1.5 text-xs text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
+            <button onClick={flushSave} className="hidden lg:flex h-8 px-2.5 items-center gap-1.5 text-xs text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
               <Save size={14} aria-hidden="true" /> Save
             </button>
-            <button onClick={handleDownloadMerged} disabled={exportingStrip} aria-label="Download merged strip" title="Download merged long-scroll PNG" className="h-8 w-8 flex items-center justify-center text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
+            <button onClick={handleDownloadMerged} disabled={exportingStrip} aria-label="Download merged strip" title="Download merged long-scroll PNG" className="hidden lg:flex h-8 w-8 items-center justify-center text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
               {exportingStrip ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />}
             </button>
-            <button onClick={handlePreview} className="h-8 px-2.5 flex items-center gap-1.5 text-xs text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
-              <Play size={14} aria-hidden="true" /> Preview
+            <button onClick={handlePreview} aria-label="Preview episode" className="h-8 px-2 sm:px-2.5 flex items-center gap-1.5 text-xs text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
+              <Play size={14} aria-hidden="true" /> <span className="hidden sm:inline">Preview</span>
             </button>
-            <button onClick={handlePublish} disabled={publishing} className="h-8 px-3 flex items-center gap-1.5 text-xs font-semibold bg-white text-black rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
+            <button onClick={handlePublish} disabled={publishing} className="h-8 px-2.5 sm:px-3 flex items-center gap-1.5 text-xs font-semibold bg-white text-black rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
               {publishing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Globe size={14} aria-hidden="true" />}
-              {publishing ? 'Publishing…' : 'Publish'}
+              <span>{publishing ? 'Publishing…' : 'Publish'}</span>
             </button>
           </div>
         </header>
 
         {/* Body */}
         <div className="flex-1 flex overflow-hidden">
-          {leftOpen && (
+          {/* Desktop: inline resizable left panel. Mobile: it's a drawer instead. */}
+          {!isMobile && leftOpen && (
             <>
               <div style={{ width: leftWidth }} className="h-full shrink-0">
                 <SidebarLeft />
@@ -559,12 +563,12 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
             </>
           )}
 
-          <div className="relative flex-1 flex flex-col overflow-hidden">
+          <div className="relative flex-1 flex flex-col overflow-hidden min-w-0">
             <TopToolbar />
             <WorkspaceDynamic />
           </div>
 
-          {rightOpen && (
+          {!isMobile && rightOpen && (
             <>
               <ResizeHandle orientation="vertical" invert onDelta={(d) => setRightWidth(rightWidth - d)} />
               <div style={{ width: rightWidth }} className="h-full shrink-0">
@@ -574,21 +578,25 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
           )}
         </div>
 
-        {/* Timeline */}
-        {timelineOpen ? (
-          <>
-            <ResizeHandle orientation="horizontal" invert onDelta={(d) => setTimelineHeight(useEditorStore.getState().timelineHeight + d)} />
-            <TimelineBottom />
-          </>
-        ) : (
-          <button
-            onClick={toggleTimeline}
-            className="h-7 bg-[#141414] border-t border-[#262626] flex items-center gap-2 px-3 text-white/45 hover:text-white transition-colors shrink-0"
-          >
-            <ChevronUp size={13} aria-hidden="true" />
-            <span className="text-[11px] font-semibold uppercase tracking-widest">Story Timeline</span>
-          </button>
-        )}
+        {/* Timeline — desktop only inline; on mobile it opens as a bottom sheet */}
+        {!isMobile &&
+          (timelineOpen ? (
+            <>
+              <ResizeHandle orientation="horizontal" invert onDelta={(d) => setTimelineHeight(useEditorStore.getState().timelineHeight + d)} />
+              <TimelineBottom />
+            </>
+          ) : (
+            <button
+              onClick={toggleTimeline}
+              className="h-7 bg-[#141414] border-t border-[#262626] flex items-center gap-2 px-3 text-white/45 hover:text-white transition-colors shrink-0"
+            >
+              <ChevronUp size={13} aria-hidden="true" />
+              <span className="text-[11px] font-semibold uppercase tracking-widest">Story Timeline</span>
+            </button>
+          ))}
+
+        {/* Mobile: bottom tab bar + slide-in drawers replace the three panels */}
+        {isMobile && <MobileEditorChrome />}
 
         <CommandPalette />
 

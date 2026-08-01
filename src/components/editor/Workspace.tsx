@@ -64,6 +64,7 @@ function BubbleNode({
       width={el.width}
       height={el.height}
       onDblClick={(e: Konva.KonvaEventObject<MouseEvent>) => { e.cancelBubble = true; onEdit() }}
+      onDblTap={(e: Konva.KonvaEventObject<TouchEvent>) => { e.cancelBubble = true; onEdit() }}
     >
       <Shape
         width={el.width}
@@ -155,11 +156,27 @@ export function Workspace() {
   const [editing, setEditing] = useState<{ pageId: string; el: EditorElement } | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; pageId: string | null } | null>(null)
   const [renaming, setRenaming] = useState<{ id: string; left: number; top: number; value: string } | null>(null)
+  // Coarse pointer (finger) → fatter transform handles so they're grabbable.
+  const [coarsePointer, setCoarsePointer] = useState(false)
   const startRef = useRef<{ x: number; y: number } | null>(null)
   const midPan = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null)
   const spaceRef = useRef(false)
   // Active brush stroke (paint tools use native pointer events, not Konva mouse).
-  const brushRef = useRef<{ engine: BrushEngine; elId: string; pageId: string; canvas: HTMLCanvasElement } | null>(null)
+  // `pointerId` locks the stroke to one finger/pen so a resting palm or a second
+  // finger can't hijack or fork it; `pointerType` lets a pen preempt a touch stroke.
+  const brushRef = useRef<{
+    engine: BrushEngine
+    elId: string
+    pageId: string
+    canvas: HTMLCanvasElement
+    pointerId: number
+    pointerType: string
+  } | null>(null)
+  // Two-finger pinch/pan gesture baseline (touch devices). Non-null while active.
+  const pinchRef = useRef<{ startDist: number; startScale: number; worldFocal: { x: number; y: number } } | null>(null)
+  // Set by the brush effect so the touch-gesture layer can end an in-progress
+  // stroke the instant a second finger lands (gesture becomes pan/zoom, no dab).
+  const endActiveStrokeRef = useRef<(() => void) | null>(null)
 
   const pages = useEditorStore((s) => s.pages)
   const viewport = useEditorStore((s) => s.viewport)
@@ -200,6 +217,15 @@ export function Workspace() {
     registerStage(stageRef.current)
     return () => registerStage(null)
   }, [dims.width, dims.height])
+
+  // ------- detect a touch (coarse) pointer for bigger transform handles -----
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)')
+    const update = () => setCoarsePointer(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   // ------- cursor "gravity" glow over blank canvas -------------------------
   // A soft light-well follows the pointer. It sits behind the Konva canvas, so
@@ -304,10 +330,38 @@ export function Workspace() {
       raf = requestAnimationFrame(() => { raf = null; stageRef.current?.batchDraw() })
     }
 
+    // Bake the active stroke's live pixels into the layer's committed `src`.
+    // Called on pointer-up, when a pen preempts a finger stroke, and when a
+    // two-finger gesture interrupts painting. A no-op with no active stroke.
+    const commitStroke = () => {
+      const cur = brushRef.current
+      if (!cur) return
+      brushRef.current = null
+      cur.engine.end()
+      const url = cur.canvas.toDataURL('image/png')
+      markPaintSrc(cur.elId, url) // we produced these pixels — don't reload them
+      useEditorStore.getState().updateElement(cur.pageId, cur.elId, { src: url }, false)
+      el.releasePointerCapture?.(cur.pointerId)
+      if (raf != null) { cancelAnimationFrame(raf); raf = null }
+      stageRef.current?.batchDraw()
+    }
+    // Let the touch-gesture layer stop a stroke the moment a pinch begins.
+    endActiveStrokeRef.current = commitStroke
+
     const onDown = (ev: PointerEvent) => {
       if (ev.button !== 0 || spaceRef.current) return
+      // A two-finger gesture owns the surface — never start a dab under a pinch.
+      if (pinchRef.current) return
       const st = useEditorStore.getState()
       if (st.activeTool !== 'brush' && st.activeTool !== 'eraser') return
+      // One stroke at a time. A pen preempts an in-progress finger/touch stroke
+      // (basic palm rejection); any other extra pointer — a resting palm, a
+      // second finger — is ignored for painting (it still drives pinch/zoom via
+      // the touch handler) so it can never fork or hijack the stroke.
+      if (brushRef.current) {
+        if (ev.pointerType === 'pen' && brushRef.current.pointerType !== 'pen') commitStroke()
+        else return
+      }
       const w = toWorldPt(ev.clientX, ev.clientY)
       const page = pageAtWorld(w.x, w.y)
       if (!page) return
@@ -330,14 +384,15 @@ export function Workspace() {
 
       const canvas = getPaintCanvas(target.id, page.width, page.height)
       const engine = new BrushEngine(canvas, { ...st.brush }, st.activeTool === 'eraser')
-      brushRef.current = { engine, elId: target.id, pageId: page.id, canvas }
+      brushRef.current = { engine, elId: target.id, pageId: page.id, canvas, pointerId: ev.pointerId, pointerType: ev.pointerType }
       engine.begin({ x: w.x - page.x, y: w.y - page.y, pressure: pressureOf(ev) })
       scheduleRedraw()
     }
 
     const onMove = (ev: PointerEvent) => {
       const cur = brushRef.current
-      if (!cur) return
+      // Only the pointer that owns the stroke drives it — extra fingers no-op.
+      if (!cur || ev.pointerId !== cur.pointerId) return
       const page = useEditorStore.getState().pages.find((p) => p.id === cur.pageId)
       if (!page) return
       const raw = (ev.getCoalescedEvents?.() as PointerEvent[] | undefined) ?? [ev]
@@ -350,16 +405,8 @@ export function Workspace() {
     }
 
     const finish = (ev: PointerEvent) => {
-      const cur = brushRef.current
-      if (!cur) return
-      brushRef.current = null
-      cur.engine.end()
-      const url = cur.canvas.toDataURL('image/png')
-      markPaintSrc(cur.elId, url) // we produced these pixels — don't reload them
-      useEditorStore.getState().updateElement(cur.pageId, cur.elId, { src: url }, false)
-      el.releasePointerCapture?.(ev.pointerId)
-      if (raf != null) { cancelAnimationFrame(raf); raf = null }
-      stageRef.current?.batchDraw()
+      if (brushRef.current?.pointerId !== ev.pointerId) return
+      commitStroke()
     }
 
     el.addEventListener('pointerdown', onDown)
@@ -368,12 +415,95 @@ export function Workspace() {
     el.addEventListener('pointercancel', finish)
     return () => {
       if (raf != null) cancelAnimationFrame(raf)
+      if (endActiveStrokeRef.current === commitStroke) endActiveStrokeRef.current = null
       el.removeEventListener('pointerdown', onDown)
       el.removeEventListener('pointermove', onMove)
       el.removeEventListener('pointerup', finish)
       el.removeEventListener('pointercancel', finish)
     }
   }, [activeTool])
+
+  // ------- two-finger pinch-zoom + pan (touch devices) ---------------------
+  // Phones and tablets don't emit wheel events, so pinch/pan is driven from raw
+  // touch events on the container. Two fingers zoom toward — and pan with — the
+  // point between them, in any tool. The gesture cancels whatever single-finger
+  // action the first touch may have started (marquee, shape draft, an element or
+  // stage drag, a brush stroke) so it never fights the pinch.
+  useEffect(() => {
+    const host = containerRef.current
+    if (!host) return
+    const ZMIN = 0.02
+    const ZMAX = 16
+
+    const rel = (t: Touch) => {
+      const r = host.getBoundingClientRect()
+      return { x: t.clientX - r.left, y: t.clientY - r.top }
+    }
+
+    const abortSingleFinger = () => {
+      // Konva synthesises a drag from the first finger — stop any live drag.
+      const dd = (Konva as unknown as { DD?: { _dragElements: Map<number, { node?: Konva.Node }> } }).DD
+      dd?._dragElements?.forEach((entry) => entry.node?.stopDrag?.())
+      endActiveStrokeRef.current?.()
+      startRef.current = null
+      midPan.current = null
+      setDraft(null)
+      setMarquee(null)
+      setGuides([])
+    }
+
+    const begin = (e: TouchEvent) => {
+      const p0 = rel(e.touches[0])
+      const p1 = rel(e.touches[1])
+      const startDist = Math.hypot(p0.x - p1.x, p0.y - p1.y) || 1
+      const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 }
+      const vp = useEditorStore.getState().viewport
+      pinchRef.current = {
+        startDist,
+        startScale: vp.scale,
+        // The world point under the initial finger-midpoint; kept fixed so it
+        // tracks the fingers as they move (pan) and zoom (scale) together.
+        worldFocal: { x: (mid.x - vp.x) / vp.scale, y: (mid.y - vp.y) / vp.scale },
+      }
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        e.preventDefault()
+        abortSingleFinger()
+        begin(e) // (re)baseline from the current two fingers — no jump
+      }
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const g = pinchRef.current
+      if (!g || e.touches.length < 2) return
+      e.preventDefault()
+      const p0 = rel(e.touches[0])
+      const p1 = rel(e.touches[1])
+      const dist = Math.hypot(p0.x - p1.x, p0.y - p1.y) || 1
+      const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 }
+      const scale = Math.max(ZMIN, Math.min(g.startScale * (dist / g.startDist), ZMAX))
+      useEditorStore.getState().setViewport({
+        x: mid.x - g.worldFocal.x * scale,
+        y: mid.y - g.worldFocal.y * scale,
+        scale,
+      })
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinchRef.current = null
+    }
+
+    host.addEventListener('touchstart', onTouchStart, { passive: false })
+    host.addEventListener('touchmove', onTouchMove, { passive: false })
+    host.addEventListener('touchend', onTouchEnd)
+    host.addEventListener('touchcancel', onTouchEnd)
+    return () => {
+      host.removeEventListener('touchstart', onTouchStart)
+      host.removeEventListener('touchmove', onTouchMove)
+      host.removeEventListener('touchend', onTouchEnd)
+      host.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [])
 
   // ------- coordinate helpers ---------------------------------------------
   const toWorld = useCallback(
@@ -428,11 +558,17 @@ export function Workspace() {
   const panning = spaceDown || activeTool === 'hand'
 
   // ------- pointer down on stage ------------------------------------------
-  const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  // Wired to Konva's POINTER events so it fires identically for mouse, pen and a
+  // single finger (Konva emits touch/tap — not mouse — for touch input, so the
+  // old onMouseDown path was dead on phones/tablets).
+  const handleMouseDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const stage = stageRef.current
     if (!stage) return
     const pointer = stage.getPointerPosition()
     if (!pointer) return
+    // A two-finger gesture owns the surface — a stray extra pointer must not also
+    // start a marquee/selection under the pinch.
+    if (pinchRef.current) return
     // Right-click is handled by the container's context menu, not selection.
     if (e.evt.button === 2) return
     // Middle-mouse drag pans from anywhere, regardless of active tool.
@@ -498,6 +634,7 @@ export function Workspace() {
     if (!stage) return
     const pointer = stage.getPointerPosition()
     if (!pointer) return
+    if (pinchRef.current) return
     if (midPan.current) {
       setViewport({
         x: midPan.current.vx + (pointer.x - midPan.current.sx),
@@ -559,8 +696,8 @@ export function Workspace() {
     midPan.current = null
   }
 
-  // Double-click empty canvas → fit all; on a page → zoom to that page.
-  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  // Double-click / double-tap empty canvas → fit all; on a page → zoom to it.
+  const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     const stage = stageRef.current
     if (!stage) return
     const pointer = stage.getPointerPosition()
@@ -704,11 +841,12 @@ export function Workspace() {
       globalCompositeOperation: el.blendMode ?? undefined,
       rotation: el.rotation,
       draggable,
-      onMouseDown: (ev: Konva.KonvaEventObject<MouseEvent>) => {
+      onPointerDown: (ev: Konva.KonvaEventObject<PointerEvent>) => {
         if (activeTool !== 'select' || panning) return
         ev.cancelBubble = true
-        if (!selectedElementIds.includes(el.id)) selectElements([el.id], ev.evt.shiftKey)
-        else if (ev.evt.shiftKey) selectElements([el.id], true)
+        const additive = !!ev.evt.shiftKey
+        if (!selectedElementIds.includes(el.id)) selectElements([el.id], additive)
+        else if (additive) selectElements([el.id], true)
       },
       onDragStart: () => {
         pushHistory()
@@ -742,6 +880,7 @@ export function Workspace() {
           align={el.align}
           lineHeight={el.lineHeight}
           onDblClick={(ev) => { ev.cancelBubble = true; setEditing({ pageId: page.id, el }) }}
+          onDblTap={(ev) => { ev.cancelBubble = true; setEditing({ pageId: page.id, el }) }}
         />
       )
     }
@@ -851,7 +990,9 @@ export function Workspace() {
     <div
       ref={containerRef}
       className="flex-1 bg-[#0C0C0C] relative overflow-hidden"
-      style={{ cursor: panning ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair' }}
+      // touch-action:none stops the browser from stealing pans/pinches/double-taps
+      // as page scroll or zoom, so the canvas gets every touch event for itself.
+      style={{ cursor: panning ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair', touchAction: 'none' }}
       onContextMenu={handleContextMenu}
     >
       {/* infinite grid background */}
@@ -883,10 +1024,11 @@ export function Workspace() {
             if (e.target === stageRef.current)
               setViewport({ x: e.target.x(), y: e.target.y(), scale: viewport.scale })
           }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          onPointerDown={handleMouseDown}
+          onPointerMove={handleMouseMove}
+          onPointerUp={handleMouseUp}
           onDblClick={handleDblClick}
+          onDblTap={handleDblClick}
         >
           <Layer>
             {visiblePages.map((page) => {
@@ -964,9 +1106,9 @@ export function Workspace() {
               borderStrokeWidth={1.5 / viewport.scale}
               anchorStroke={SELECT}
               anchorFill="#fff"
-              anchorSize={8 / viewport.scale}
+              anchorSize={(coarsePointer ? 16 : 8) / viewport.scale}
               anchorCornerRadius={2}
-              rotateAnchorOffset={22 / viewport.scale}
+              rotateAnchorOffset={(coarsePointer ? 34 : 22) / viewport.scale}
               ignoreStroke
               boundBoxFunc={(oldBox, newBox) => (newBox.width < 5 || newBox.height < 5 ? oldBox : newBox)}
             />

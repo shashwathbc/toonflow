@@ -44,7 +44,9 @@ export function TopToolbar() {
 
   return (
     <>
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-[#1B1B1B]/95 backdrop-blur-xl rounded-xl shadow-2xl border border-[#2E2E2E] px-1.5 py-1.5">
+    {/* max-width + horizontal scroll keeps the pill on-screen on narrow phones
+        instead of overflowing the viewport; scrollbar hidden for a clean look. */}
+    <div className="absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-[#1B1B1B]/95 backdrop-blur-xl rounded-xl shadow-2xl border border-[#2E2E2E] px-1.5 py-1.5 max-w-[calc(100vw-1rem)] overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       {TOOLS.map((t) => {
         const isPaint = t.id === 'brush' || t.id === 'eraser'
         return (
@@ -68,7 +70,7 @@ export function TopToolbar() {
           aria-label={t.label}
           aria-pressed={activeTool === t.id}
           className={cn(
-            'relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]',
+            'relative w-9 h-9 shrink-0 flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]',
             activeTool === t.id ? 'bg-[#4C9AFF] text-white' : 'text-white/60 hover:text-white hover:bg-white/10',
           )}
         >
@@ -77,14 +79,14 @@ export function TopToolbar() {
         )
       })}
 
-      <div className="w-px h-6 bg-[#2E2E2E] mx-1" />
+      <div className="w-px h-6 bg-[#2E2E2E] mx-1 shrink-0" />
 
       <button
         onClick={undo}
         disabled={!canUndo}
         title="Undo · Ctrl+Z"
         aria-label="Undo"
-        className="w-9 h-9 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+        className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
       >
         <Undo2 size={17} />
       </button>
@@ -93,18 +95,18 @@ export function TopToolbar() {
         disabled={!canRedo}
         title="Redo · Ctrl+Shift+Z"
         aria-label="Redo"
-        className="w-9 h-9 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+        className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
       >
         <Redo2 size={17} />
       </button>
 
-      <div className="w-px h-6 bg-[#2E2E2E] mx-1" />
+      <div className="w-px h-6 bg-[#2E2E2E] mx-1 shrink-0" />
 
       <button
         onClick={() => setRightTab('assistant')}
         title="AI Assistant"
         aria-label="Open AI assistant"
-        className="h-9 pl-2.5 pr-3 flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#4C9AFF]/20 to-[#A855F7]/20 text-white hover:from-[#4C9AFF]/30 hover:to-[#A855F7]/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
+        className="h-9 shrink-0 pl-2.5 pr-3 flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#4C9AFF]/20 to-[#A855F7]/20 text-white hover:from-[#4C9AFF]/30 hover:to-[#A855F7]/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]"
       >
         <Sparkles size={16} className="text-[#4C9AFF]" />
         <span className="text-xs font-semibold">AI</span>
