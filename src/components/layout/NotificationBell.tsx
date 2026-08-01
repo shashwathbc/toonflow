@@ -89,7 +89,7 @@ export default function NotificationBell() {
         <DropdownMenu.Trigger asChild>
           <button
             type="button"
-            className="relative btn-ghost rounded-lg p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="relative btn-ghost rounded-full p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
           >
             <Bell size={18} aria-hidden="true" />

@@ -2,13 +2,53 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, BookOpen, Plus, User } from 'lucide-react'
+import { Home, BookOpen, Sparkles, Star, User } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import * as Avatar from '@radix-ui/react-avatar'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'
-import * as Avatar from '@radix-ui/react-avatar'
-import { Tooltip } from '@/components/ui/Tooltip'
 import { UserDropdownContent } from './UserMenu'
+
+/** A standard labelled tab: icon in a rounded highlight with a caption below. */
+function Tab({
+  href,
+  label,
+  icon,
+  isActive,
+}: {
+  href: string
+  label: string
+  icon: React.ReactNode
+  isActive: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={isActive ? 'page' : undefined}
+      className="group flex flex-1 flex-col items-center justify-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'flex items-center justify-center rounded-xl px-3.5 py-1 transition-colors',
+          isActive
+            ? 'bg-accent/15 text-accent'
+            : 'text-text-secondary group-hover:text-text'
+        )}
+      >
+        {icon}
+      </span>
+      <span
+        className={cn(
+          'text-[10px] leading-none transition-colors',
+          isActive ? 'font-semibold text-accent' : 'text-text-muted group-hover:text-text-secondary'
+        )}
+      >
+        {label}
+      </span>
+    </Link>
+  )
+}
 
 export default function MobileNav() {
   const pathname = usePathname()
@@ -21,119 +61,107 @@ export default function MobileNav() {
     .toUpperCase()
     .slice(0, 2) ?? '??'
 
-  const items = [
-    {
-      href: '/',
-      label: 'Home',
-      icon: <Home size={20} />,
-      isActive: pathname === '/',
-    },
-    {
-      href: '/originals',
-      label: 'Originals',
-      icon: <BookOpen size={20} />,
-      isActive: pathname.startsWith('/originals'),
-    },
-    {
-      href: isAuthenticated ? '/create' : '/login?redirect=/create',
-      label: 'Create',
-      icon: <Plus size={20} />,
-      isActive: pathname.startsWith('/create'),
-    },
-    {
-      href: isAuthenticated ? '/dashboard' : '/login',
-      label: isAuthenticated ? 'Dashboard' : 'Login',
-      isActive: isAuthenticated
-        ? pathname.startsWith('/dashboard') || pathname.startsWith('/profile')
-        : false,
-      customRender: isAuthenticated ? (
-        <Avatar.Root className="w-6 h-6 rounded-full overflow-hidden bg-accent/20 flex items-center justify-center border border-transparent hover:border-white transition-colors">
-          <Avatar.Image
-            src={userProfile?.photoURL ?? undefined}
-            alt={userProfile?.displayName ?? 'User avatar'}
-            className="w-full h-full object-cover"
-          />
-          <Avatar.Fallback className="text-[10px] font-bold text-accent">
-            {initials}
-          </Avatar.Fallback>
-        </Avatar.Root>
-      ) : (
-        <User size={20} />
-      ),
-    },
-  ]
+  const accountActive =
+    pathname.startsWith('/dashboard') || pathname.startsWith('/profile')
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-bg/90 backdrop-blur-lg border-t border-bg-border h-14 md:hidden flex items-center justify-around px-2"
+      className="fixed bottom-0 left-0 right-0 z-50 h-16 border-t border-bg-border bg-bg/90 backdrop-blur-lg md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       aria-label="Mobile navigation bar"
     >
-      {items.map((item, idx) => {
-        const content = item.customRender ?? item.icon
+      <div className="mx-auto flex h-16 max-w-md items-stretch justify-around px-1">
+        <Tab
+          href="/"
+          label="Home"
+          icon={<Home size={20} />}
+          isActive={pathname === '/'}
+        />
+        <Tab
+          href="/browse"
+          label="Browse"
+          icon={<BookOpen size={20} />}
+          isActive={pathname.startsWith('/browse')}
+        />
 
-        // If it's the last item (profile/user menu) and the user is authenticated, render it as a DropdownMenu trigger
-        if (idx === items.length - 1 && isAuthenticated) {
-          return (
-            <DropdownMenu.Root key={idx}>
-              <Tooltip label={item.label} side="top">
-                <DropdownMenu.Trigger asChild>
-                  <button
-                    type="button"
+        {/* Create — the raised, focal call-to-action */}
+        <Link
+          href={isAuthenticated ? '/create' : '/login?redirect=/create'}
+          aria-label="Create new content"
+          aria-current={pathname.startsWith('/create') ? 'page' : undefined}
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <span
+            aria-hidden="true"
+            className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full bg-white text-bg shadow-lg shadow-black/30 ring-4 ring-bg transition-transform active:scale-95"
+          >
+            <Sparkles size={22} />
+          </span>
+          <span className="text-[10px] font-semibold leading-none text-accent">
+            Create
+          </span>
+        </Link>
+
+        <Tab
+          href="/originals"
+          label="Originals"
+          icon={<Star size={20} />}
+          isActive={pathname.startsWith('/originals')}
+        />
+
+        {/* Account — avatar dropdown (Profile / Dashboard / Sign out) or Login */}
+        {isAuthenticated ? (
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                aria-label="Account menu"
+                className="group flex flex-1 flex-col items-center justify-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'flex items-center justify-center rounded-xl px-3 py-1 transition-colors',
+                    accountActive && 'bg-accent/15'
+                  )}
+                >
+                  <Avatar.Root
                     className={cn(
-                      'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'
+                      'flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border bg-accent/20 transition-colors',
+                      accountActive ? 'border-accent' : 'border-transparent group-hover:border-white'
                     )}
-                    aria-label={item.label}
                   >
-                    <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
-                      {content}
-                    </span>
-                    {item.isActive && (
-                      <span
-                        className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </button>
-                </DropdownMenu.Trigger>
-              </Tooltip>
-              <UserDropdownContent side="top" align="end" sideOffset={12} />
-            </DropdownMenu.Root>
-          )
-        }
-
-        return (
-          <Tooltip key={idx} label={item.label} side="top">
-            <Link
-              href={item.href}
-              onClick={(item as { onClick?: () => void }).onClick}
-              className={cn(
-                'flex flex-col items-center justify-center w-12 h-12 transition-all relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                item.isActive ? 'text-accent' : 'text-text-secondary hover:text-text'
-              )}
-              aria-label={item.label}
-              aria-current={item.isActive ? 'page' : undefined}
-            >
-              <span aria-hidden="true" className={cn('transition-transform', item.isActive && 'scale-110')}>
-                {content}
-              </span>
-              {(item as { badge?: boolean }).badge && (
+                    <Avatar.Image
+                      src={userProfile?.photoURL ?? undefined}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                    <Avatar.Fallback className="text-[10px] font-bold text-accent">
+                      {initials}
+                    </Avatar.Fallback>
+                  </Avatar.Root>
+                </span>
                 <span
-                  className="w-2 h-2 rounded-full bg-accent absolute top-1.5 right-2.5 ring-2 ring-bg animate-fade-in"
-                  aria-hidden="true"
-                />
-              )}
-              {item.isActive && (
-                <span
-                  className="w-1 h-1 rounded-full bg-accent absolute bottom-1.5 animate-fade-in"
-                  aria-hidden="true"
-                />
-              )}
-            </Link>
-          </Tooltip>
-        )
-      })}
+                  className={cn(
+                    'text-[10px] leading-none transition-colors',
+                    accountActive ? 'font-semibold text-accent' : 'text-text-muted group-hover:text-text-secondary'
+                  )}
+                >
+                  You
+                </span>
+              </button>
+            </DropdownMenu.Trigger>
+            <UserDropdownContent side="top" align="end" sideOffset={12} />
+          </DropdownMenu.Root>
+        ) : (
+          <Tab
+            href="/login"
+            label="Login"
+            icon={<User size={20} />}
+            isActive={pathname.startsWith('/login')}
+          />
+        )}
+      </div>
     </nav>
   )
 }

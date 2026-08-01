@@ -94,7 +94,7 @@ function Navbar() {
           <Tooltip label="Search">
             <Link
               href="/browse"
-              className="btn-ghost p-2 rounded-lg"
+              className="btn-ghost p-2 rounded-full"
               aria-label="Search content"
             >
               <Search size={18} aria-hidden="true" />
@@ -107,7 +107,7 @@ function Navbar() {
               <Link
                 href="/messages"
                 className={cn(
-                  'relative btn-ghost p-2 rounded-lg',
+                  'relative btn-ghost p-2 rounded-full',
                   messagesActive && 'bg-bg-elevated text-text'
                 )}
                 aria-current={messagesActive ? 'page' : undefined}

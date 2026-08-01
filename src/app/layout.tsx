@@ -5,6 +5,8 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'react-hot-toast'
 import PwaRegister from '@/components/pwa/PwaRegister'
 import { TooltipProvider } from '@/components/ui/Tooltip'
+import JsonLd from '@/components/seo/JsonLd'
+import { organizationSchema, websiteSchema } from '@/lib/seo/schema'
 import { APP_NAME, APP_URL, SOCIAL_HANDLE } from '@/lib/utils/constants'
 
 const APP_DESCRIPTION =
@@ -39,6 +41,12 @@ export const metadata: Metadata = {
     description: APP_DESCRIPTION,
   },
   manifest: '/manifest.json',
+  // Google Search Console verification. Set NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+  // to the token from the "HTML tag" verification method — Next emits the
+  // <meta name="google-site-verification"> tag. Left unset, no tag is emitted.
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+    : undefined,
   // NOTE: no `icons` key on purpose. Icons come from the App Router file
   // conventions — src/app/icon.png, apple-icon.png, opengraph-image.png,
   // twitter-image.png (plus favicon.ico). Next content-hashes those URLs, so
@@ -64,6 +72,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`dark ${inter.variable}`}>
       <body>
+        {/* Site-wide structured data: brand entity + sitelinks search box.
+            Server-rendered so it's in the raw HTML for every crawl. */}
+        <JsonLd data={organizationSchema()} />
+        <JsonLd data={websiteSchema()} />
         {/* WCAG 2.4.1: Skip navigation */}
         <a href="#main-content" className="skip-to-main">
           Skip to main content

@@ -18,7 +18,7 @@ import {
   Plus,
   Check,
   Loader2,
-  Download,
+  GalleryVertical,
   Type,
   Layers,
   RotateCcw,
@@ -56,7 +56,9 @@ import {
   migratePanelsToPages,
   projectHasContent,
 } from '@/lib/editor/persistence'
-import { exportPageBlob, exportMergedStripBlob, downloadBlob } from '@/lib/editor/exportProject'
+import { exportPageBlob, exportMergedStripBlob } from '@/lib/editor/exportProject'
+import ExportMenu, { type PreparedExport, type ExtraExportItem } from '@/components/reader/ExportMenu'
+import type { PanelSource, ExportMeta } from '@/lib/webtoon/export/formats'
 import { cn } from '@/lib/utils/cn'
 import type { Webtoon, Episode, PanelImage } from '@/types'
 
@@ -366,35 +368,62 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
     }
   }
 
-  // ---- download one merged long-scroll PNG ---------------------------------
-  const [exportingStrip, setExportingStrip] = useState(false)
-  const handleDownloadMerged = async () => {
+  // ---- multi-format export from the live canvas ----------------------------
+  // Prepares the stage (hide chrome, mount off-screen pages) then hands the
+  // export menu a source that rasterizes each visible page on demand. Cleanup
+  // restores the editor after the chosen format finishes or fails.
+  const prepareEditorExport = async (): Promise<PreparedExport> => {
     const st = useEditorStore.getState()
-    if (st.timelineOrder.length === 0) {
-      toast.error('Nothing to export yet')
-      return
+    const order = st.timelineOrder.filter((id) => {
+      const p = st.pages.find((pg) => pg.id === id)
+      return p && !p.isHidden
+    })
+    if (order.length === 0) throw new Error('Add at least one page before exporting.')
+
+    const restoreSafeZone = st.showSafeZone
+    if (restoreSafeZone) st.toggleSafeZone()
+    st.clearSelection()
+    st.selectPage(null)
+    setExporting(true)
+    // Let off-screen pages mount and their bitmaps decode before rasterizing.
+    await new Promise((r) => setTimeout(r, 600))
+
+    const source: PanelSource = {
+      count: order.length,
+      load: async (i) => {
+        const blob = await exportPageBlob(order[i], PUBLISH_WIDTH)
+        if (!blob) throw new Error('A page failed to render.')
+        return { blob, mime: 'image/jpeg', ext: 'jpg' }
+      },
     }
-    setExportingStrip(true)
-    const t = toast.loading('Merging pages…')
-    try {
-      st.clearSelection()
-      st.selectPage(null)
-      setExporting(true)
-      await new Promise((r) => setTimeout(r, 600))
-      const blob = await exportMergedStripBlob(st.timelineOrder, PUBLISH_WIDTH)
-      if (blob) {
-        downloadBlob(blob, `${(webtoon?.title || 'webtoon').replace(/[^\w-]+/g, '_')}-episode.png`)
-        toast.success('Downloaded merged strip', { id: t })
-      } else {
-        toast.error('Nothing to export', { id: t })
-      }
-    } catch (err) {
-      console.error(err)
-      toast.error('Export failed', { id: t })
-    } finally {
+    const meta: ExportMeta = {
+      webtoonTitle: webtoon?.title || 'Webtoon',
+      episodeNumber: activeEpisode?.episodeNumber,
+      episodeTitle: activeEpisode?.title,
+    }
+    const cleanup = () => {
       setExporting(false)
-      setExportingStrip(false)
+      if (restoreSafeZone) useEditorStore.getState().toggleSafeZone()
     }
+    return { source, meta, cleanup }
+  }
+
+  // The original one-click download, kept as a bespoke menu item: one tall PNG
+  // with feathered seams between pages (its own merged-canvas renderer).
+  const mergedStripExtra: ExtraExportItem = {
+    id: 'merged-png',
+    label: 'Long strip (PNG)',
+    hint: 'Single blended long-scroll image',
+    group: 'Single file',
+    icon: GalleryVertical,
+    run: async (onProgress) => {
+      onProgress(0, 1, 'Merging pages')
+      const blob = await exportMergedStripBlob(useEditorStore.getState().timelineOrder, PUBLISH_WIDTH)
+      if (!blob) throw new Error('Nothing to export.')
+      onProgress(1, 1, 'Merging pages')
+      const name = `${(webtoon?.title || 'webtoon').replace(/[^\w-]+/g, '_')}-episode.png`
+      return { blob, filename: name }
+    },
   }
 
   const handlePreview = () => {
@@ -445,7 +474,7 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
     panel === 'navigator' ? <SidebarLeft /> : panel === 'inspector' ? <SidebarRight /> : <TimelineBottom fill />
   // Resize by reading live state (not a render-closure width) so drags never drift.
   const growLeft = (d: number) => { const s = useEditorStore.getState(); s.setLeftWidth(s.leftWidth + d) }
-  const growRight = (d: number) => { const s = useEditorStore.getState(); s.setRightWidth(s.rightWidth - d) }
+  const growRight = (d: number) => { const s = useEditorStore.getState(); s.setRightWidth(s.rightWidth + d) }
   const growBottom = (d: number) => { const s = useEditorStore.getState(); s.setTimelineHeight(s.timelineHeight + d) }
   // Static class strings (Tailwind JIT can't see dynamically-built ones).
   const transitionCls = (dim: 'width' | 'height') =>
@@ -569,9 +598,15 @@ export function CanvasEditor({ webtoonId }: { webtoonId: string }) {
             <button onClick={flushSave} className="hidden lg:flex h-8 px-2.5 items-center gap-1.5 text-xs text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
               <Save size={14} aria-hidden="true" /> Save
             </button>
-            <button onClick={handleDownloadMerged} disabled={exportingStrip} aria-label="Download merged strip" title="Download merged long-scroll PNG" className="hidden lg:flex h-8 w-8 items-center justify-center text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
-              {exportingStrip ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />}
-            </button>
+            <div className="hidden lg:flex">
+              <ExportMenu
+                prepare={prepareEditorExport}
+                extraItems={[mergedStripExtra]}
+                triggerLabel="Download / export"
+                triggerClassName="text-white/70 hover:text-white hover:bg-white/5"
+                align="end"
+              />
+            </div>
             <button onClick={handlePreview} aria-label="Preview episode" className="h-8 px-2 sm:px-2.5 flex items-center gap-1.5 text-xs text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4C9AFF]">
               <Play size={14} aria-hidden="true" /> <span className="hidden sm:inline">Preview</span>
             </button>

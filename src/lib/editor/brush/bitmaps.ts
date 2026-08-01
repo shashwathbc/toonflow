@@ -12,6 +12,8 @@
 // registry doesn't redundantly reload the pixels it just produced.
 // ---------------------------------------------------------------------------
 
+import { isStorageUrl, proxyImageUrl } from '@/lib/utils/imageProxy'
+
 interface Entry {
   canvas: HTMLCanvasElement
   src: string
@@ -55,18 +57,23 @@ export function reconcilePaintCanvas(
     ctx.clearRect(0, 0, e.canvas.width, e.canvas.height)
     return
   }
+  const isData = src.startsWith('data:')
+  // Storage bitmaps go through the same-origin proxy: a same-origin image never
+  // taints, so a later toDataURL() (next stroke's base snapshot / export) works
+  // even when the bucket CORS / browser cache would block a direct anonymous
+  // load. Non-Storage remotes keep the anonymous path. data: URLs load directly.
+  const useProxy = !isData && isStorageUrl(src)
+  const loadSrc = useProxy ? proxyImageUrl(src) : src
   return new Promise<void>((resolve) => {
     const img = new Image()
-    // Storage-hosted bitmaps must load anonymously or the canvas becomes tainted
-    // and a later toDataURL() (next stroke's base snapshot / export) would throw.
-    if (!src.startsWith('data:')) img.crossOrigin = 'anonymous'
+    if (!isData && !useProxy) img.crossOrigin = 'anonymous'
     img.onload = () => {
       ctx.clearRect(0, 0, e.canvas.width, e.canvas.height)
       ctx.drawImage(img, 0, 0, e.canvas.width, e.canvas.height)
       resolve()
     }
     img.onerror = () => resolve()
-    img.src = src
+    img.src = loadSrc
   })
 }
 

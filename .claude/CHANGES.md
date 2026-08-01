@@ -1,5 +1,10 @@
 # Toonflow Studio Paint — Change Log
 
+## Editor: fix right sidebar (Properties/inspector) resizing in reverse (2026-08-02)
+- Report: dragging the right sidebar's resize divider worked backwards — dragging left (toward the canvas) shrank the panel instead of widening it, and vice-versa.
+- Root cause: a double sign-inversion. The right-slot `<ResizeHandle>` in src/components/editor/CanvasEditor.tsx passes `invert` (a left-edge handle grows when dragged left → the handle already flips the delta's sign), but `growRight` ALSO inverted by subtracting the delta (`setRightWidth(rightWidth - d)`). The two negations cancelled, so the panel resized in the wrong direction. The sibling handles are correct because grow functions ADD and let `invert` alone pick the edge direction: `growLeft` adds with no `invert` (right-edge handle), `growBottom` adds with `invert` (top-edge handle).
+- Fix: src/components/editor/CanvasEditor.tsx — `growRight` now ADDS the delta (`setRightWidth(rightWidth + d)`), matching the add-only convention while keeping `invert` on the handle. One-line change; clamp in useEditorStore.setRightWidth ([220, 460]) unchanged.
+
 ## Webtoon editor: fix mobile pinch-zoom (iOS) + add on-screen zoom controls (2026-08-01)
 - Report: on a phone, the webtoon center canvas couldn't be zoomed in/out with fingers. The existing two-finger pinch (added earlier today) worked on Android/Chrome but did nothing on iPhone/iPad.
 - Root cause (iOS): `touch-action:none` does NOT stop Safari's native pinch. Safari consumes the two-finger gesture and emits non-standard `gesturestart`/`gesturechange`/`gestureend` events INSTEAD of firing multi-touch `touchmove`, so the touch-based pinch handler never ran on iOS.
@@ -2281,3 +2286,76 @@ Every agent-built webtoon page now carries one canonical, editable prompt in a f
 - **`useAgentWorkflow.ts`**: builds each page's art prompt from ONLY the looks of that panel's `cast` (environment-only panels prepend nothing; legacy single-character fallback kept). Auto-saves the cast to the left-sidebar roster via new `listCharacters` (dedupe) + `createCharacter` (look → `notes`, best-effort) so characters persist and are reusable. Lays SFX captions on the page. AI panel summary now lists cast names ("Cast: … · saved to your roster").
 - **`firestore.ts`**: new one-shot `listCharacters(webtoonId)` for the dedupe read.
 - **`SidebarRight.tsx` PanelArtSection**: the per-page editable field now shows the canonical PROMPT/TEXT block (seeded via `buildPagePromptBlock`, monospaced, 11 rows, format hint). Generate parses it → paints art from PROMPT only (never the words) → rewrites the on-canvas dialogue from the TEXT rows. `page.artPrompt` stays art-only, so image gen and the page-gating are unaffected.
+
+## Episode download — multi-format export menu (2026-08-01)
+Readers can now download any published webtoon episode from the reader header (new Download icon next to the Like button), choosing from 12 platform/format targets. All export work runs client-side in the browser — panel bytes are pulled with `fetch()` (Storage bucket allows GET from any origin per `cors.json`), so canvases drawn from them are never tainted and re-encode cleanly.
+
+- **`src/lib/webtoon/export/zip.ts`** — dependency-free ZIP writer (STORE method + CRC32). Panels are already compressed, so storing them uncompressed is fast and is exactly what CBZ/unzip tools expect. Supports custom container mime (used for CBZ `application/vnd.comicbook+zip`).
+- **`src/lib/webtoon/export/imageOps.ts`** — `fetchPanel`, `decodePanel` (ImageBitmap fast-path, `<img>` fallback), `encodePanel` (re-encode + downscale + white matte for opaque codecs), `canEncode` (probes WebP/AVIF support once, cached), and `sliceVertical` (streams the long strip into fixed-width capped-height platform slices; one segment canvas alive at a time so long episodes don't trip the max-canvas limit).
+- **`src/lib/webtoon/export/formats.ts`** — the 12-format registry (id/label/hint/group/icon/requiresMime), panel-URL extraction, filename helpers.
+- **`src/lib/webtoon/export/run.ts`** — `runExport(formatId, input, onProgress)` orchestrator → `{blob, filename}`, plus `downloadResult`. Formats: WEBTOON (800px JPEG slices), Tapas (940px slices), MangaDex (PNG page sequence), ZIP (original panels), CBZ (+ ComicInfo.xml), PDF (jspdf, one panel/page, px→pt clamped to the 14000pt page limit), HTML Package (offline vertical-reader index.html + images/), PNG/JPG/WebP/AVIF sequences, and JSON + Images (metadata.json manifest + panels).
+- **`src/components/reader/DownloadEpisodeMenu.tsx`** — Radix DropdownMenu grouped by Platforms / Archives / Documents / Image sequences / Data, each item with a lucide icon, label + packaging hint. Probes codec support on mount and disables WebP/AVIF with a "Not supported in this browser" note where unavailable. Live progress via a single react-hot-toast (`phase… %`); trigger shows a spinner while busy. WCAG: `aria-label`, `role=menu/menuitem`, focus-visible ring.
+- **`src/app/(main)/webtoon/[id]/episode/[episodeId]/page.tsx`** — mounts `<DownloadEpisodeMenu>` in the reader header alongside the Like button.
+
+Note: AVIF (and sometimes WebP) canvas encoding is browser-dependent; unsupported items disable gracefully rather than failing mid-export. Typecheck + eslint clean.
+
+## Mobile nav redesign — labelled bottom bar + polished top icons (2026-08-01)
+Reworked the mobile chrome to match the requested reference: a labelled 5-tab bottom bar with a raised, glowing "Create" call-to-action, and cleaner circular action icons in the top navbar.
+
+- **`src/components/layout/MobileNav.tsx`** — full rebuild. Was a 4-item, label-less bar (Home / Originals / Plus / avatar) with active dots; now a 5-tab labelled bar: **Home · Browse · Create · Originals · You**. Icons sit above `text-[10px]` captions; the active tab gets a `bg-accent/15` rounded highlight + accent label (via a shared `Tab` sub-component). **Create** is the focal CTA — a raised `h-14 w-14` accent→emerald gradient circle (`-mt-7`, `ring-[6px] ring-bg`, `shadow-accent/40`) with a `Sparkles` icon, wired to `/create` (or `/login?redirect=/create`). Bar height `h-14`→`h-16` to seat labels + the raised button; content centred in a `max-w-md` row. The 5th tab keeps the account **avatar → UserDropdown** (Profile / Dashboard / Sign out) when authenticated so mobile users retain one-tap logout, falling back to a **Login** tab for guests. Dropped the now-redundant per-item Tooltips (visible labels replace them); kept `aria-current`, `aria-label`, focus-visible rings.
+- **`src/components/layout/Navbar.tsx`** — search & messages icon buttons `rounded-lg`→`rounded-full` for a cohesive circular-icon look (top bar already matched the reference: logo + wordmark, then search / messages / bell-with-count).
+- **`src/components/layout/NotificationBell.tsx`** — bell trigger `rounded-lg`→`rounded-full` to match.
+
+Typecheck (my files clean; one pre-existing unrelated error in `lib/webtoon/export/run.ts`) + eslint on all three changed files clean.
+
+## Mobile nav — Create button restyle (2026-08-01)
+Per request, changed the bottom-bar Create CTA in `src/components/layout/MobileNav.tsx` to a Google-dark-mode look: solid **white** circle with a dark (`text-bg`) `Sparkles` icon, made a little smaller (`h-14 w-14`→`h-12 w-12`, icon `24`→`22`, `ring-[6px]`→`ring-4`, `-mt-7`→`-mt-6`), and swapped the accent glow for a neutral `shadow-black/30`.
+
+## SEO — "create with AI" landing pages + sitewide structured data (2026-08-01)
+Goal: make Toonflow eligible to rank for creation-intent searches (e.g. "webtoon creation ai", "create novel with ai", "ai anime/manga generator"). Previously the only creation surface (`/create`) was auth-gated AND disallowed in `robots.ts`, and the homepage targets readers — so Google could not index anything for creation intent. Decision (confirmed with user): keep the homepage reader-first and add dedicated, crawlable landing pages; launch the webtoon/manga pages now with honest "early access" CTAs since the Webtoon Studio is still allowlist-gated.
+
+- **`src/lib/seo/schema.ts`** (new) — pure JSON-LD builders: `organizationSchema()`, `websiteSchema()` (WebSite + SearchAction sitelinks searchbox → `/browse?q=`), `softwareAppSchema()` (WebApplication; intentionally NO aggregateRating — we don't fabricate ratings), `faqPageSchema()`, `breadcrumbSchema()`. One source of truth for brand identity via constants.
+- **`src/app/layout.tsx`** — renders `<JsonLd organizationSchema />` + `<JsonLd websiteSchema />` site-wide (server-rendered, in raw HTML), and adds `verification.google` driven by `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` (unset ⇒ no tag) so Search Console verification is a one-env-var change.
+- **`src/components/marketing/{LandingHero,FeatureGrid,HowItWorks,Faq,CtaBanner}.tsx`** (new) — reusable Server Components (no client JS). `Faq` uses native `<details>/<summary>` (keyboard-operable, focus-visible ring, answer text in DOM for FAQ rich results + crawlers). Design tokens only.
+- **`src/app/(main)/ai-novel-generator/page.tsx`**, **`.../ai-webtoon-generator/page.tsx`**, **`.../ai-manga-generator/page.tsx`** (new) — public, statically-prerendered landing pages under `(main)` (get Navbar/Footer; not under any disallowed prefix). Each: keyword-rich `metadata` (title/description/keywords/canonical/OG), one `<h1>` + section hierarchy, ~700 words of accurate copy, feature grid, how-it-works, visible 6–7 item FAQ, and server-rendered `WebApplication` + `FAQPage` + `BreadcrumbList` JSON-LD. Novel = live → "Start writing free" → `/signup?redirect=/create/novel`; webtoon & manga = allowlist-gated → "Get early access" → `/signup?redirect=/create`. Copy avoids overclaiming (AI assists, doesn't fully auto-write; manga = anime-style still art/panels, not video).
+- **`src/components/auth/SignupForm.tsx`** — added `redirect` query-param support mirroring `LoginForm` (same open-redirect guard: only same-origin relative paths), so the landing CTAs actually land the user in the studio post-signup; the "Sign in" link now preserves the redirect.
+- **`src/app/sitemap.ts`** — added the 3 landing routes at `priority: 0.9` (above the rest of the static set).
+- **`src/components/layout/Footer.tsx`** — new "Create with AI" nav column linking the 3 pages (sitewide internal links for crawl/discovery); grid `lg:grid-cols-4`→`lg:grid-cols-5`.
+
+Verified: `npm run build` passes on Turbopack; all 3 pages prerender static (`○`); raw HTML contains Organization/WebSite/SearchAction (sitewide) + WebApplication/FAQPage/BreadcrumbList/Question/Answer/Offer (per page); H1 + CTA hrefs correct; sitemap.xml lists the 3 routes; robots.txt disallows none of them.
+
+Off-page (user must do — outside code): verify the domain in Google Search Console and set `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`; submit `sitemap.xml`; confirm the production domain matches `NEXT_PUBLIC_APP_URL`; build backlinks (Product Hunt, subreddits, AI-tool directories) — the biggest ranking lever that can't be done in code.
+
+## Webtoon AI layout — bubbles sized to text + zero-overlap flow (2026-08-02)
+Problem: AI-planned webtoon pages rendered with speech bubbles and SFX captions stacked ON TOP of each other and text overflowing/clipping (e.g. "GAHHK…", "THHHH…"), nothing like a real long-scroll webtoon (Solo Leveling / Magic Emperor). Root cause: `store.addBubble` always made a fixed `min(width*0.42, 340)`px box regardless of text, and `useAgentWorkflow` placed bubbles by zone and SFX independently with NO collision check — so they overlapped.
+
+- **`src/lib/editor/bubbleLayout.ts`** (new) — pure geometry + client-only canvas text measurement. `sizeBubbleToText(kind, text, panelWidth)` wraps the text, inverts each bubble kind's text-area fraction (mirrors `bubbleTextRect` in bubbles.ts) to grow the outline box to fit + tail room, and clamps sane min/max width; `sizeSfxToText` shrinks the big SFX font so the whole word stays on one line (never clipped). `layoutPanelDialogue(page, bubbles, sfx)` sizes every item, seeds each to its storyboard zone, sorts top→bottom, then sweeps down enforcing `top ≥ prevBottom + gap` (guarantees no vertical overlap regardless of x), and proportionally scales the whole stack down if it can't fit the panel's safe height.
+- **`src/components/editor/useAgentWorkflow.ts`** — replaced the two independent placement loops (and the local `BUBBLE_POS` map + `makeSfxTextSpec` import) with a single `layoutPanelDialogue(...)` call; each returned spec carries its final geometry and is dropped on the page via `store.addElement`.
+
+Verified: full `npx tsc --noEmit` clean.
+
+## Fix: bucket CORS + editor export dropdown (2026-08-01)
+Root cause of "download not working": the Storage bucket `toonflow-studio-paint-f76d5.firebasestorage.app` had **no CORS config**, so cross-origin reads of panel images were blocked — tainting the editor's export canvas (`SecurityError: Tainted canvases may not be exported` in `exportMergedStripBlob`) and would have blocked the reader download's `fetch()` too.
+
+- **Applied `cors.json` to the bucket** via `gcloud storage buckets update gs://toonflow-studio-paint-f76d5.firebasestorage.app --cors-file=cors.json` (origin `*`, GET). Verified with `describe`. This un-taints editor canvas export AND unblocks the reader fetch-based export. (gcloud authed as toonflowstudiopaint@gmail.com; gsutil's python is broken in this env so `gcloud storage` was used.)
+
+Generalized the export pipeline so the same 12 formats work from either published panel URLs (reader) or live Konva pages (editor):
+- **`formats.ts`** — added `ExportMeta` and `PanelSource` (`{count, load(i) -> {blob,mime,ext}}`); `baseFilename` now takes meta.
+- **`imageOps.ts`** — `sliceVertical` now takes blob-loaders instead of URLs (origin-agnostic).
+- **`run.ts`** — new `runExportFromSource(formatId, source, meta, onProgress)` core; `urlPanelSource(urls)` helper; `runExport(input)` kept as the reader wrapper.
+- **`src/components/reader/ExportMenu.tsx`** (new) — reusable grouped dropdown (trigger styling/label via props). Takes a `prepare()` that returns `{source, meta, cleanup?}`; supports `extraItems` for bespoke actions. Probes WebP/AVIF and disables unsupported; live progress toast.
+- **`DownloadEpisodeMenu.tsx`** — now a thin wrapper over `ExportMenu` (reader panel URLs).
+- **`CanvasEditor.tsx`** — the top toolbar's "Download merged long-scroll PNG" icon is **replaced with `<ExportMenu>`**: `prepareEditorExport()` hides chrome, mounts off-screen pages, and rasterizes each visible page via `exportPageBlob(PUBLISH_WIDTH)`; the old merged-strip PNG is preserved as a "Long strip (PNG)" extra item at the top of the menu. Cleanup restores safe-zone/exporting state after each export.
+
+Typecheck + eslint clean.
+
+## Fix: same-origin image proxy (definitive taint fix) (2026-08-01)
+Even with bucket CORS set, editor export kept throwing `Tainted canvases may not be exported`: panel images are uploaded with `cacheControl: max-age=31536000`, so the browser kept serving the pre-CORS cached copies (no ACAO), and `useResilientImage` fell back to a no-crossOrigin load that taints the canvas. Fixed by serving Storage images through our own origin — a same-origin image never taints and the fresh proxy URL bypasses the stale cache.
+
+- **`src/lib/utils/imageProxy.ts`** (new) — `isStorageUrl()` (host allowlist: firebasestorage.googleapis.com, storage.googleapis.com, *.firebasestorage.app, *.appspot.com) + `proxyImageUrl()` → `/api/img?u=…`.
+- **`src/app/api/img/route.ts`** (new) — Node runtime GET proxy: validates host (SSRF guard), server-side fetches the image (no CORS server-side), streams bytes back same-origin with `Cache-Control` + `Content-Type`.
+- **`Workspace.tsx` `useResilientImage`** — on a failed anonymous load, Storage hosts now fall back to the same-origin proxy (untainted, exportable) instead of the tainting plain load; non-Storage remotes keep the plain display-only fallback.
+- **`brush/bitmaps.ts` `reconcilePaintCanvas`** — paint-layer bitmaps load Storage srcs via the proxy so paint layers also stay exportable.
+- **`export/imageOps.ts` `fetchPanel`** — reader download fetches Storage panels through the proxy (no CORS, no stale cache).
+
+Net: editor export (all 12 formats + Long strip PNG) and reader download both work without depending on bucket CORS or the browser cache. Bucket CORS remains set as belt-and-suspenders. Typecheck + eslint clean.

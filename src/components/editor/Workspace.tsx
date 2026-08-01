@@ -14,6 +14,7 @@ import {
   type BubbleElement,
 } from '@/store/useEditorStore'
 import { registerStage } from '@/lib/editor/exportProject'
+import { isStorageUrl, proxyImageUrl } from '@/lib/utils/imageProxy'
 import { PageContextMenu } from '@/components/editor/PageContextMenu'
 import { ZoomControls } from '@/components/editor/ZoomControls'
 import { BrushEngine, type InputSample } from '@/lib/editor/brush/engine'
@@ -103,21 +104,22 @@ function BubbleNode({
 // Image node — loads its bitmap through use-image so Konva can paint it.
 //
 // Remote (Storage) images are requested with crossOrigin="anonymous" so the
-// canvas stays untainted and pages can be exported. If that request is blocked —
-// most often because the Storage bucket has no CORS config, which the browser
-// fails *silently* (no error, no onload) — the image would never paint and the
-// panel would show only the gray #2A2A2A placeholder below. So on a failed
-// anonymous load we retry the same URL WITHOUT crossOrigin: the art then at
-// least DISPLAYS (that page just can't be exported until CORS is configured —
-// see cors.json / the bucket CORS setup). data: URLs never need crossOrigin.
+// canvas stays untainted and pages can be exported. If that request is blocked
+// (bucket CORS missing, or — more stubbornly — the browser serving a stale
+// pre-CORS copy from its 1-year cache), we fall back to the SAME-ORIGIN proxy
+// (`/api/img`) for Storage hosts: the art both DISPLAYS and stays exportable
+// because a same-origin image never taints the canvas. Non-Storage remotes keep
+// the old plain (display-only) fallback. data: URLs never need any of this.
 // ---------------------------------------------------------------------------
 function useResilientImage(src: string | undefined): HTMLImageElement | undefined {
   const isData = !!src?.startsWith('data:')
   const [anon, anonStatus] = useImage(src ?? '', isData ? undefined : 'anonymous')
-  // Only fire the fallback for a remote URL whose anonymous load actually failed
-  // (empty url is a no-op in use-image, so the hook stays cheap while idle).
-  const [plain] = useImage(anonStatus === 'failed' && !isData ? (src ?? '') : '')
-  return anon ?? plain
+  const failed = anonStatus === 'failed' && !isData && !!src
+  // Storage hosts → same-origin proxy (untainted, CORS/cache-independent).
+  const [proxied] = useImage(failed && isStorageUrl(src!) ? proxyImageUrl(src!) : '')
+  // Any other remote host → plain load so it at least shows (display only).
+  const [plain] = useImage(failed && !isStorageUrl(src!) ? src! : '')
+  return anon ?? proxied ?? plain
 }
 
 function ImageNode({ el, common }: { el: ImageElement; common: Record<string, unknown> }) {

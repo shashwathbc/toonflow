@@ -35,6 +35,14 @@ const PLATFORM_LINKS = [
   { href: '/earnings', label: 'Creator Earnings' },
 ]
 
+// Keyword-targeted AI creation landing pages. Sitewide footer links give these
+// pages crawlable internal links from every public page (helps discovery + SEO).
+const CREATE_LINKS = [
+  { href: '/ai-novel-generator', label: 'AI Novel Generator' },
+  { href: '/ai-webtoon-generator', label: 'AI Webtoon Generator' },
+  { href: '/ai-manga-generator', label: 'AI Manga Generator' },
+]
+
 // Code-split: Footer renders on every (main) page, and SupportModal statically
 // imports framer-motion — so a static import here put the whole animation
 // library in the shared chunk for every public page, to render a closed modal.
@@ -82,7 +90,7 @@ function Footer() {
       aria-label="Site footer"
     >
       {/* Main footer */}
-      <div className="max-w-screen-xl mx-auto px-4 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+      <div className="max-w-screen-xl mx-auto px-4 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10">
         {/* Brand */}
         <div className="space-y-3">
           <Link
@@ -118,6 +126,25 @@ function Footer() {
           </h3>
           <ul className="space-y-2" role="list">
             {PLATFORM_LINKS.map(({ href, label }) => (
+              <li key={href}>
+                <Link
+                  href={href}
+                  className="text-sm text-text-secondary hover:text-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
+                >
+                  {label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* Create with AI */}
+        <nav aria-label="Create with AI links">
+          <h3 className="text-xs font-semibold text-text-muted tracking-widest uppercase mb-3">
+            Create with AI
+          </h3>
+          <ul className="space-y-2" role="list">
+            {CREATE_LINKS.map(({ href, label }) => (
               <li key={href}>
                 <Link
                   href={href}

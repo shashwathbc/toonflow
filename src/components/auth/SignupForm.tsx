@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -29,6 +29,10 @@ type FormData = z.infer<typeof schema>
 
 export default function SignupForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const rawRedirect = searchParams.get('redirect') ?? '/'
+  // Prevent open redirect — only allow same-origin relative paths (mirrors LoginForm).
+  const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/'
   const [googleLoading, setGoogleLoading] = useState(false)
 
   const {
@@ -41,7 +45,7 @@ export default function SignupForm() {
     try {
       await signUpWithEmail(data.email, data.password, data.displayName)
       toast.success('Account created! Welcome to Toonflow!')
-      router.push('/')
+      router.push(redirect)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Signup failed'
       toast.error(message.includes('email-already-in-use')
@@ -55,7 +59,7 @@ export default function SignupForm() {
     try {
       await signInWithGoogle()
       toast.success('Welcome to Toonflow!')
-      router.push('/')
+      router.push(redirect)
     } catch {
       toast.error('Google sign-up failed')
     } finally {
@@ -145,7 +149,12 @@ export default function SignupForm() {
 
       <p className="text-center text-sm text-text-secondary">
         Already have an account?{' '}
-        <Link href="/login" className="text-accent hover:underline">Sign in</Link>
+        <Link
+          href={redirect === '/' ? '/login' : `/login?redirect=${encodeURIComponent(redirect)}`}
+          className="text-accent hover:underline"
+        >
+          Sign in
+        </Link>
       </p>
     </div>
   )

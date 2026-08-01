@@ -4,7 +4,7 @@ import { useCallback, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { useEditorStore } from '@/store/useEditorStore'
 import { getWebtoonById, listCharacters, createCharacter } from '@/lib/firebase/firestore'
-import { makeSfxTextSpec } from '@/lib/editor/panelArt'
+import { layoutPanelDialogue } from '@/lib/editor/bubbleLayout'
 import type { BubbleKind } from '@/lib/editor/bubbles'
 import { panelSize } from '@/lib/editor/webtoonFormat'
 
@@ -48,13 +48,6 @@ async function saveCastToRoster(webtoonId: string, cast: StoryCharacter[]): Prom
   } catch {
     return 0 // roster save is a convenience, never fail the whole plan on it
   }
-}
-
-// Storyboard placement zone → fractional center on the page (0–1).
-const BUBBLE_POS: Record<string, { x: number; y: number }> = {
-  'top-left': { x: 0.3, y: 0.18 },   'top-center': { x: 0.5, y: 0.18 },   'top-right': { x: 0.7, y: 0.18 },
-  'mid-left': { x: 0.3, y: 0.5 },    center: { x: 0.5, y: 0.5 },          'mid-right': { x: 0.7, y: 0.5 },
-  'bottom-left': { x: 0.3, y: 0.82 },'bottom-center': { x: 0.5, y: 0.82 },'bottom-right': { x: 0.7, y: 0.82 },
 }
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
@@ -197,27 +190,17 @@ export function useAgentWorkflow() {
         if (!firstPageId) firstPageId = pageId
         const page = useEditorStore.getState().pages.find((p) => p.id === pageId)
         if (!page) continue
-        const n = panel.bubbles.length || 1
-        panel.bubbles.forEach((b, idx) => {
-          const zone = b.position ? BUBBLE_POS[b.position] : undefined
-          // Reading-order fallback keeps un-positioned bubbles legible top→bottom.
-          const fallbackY = 0.16 + (0.68 * (idx + 0.5)) / n
-          const xFrac = zone ? zone.x : 0.5
-          // Bias toward the chosen zone but spread stacked bubbles by index so two
-          // bubbles sharing a zone don't overlap; clamp inside the safe band.
-          const yFrac = zone
-            ? Math.max(0.14, Math.min(0.86, zone.y + (idx - (n - 1) / 2) * 0.14))
-            : fallbackY
-          const id = store.addBubble(pageId, b.kind, page.width * xFrac, page.height * yFrac)
-          if (id) useEditorStore.getState().updateElement(pageId, id, { text: b.text }, false)
-        })
-        // Onomatopoeia as big caption lettering, staggered down the right side so
-        // it reads as SFX on the art rather than dialogue.
-        ;(panel.sfx ?? []).forEach((s, idx) => {
-          const cx = page.width * 0.66
-          const cy = page.height * Math.min(0.86, 0.24 + 0.18 * idx)
-          store.addElement(pageId, makeSfxTextSpec(s, page, cx, cy))
-        })
+        // Size every bubble/SFX to its text and flow them down the panel's safe
+        // area with a guaranteed gap — no fixed-size boxes, no overlaps (see
+        // layoutPanelDialogue). Each placed spec carries its own final geometry.
+        const placed = layoutPanelDialogue(
+          { width: page.width, height: page.height },
+          panel.bubbles.map((b) => ({ kind: b.kind, text: b.text, zone: b.position })),
+          panel.sfx ?? [],
+        )
+        for (const item of placed) {
+          store.addElement(pageId, { ...item.spec, x: item.x, y: item.y })
+        }
       }
 
       useEditorStore.getState().clearSelection()

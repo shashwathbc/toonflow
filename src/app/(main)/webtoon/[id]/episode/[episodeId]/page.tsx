@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { getWebtoonById, getEpisodesByWebtoon, upsertReadingHistory } from '@/lib/firebase/firestore'
 import { useViewTracking } from '@/hooks/useViewTracking'
 import LikeButton from '@/components/reader/LikeButton'
+import DownloadEpisodeMenu from '@/components/reader/DownloadEpisodeMenu'
 import CommentSection from '@/components/reader/CommentSection'
 import { EpisodeIntroPage } from '@/components/webtoon/EpisodeIntroPage'
 import { EpisodeOutroPage } from '@/components/webtoon/EpisodeOutroPage'
@@ -93,7 +94,10 @@ export default function EpisodeReaderPage() {
             Ep. {episode.episodeNumber} · {episode.title}
           </p>
 
-          <LikeButton contentType="episode" contentId={episodeId} parentId={id} initialCount={episode.likeCount ?? 0} size="sm" showCount={false} authorId={webtoon?.authorId} contentTitle={webtoon?.title} />
+          <div className="flex items-center gap-1">
+            <DownloadEpisodeMenu webtoonTitle={webtoon?.title ?? 'Webtoon'} episode={episode} />
+            <LikeButton contentType="episode" contentId={episodeId} parentId={id} initialCount={episode.likeCount ?? 0} size="sm" showCount={false} authorId={webtoon?.authorId} contentTitle={webtoon?.title} />
+          </div>
         </div>
       </header>
 

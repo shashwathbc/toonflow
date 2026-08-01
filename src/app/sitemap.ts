@@ -8,6 +8,11 @@ export const revalidate = 3600 // rebuild the sitemap at most hourly
 // (/login and /signup are excluded deliberately: robots.ts disallows them.)
 const STATIC_ROUTES = ['', '/browse', '/originals', '/earnings', '/ai-policy', '/privacy', '/terms']
 
+// Keyword-targeted "create with AI" landing pages. Higher priority than the rest
+// of the static set — these are the primary acquisition surfaces for creation
+// search intent (ai novel/webtoon/manga generator).
+const LANDING_ROUTES = ['/ai-novel-generator', '/ai-webtoon-generator', '/ai-manga-generator']
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
   const routes: MetadataRoute.Sitemap = STATIC_ROUTES.map((path) => ({
@@ -16,6 +21,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: path === '' ? 'daily' : 'weekly',
     priority: path === '' ? 1 : 0.7,
   }))
+
+  for (const path of LANDING_ROUTES) {
+    routes.push({
+      url: `${APP_URL}${path}`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    })
+  }
 
   // Best-effort: include published novels AND webtoons. Webtoons were omitted
   // before, so half the catalog was never submitted for indexing. Never let a
