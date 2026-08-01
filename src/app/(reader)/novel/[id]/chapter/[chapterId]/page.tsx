@@ -14,6 +14,7 @@ import {
   upsertReadingHistory,
 } from '@/lib/firebase/firestore'
 import { useViewTracking } from '@/hooks/useViewTracking'
+import { useReaderChrome } from '@/hooks/useReaderChrome'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import CommentSection from '@/components/reader/CommentSection'
@@ -49,16 +50,21 @@ export default function ChapterReaderPage() {
   const [centered, setCentered] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showChapterList, setShowChapterList] = useState(false)
-  const [headerVisible, setHeaderVisible] = useState(true)
-  const [progress, setProgress] = useState(0)
+
+  // Immersive chrome (top bar + floating bottom nav) — hides while reading,
+  // reveals on scroll-up or a tap on the page. Shared with the webtoon reader.
+  // Collapse any open header panel whenever the chrome hides.
+  const closePanels = useCallback(() => {
+    setShowSettings(false)
+    setShowChapterList(false)
+  }, [])
+  const { chromeVisible, progress, handleSurfaceClick } = useReaderChrome(closePanels)
 
   // Sanitize the stored HTML once per chapter (defends readers against a
   // creator embedding a script/onerror payload in their own content doc).
   const safeContent = useMemo(() => sanitizeHtml(chapter?.content), [chapter?.content])
 
-  const headerTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef    = useRef<HTMLDivElement>(null)
-  const lastScrollY   = useRef(0)
   const progressBarRef = useRef<HTMLDivElement>(null)
 
   // Width/valuenow are set via the DOM: static-analysis a11y linters reject
@@ -110,42 +116,10 @@ export default function ChapterReaderPage() {
   }, [chapter, chapterId, id, firebaseUser])
 
 
-  // ── Reading progress + header auto-hide ─────────────────────
-  const handleScroll = useCallback(() => {
-    const scrollY  = window.scrollY
-    const maxScroll = document.documentElement.scrollHeight - window.innerHeight
-    setProgress(maxScroll > 0 ? (scrollY / maxScroll) * 100 : 0)
-
-    // Hide header when scrolling down, show when scrolling up
-    if (scrollY > lastScrollY.current + 8 && scrollY > 120) {
-      setHeaderVisible(false)
-      setShowSettings(false)
-      setShowChapterList(false)
-    } else if (scrollY < lastScrollY.current - 8) {
-      setHeaderVisible(true)
-    }
-    lastScrollY.current = scrollY
-
-    // Auto-show header after 2.5s idle
-    if (headerTimer.current) clearTimeout(headerTimer.current)
-    headerTimer.current = setTimeout(() => setHeaderVisible(true), 2500)
-  }, [])
-
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', handleScroll)
-      // The listener is removed above, but the last scroll already scheduled a
-      // 2.5s "re-show header" timer. Without this it survives unmount and fires
-      // setHeaderVisible on a dead component, keeping the whole reader closure
-      // (chapters + content) reachable until it does.
-      if (headerTimer.current) clearTimeout(headerTimer.current)
-    }
-  }, [handleScroll])
-
   // ── Derived ──────────────────────────────────────────────────
-  // Memoized because this component re-renders on EVERY scroll event (setProgress
-  // above), and without it the findIndex + both lookups re-ran each frame.
+  // Memoized because this component re-renders on EVERY scroll event (the reader
+  // chrome hook tracks progress), and without it the findIndex + both lookups
+  // re-ran each frame.
   const { prevChapter, nextChapter } = useMemo(() => {
     const idx = chapters.findIndex((c) => c.id === chapterId)
     return {
@@ -185,7 +159,7 @@ export default function ChapterReaderPage() {
       <header
         className={cn(
           'reader-header fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md border-b border-white/8',
-          !headerVisible && 'hidden'
+          !chromeVisible && 'hidden'
         )}
         role="banner"
       >
@@ -329,6 +303,7 @@ export default function ChapterReaderPage() {
         tabIndex={-1}
         className="max-w-[680px] mx-auto px-5 sm:px-8 pt-20 pb-8"
         ref={contentRef}
+        onClick={handleSurfaceClick}
       >
         {/* Chapter heading */}
         <header className="mb-12 text-center reader-chapter-heading">
@@ -442,7 +417,14 @@ export default function ChapterReaderPage() {
       {/* Prev/Next always shown; the boundary side is a disabled button rather
           than being hidden, so the control stays symmetric and its state mirrors
           the chapter order (same behaviour as the inline nav above). */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50">
+      <div
+        className={cn(
+          'fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50 transition-all duration-300',
+          chromeVisible
+            ? 'opacity-100 translate-y-0'
+            : 'opacity-0 translate-y-4 pointer-events-none'
+        )}
+      >
         {prevChapter ? (
           <Tooltip label="Previous chapter" side="top">
             <Link

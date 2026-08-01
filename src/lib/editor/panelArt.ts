@@ -21,9 +21,20 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' }
 // The full-bleed clause is what stops each panel reading as a separate framed
 // page: the art must run to all four edges so consecutive panels fuse into one
 // continuous vertical scroll (see FULLBLEED_STYLE / webtoonFormat.ts).
+//
+// IMPORTANT: this describes only the RENDERING (lineart, shading, colour,
+// lighting) — it must NEVER name the medium as "korean manhwa / webtoon /
+// official webtoon art style". Empirically (see the STYLE_SUFFIX note in
+// generate-image/route.ts) that phrasing carries such a strong "beautiful
+// character portrait" prior that it OVERRIDES the actual scene: environment-only
+// panels (a cosmic void, a skyline, an empty hall) came back as a woman's face.
+// The manhwa LOOK is carried instead by the concrete render traits below (clean
+// lineart + cel shading + screentone), which don't force a person — so a scene
+// renders as a scene, while a character panel (whose cast look is prepended to
+// the prompt) still renders the character.
 export const MANHWA_STYLE =
-  ', korean manhwa webtoon panel, official webtoon art style, clean sharp digital lineart,' +
-  ' cel shading, screentone, vibrant colors, cinematic dramatic lighting,' +
+  ', clean sharp digital lineart, cel shading, screentone, vibrant colors,' +
+  ' cinematic dramatic lighting,' +
   FULLBLEED_STYLE +
   ' professional studio quality, highly detailed'
 

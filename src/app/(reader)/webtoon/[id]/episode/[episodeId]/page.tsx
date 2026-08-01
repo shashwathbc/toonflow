@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -8,8 +8,9 @@ import { ChevronLeft, ChevronRight, ImageIcon, Loader2, Home, List } from 'lucid
 import { useAuth } from '@/hooks/useAuth'
 import { getWebtoonById, getEpisodesByWebtoon, upsertReadingHistory } from '@/lib/firebase/firestore'
 import { useViewTracking } from '@/hooks/useViewTracking'
+import { useReaderChrome } from '@/hooks/useReaderChrome'
+import { cn } from '@/lib/utils/cn'
 import LikeButton from '@/components/reader/LikeButton'
-import DownloadEpisodeMenu from '@/components/reader/DownloadEpisodeMenu'
 import CommentSection from '@/components/reader/CommentSection'
 import { EpisodeIntroPage } from '@/components/webtoon/EpisodeIntroPage'
 import { EpisodeOutroPage } from '@/components/webtoon/EpisodeOutroPage'
@@ -23,6 +24,22 @@ export default function EpisodeReaderPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [episode, setEpisode] = useState<Episode | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Immersive chrome (top bar + floating episode nav) — hides while reading,
+  // reveals on scroll-up or a tap. Shared with the novel chapter reader.
+  const { chromeVisible, progress, handleSurfaceClick } = useReaderChrome()
+  const progressBarRef = useRef<HTMLDivElement>(null)
+
+  // Width/valuenow set via the DOM: a11y linters reject JSX expressions in
+  // aria-* and inline style attributes.
+  useEffect(() => {
+    const el = progressBarRef.current
+    if (!el) return
+    el.style.width = `${progress}%`
+    el.setAttribute('aria-valuemin', '0')
+    el.setAttribute('aria-valuemax', '100')
+    el.setAttribute('aria-valuenow', String(Math.round(progress)))
+  }, [progress])
 
   useEffect(() => {
     Promise.all([getWebtoonById(id), getEpisodesByWebtoon(id)])
@@ -75,14 +92,28 @@ export default function EpisodeReaderPage() {
   ).filter(Boolean)
 
   return (
-    <div className="min-h-screen bg-bg">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-bg-border">
+    <div className="min-h-screen bg-black">
+      {/* Reading progress bar (always visible, non-intrusive) */}
+      <div
+        ref={progressBarRef}
+        className="reader-progress-bar"
+        role="progressbar"
+        aria-label="Reading progress"
+      />
+
+      {/* Immersive header — overlays the top of the strip and hides while reading */}
+      <header
+        className={cn(
+          'reader-header fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md border-b border-white/8',
+          !chromeVisible && 'hidden'
+        )}
+        role="banner"
+      >
         <div className="max-w-3xl mx-auto px-4 h-12 flex items-center justify-between gap-3">
           <Tooltip label="Back to webtoon" side="bottom">
             <Link
               href={`/webtoon/${id}`}
-              className="flex items-center gap-1 text-text-muted hover:text-text text-xs transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
+              className="flex items-center gap-1 text-white/40 hover:text-white text-xs transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none rounded"
               aria-label="Back to webtoon"
             >
               <ChevronLeft size={14} aria-hidden="true" />
@@ -90,20 +121,20 @@ export default function EpisodeReaderPage() {
             </Link>
           </Tooltip>
 
-          <p className="text-xs font-medium text-text truncate text-center">
+          <p className="text-xs font-medium text-white/70 truncate text-center">
             Ep. {episode.episodeNumber} · {episode.title}
           </p>
 
           <div className="flex items-center gap-1">
-            <DownloadEpisodeMenu webtoonTitle={webtoon?.title ?? 'Webtoon'} episode={episode} />
             <LikeButton contentType="episode" contentId={episodeId} parentId={id} initialCount={episode.likeCount ?? 0} size="sm" showCount={false} authorId={webtoon?.authorId} contentTitle={webtoon?.title} />
           </div>
         </div>
       </header>
 
       {/* Panels — vertical scroll webtoon format, always framed by the
-          mandatory Toonflow intro and outro branding pages */}
-      <main id="main-content" className="max-w-2xl mx-auto" tabIndex={-1}>
+          mandatory Toonflow intro and outro branding pages. Tapping the strip
+          toggles the immersive chrome. */}
+      <main id="main-content" className="max-w-2xl mx-auto" tabIndex={-1} onClick={handleSurfaceClick}>
         {webtoon && <EpisodeIntroPage webtoon={webtoon} episode={episode} />}
 
         {panels.length > 0 ? (
@@ -161,6 +192,64 @@ export default function EpisodeReaderPage() {
           <CommentSection targetId={episodeId} targetType="episode" creatorId={webtoon?.authorId} contentTitle={webtoon?.title} contentLink={`/webtoon/${id}/episode/${episodeId}`} />
         </div>
       </main>
+
+      {/* Floating episode nav — mirrors the novel reader; fades out with the
+          chrome so the strip reads uninterrupted. Boundary sides render
+          disabled (home links live in the inline end-of-episode nav above). */}
+      <div
+        className={cn(
+          'fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50 transition-all duration-300',
+          chromeVisible
+            ? 'opacity-100 translate-y-0'
+            : 'opacity-0 translate-y-4 pointer-events-none'
+        )}
+      >
+        {prevEpisode ? (
+          <Tooltip label="Previous episode" side="top">
+            <Link
+              href={`/webtoon/${id}/episode/${prevEpisode.id}`}
+              className="w-10 h-10 rounded-full bg-black/70 border border-white/15 backdrop-blur-md flex items-center justify-center text-white/60 hover:text-white hover:border-white/30 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+              aria-label="Previous episode"
+            >
+              <ChevronLeft size={16} aria-hidden="true" />
+            </Link>
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-label="No previous episode"
+            className="w-10 h-10 rounded-full bg-black/70 border border-white/15 backdrop-blur-md flex items-center justify-center text-white/60 opacity-40 cursor-not-allowed"
+          >
+            <ChevronLeft size={16} aria-hidden="true" />
+          </button>
+        )}
+
+        <div className="px-4 py-2 rounded-full bg-black/70 border border-white/15 backdrop-blur-md text-[11px] text-white/50 font-medium tabular-nums">
+          {Math.round(progress)}%
+        </div>
+
+        {nextEpisode ? (
+          <Tooltip label="Next episode" side="top">
+            <Link
+              href={`/webtoon/${id}/episode/${nextEpisode.id}`}
+              className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black hover:bg-white/90 transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+              aria-label="Next episode"
+            >
+              <ChevronRight size={16} aria-hidden="true" />
+            </Link>
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-label="No next episode"
+            className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black opacity-40 cursor-not-allowed"
+          >
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        )}
+      </div>
     </div>
   )
 }

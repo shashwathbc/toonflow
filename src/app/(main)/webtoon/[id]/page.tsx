@@ -13,6 +13,7 @@ import { useLiveViewCount } from '@/hooks/useLiveViewCount'
 import { formatCount, formatDate, toTitleCase } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
+import DownloadEpisodeMenu from '@/components/reader/DownloadEpisodeMenu'
 import AuthorCard from '@/components/social/AuthorCard'
 import { cn } from '@/lib/utils/cn'
 import JsonLd from '@/components/seo/JsonLd'
@@ -191,34 +192,45 @@ export default function WebtoonDetailPage() {
         ) : (
           <div className="bg-bg-card border border-bg-border rounded-2xl overflow-hidden">
             {episodes.map((ep, i) => (
-              <Link
+              // Row is a flex container, not a single Link, so the download menu
+              // can sit alongside the navigation link without nesting a button
+              // inside an anchor. Download lives here — never in the reader — so
+              // reading stays a clean, chrome-light experience.
+              <div
                 key={ep.id}
-                href={`/webtoon/${id}/episode/${ep.id}`}
-                className="flex items-center gap-4 px-5 py-3.5 border-b border-bg-border/50 last:border-0 hover:bg-bg-elevated/40 transition-colors group"
+                className="flex items-center border-b border-bg-border/50 last:border-0 hover:bg-bg-elevated/40 transition-colors group"
               >
-                {ep.thumbnailURL ? (
-                  <div className="w-12 h-14 rounded-lg overflow-hidden flex-shrink-0">
-                    <Image src={ep.thumbnailURL} alt="" width={48} height={56} className="object-cover w-full h-full" />
-                  </div>
-                ) : (
-                  <div className="w-12 h-14 rounded-lg bg-bg-elevated flex-shrink-0 flex items-center justify-center">
-                    <span className="text-xs font-bold text-text-muted">{ep.episodeNumber ?? i + 1}</span>
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text group-hover:text-accent transition-colors truncate">
-                    Ep. {ep.episodeNumber ?? i + 1} · {ep.title || `Episode ${ep.episodeNumber ?? i + 1}`}
-                  </p>
-                  <p className="text-xs text-text-muted">{ep.panels?.length ?? 0} panels</p>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0 text-xs text-text-muted">
-                  {(ep.viewCount ?? 0) > 0 && (
-                    <span className="flex items-center gap-1"><Eye size={11} aria-hidden="true" /> {formatCount(ep.viewCount ?? 0)}</span>
+                <Link
+                  href={`/webtoon/${id}/episode/${ep.id}`}
+                  className="flex items-center gap-4 px-5 py-3.5 flex-1 min-w-0 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded-l-2xl"
+                >
+                  {ep.thumbnailURL ? (
+                    <div className="w-12 h-14 rounded-lg overflow-hidden flex-shrink-0">
+                      <Image src={ep.thumbnailURL} alt="" width={48} height={56} className="object-cover w-full h-full" />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-14 rounded-lg bg-bg-elevated flex-shrink-0 flex items-center justify-center">
+                      <span className="text-xs font-bold text-text-muted">{ep.episodeNumber ?? i + 1}</span>
+                    </div>
                   )}
-                  {ep.publishedAt && <span>{formatDate(ep.publishedAt)}</span>}
-                  <ChevronRight size={14} className="group-hover:text-accent transition-colors" aria-hidden="true" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-text group-hover:text-accent transition-colors truncate">
+                      Ep. {ep.episodeNumber ?? i + 1} · {ep.title || `Episode ${ep.episodeNumber ?? i + 1}`}
+                    </p>
+                    <p className="text-xs text-text-muted">{ep.panels?.length ?? 0} panels</p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0 text-xs text-text-muted">
+                    {(ep.viewCount ?? 0) > 0 && (
+                      <span className="flex items-center gap-1"><Eye size={11} aria-hidden="true" /> {formatCount(ep.viewCount ?? 0)}</span>
+                    )}
+                    {ep.publishedAt && <span>{formatDate(ep.publishedAt)}</span>}
+                  </div>
+                </Link>
+                <div className="flex items-center gap-1 pl-1 pr-4 flex-shrink-0">
+                  <DownloadEpisodeMenu webtoonTitle={webtoon.title} episode={ep} />
+                  <ChevronRight size={14} className="text-text-muted group-hover:text-accent transition-colors" aria-hidden="true" />
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}
