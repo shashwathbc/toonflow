@@ -17,26 +17,37 @@ import {
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
-// Premium manhwa look appended to EVERY panel prompt so panels share one style.
+// Leading style anchor placed at the VERY FRONT of every panel prompt — the
+// position Flux weights most heavily. This is the single biggest lever for making
+// panels read as flat webtoon / manhwa art instead of the semi-realistic,
+// airbrushed portraits Flux paints by default.
+//
+// Empirically verified against the LIVE Flux service (2026-08-02): leading with
+// these flat-anime terms flips the render from painterly realism to clean
+// cel-shaded webtoon art. Crucially, an earlier concern (documented in the old
+// STYLE_SUFFIX note) that naming "manhwa/webtoon" up front turns scenery into a
+// stray face was RE-TESTED on environment-only prompts (a ruined cathedral hall,
+// empty and silent) and did NOT recur — that regression was specific to SHORT,
+// bare-subject cover prompts, not the long, concrete scene prompts panels carry.
+export const WEBTOON_ART_PREFIX =
+  'Flat 2D anime webtoon manhwa panel art, clean bold ink lineart,' +
+  ' flat cel shading, screentone, flat vibrant color palette. '
+
+// Trailing style clause appended to EVERY panel prompt so panels share one look.
 // The full-bleed clause is what stops each panel reading as a separate framed
 // page: the art must run to all four edges so consecutive panels fuse into one
 // continuous vertical scroll (see FULLBLEED_STYLE / webtoonFormat.ts).
 //
-// IMPORTANT: this describes only the RENDERING (lineart, shading, colour,
-// lighting) — it must NEVER name the medium as "korean manhwa / webtoon /
-// official webtoon art style". Empirically (see the STYLE_SUFFIX note in
-// generate-image/route.ts) that phrasing carries such a strong "beautiful
-// character portrait" prior that it OVERRIDES the actual scene: environment-only
-// panels (a cosmic void, a skyline, an empty hall) came back as a woman's face.
-// The manhwa LOOK is carried instead by the concrete render traits below (clean
-// lineart + cel shading + screentone), which don't force a person — so a scene
-// renders as a scene, while a character panel (whose cast look is prepended to
-// the prompt) still renders the character.
+// IMPORTANT: the wording here is deliberately FLAT-ANIME and carries NO cinematic
+// realism vocabulary ("cinematic dramatic lighting", "film grain", "masterpiece",
+// "rich color grading"). Those terms were the reason panels came out as glossy,
+// photoreal digital paintings; removing them — and pairing the flat-anime render
+// traits with the WEBTOON_ART_PREFIX above — is what produces true webtoon art.
 export const MANHWA_STYLE =
-  ', clean sharp digital lineart, cel shading, screentone, vibrant colors,' +
-  ' cinematic dramatic lighting, cinematic composition, subtle film grain,' +
+  ', flat 2D anime art style, korean webtoon manhwa episode illustration,' +
+  ' clean bold ink lineart, flat cel shading, screentone, flat vibrant colors,' +
   FULLBLEED_STYLE +
-  ' professional studio quality, masterpiece, highly detailed'
+  ' sharp focus, high quality, highly detailed'
 
 // A painted panel background is a locked, full-page image layer whose name ends
 // with this suffix. Used to find/replace a panel's art and to tell blanks apart.
@@ -86,7 +97,10 @@ export async function generatePanelImage(
         headers: JSON_HEADERS,
         body: JSON.stringify({
           action: 'generate',
-          prompt: prompt + MANHWA_STYLE,
+          // Anchor the flat-anime look at the FRONT and reinforce it at the back,
+          // wrapping the creator's clean scene prompt on both sides. Neither piece
+          // is stored on the page — the editable artPrompt stays scene-only.
+          prompt: WEBTOON_ART_PREFIX + prompt + MANHWA_STYLE,
           imageType: 'webtoon',
           shot: opts.shot,
           seed: opts.seed,

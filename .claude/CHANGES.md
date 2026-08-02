@@ -1,5 +1,23 @@
 # Toonflow Studio Paint — Change Log
 
+## Webtoon AI panels: fixed generated art not looking like webtoon/manhwa (2026-08-02)
+- Request: "images generated in webtoon don't have webtoon format" — AI panels came out as glossy, semi-realistic digital paintings instead of flat webtoon/manhwa art.
+- Diagnosis (verified against the LIVE Flux/Pollinations service, side-by-side test gens saved to scratchpad):
+  - Confirmed the problem is ART STYLE, not dimensions — Pollinations downscales but preserves aspect ratio exactly (832×1600 → 553×1065, both ≈1.92), so the tall webtoon "format"/shape was already correct.
+  - Root cause: every prompt layer stacked cinematic-realism vocabulary ("cinematic dramatic lighting", "subtle film grain", "masterpiece", "rich cinematic color grading", "premium digital illustration") and had NO explicit flat-anime anchor — the word "manhwa/webtoon" had been removed earlier over a "scene turns into a face" fear. Result: Flux defaulted to airbrushed photoreal portraits. A baseline test gen produced a realistic beauty portrait that even ignored "silver hair".
+  - Re-tested that fear: leading with flat-anime style on an environment-only prompt (ruined cathedral hall) did NOT reintroduce the stray-face regression — that was specific to SHORT bare-subject cover prompts, not long concrete panel prompts.
+- Fix (3 parts):
+  - src/lib/editor/panelArt.ts — added `WEBTOON_ART_PREFIX` (leading flat-anime anchor placed at the FRONT of every panel prompt, the position Flux weights most) and rewrote `MANHWA_STYLE` to drop all cinematic-realism words, keeping flat-anime render traits (bold ink lineart, flat cel shading, screentone, flat colors) + FULLBLEED_STYLE. `generatePanelImage` now sends `WEBTOON_ART_PREFIX + prompt + MANHWA_STYLE` (neither is persisted on the page — the editable artPrompt stays scene-only).
+  - src/app/api/ai/generate-image/route.ts — rewrote `WEBTOON_STYLE_SUFFIX` to drop the duplicate cinematic-realism vocabulary (light flat-anime reinforcement + blank-bubble/no-text guards only); made the webtoon branch of `styledPrompt` explicit so a panel prompt is never hit by the covers-only short-subject doubling; bumped the prompt schema max 2600→2800 for the added prefix headroom.
+  - src/app/api/ai/storyboard/route.ts — steered the AI-generated per-chapter `style` field (and the system framing) toward a flat 2D anime/manhwa look, explicitly NOT painterly/photoreal, instead of "cinematic color grade".
+- Verified: `npx tsc --noEmit` clean; end-to-end test gen with exact production wording produces a clean flat cel-shaded webtoon panel (silver-blue hair respected, flat panel background) vs. the photoreal baseline.
+
+## Footer: added Discord social icon next to LinkedIn (2026-08-02)
+- Request: add a Discord icon in the footer next to the LinkedIn icon, linking to https://discord.gg/5TuFeezv8.
+- src/components/layout/Footer.tsx:
+  - Added an inline `DiscordIcon` SVG (fill="currentColor" — Discord's mark is a filled glyph, unlike the stroke-based Instagram/LinkedIn icons) sized via the shared `size` prop.
+  - Appended a Discord entry to `SOCIAL_LINKS` (href https://discord.gg/5TuFeezv8, aria-label "Join the Toonflow Discord (opens in new tab)"), so it renders after LinkedIn using the existing social-link mapping (target=_blank, rel=noopener noreferrer, focus-visible ring).
+
 ## Readers: outro "Follow" label now uses the author's live profile name (2026-08-02)
 - Request: on the closing (extro/outro) page of both novel and webtoon, the "Follow {name}" label should show the name the author currently keeps on their profile, not a possibly stale copy.
 - Root cause: both outro components rendered `authorName`, which is denormalized onto each novel/webtoon doc at creation. After a profile rename it can lag until `syncAuthorContent` fans out, so the follow label could show an old name.

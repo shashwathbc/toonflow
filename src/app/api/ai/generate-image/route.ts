@@ -55,9 +55,16 @@ const STYLE_SUFFIX =
 // explicitly allowing blank bubble SHAPES when the prompt asks for them. It does
 // NOT mention bubbles itself — otherwise every scenery page would grow random
 // bubbles it never asked for.
+//
+// The client already carries the primary flat-anime styling (WEBTOON_ART_PREFIX +
+// MANHWA_STYLE in lib/editor/panelArt.ts). This suffix deliberately AVOIDS the
+// cinematic-realism vocabulary that used to live here ("premium digital
+// illustration", "cinematic dramatic lighting", "rich cinematic color grading") —
+// that wording pulled Flux toward glossy photoreal painting and away from the
+// webtoon look. It keeps only a light flat-anime reinforcement plus the guards,
+// so it never fights the client style even for a future caller.
 const WEBTOON_STYLE_SUFFIX =
-  ', premium digital illustration, cinematic dramatic lighting,' +
-  ' highly detailed, rich cinematic color grading, sharp focus, high quality,' +
+  ', flat 2D anime webtoon art style, clean cel-shaded illustration,' +
   ' any speech bubbles and narration boxes are completely blank and empty,' +
   ' no text, no letters, no words, no typography, no watermark, no logo'
 
@@ -71,9 +78,10 @@ const generateSchema = z.object({
   action: z.literal('generate'),
   // Webtoon page prompts are assembled from several capped parts (locked style +
   // each present character's look + the scene, which now also carries baked-in
-  // speech-bubble dialogue) + MANHWA_STYLE, so allow generous headroom before the
-  // longest pages would trip validation. Still well under MAX_BODY_BYTES.
-  prompt: z.string().min(1).max(2600),
+  // speech-bubble dialogue) wrapped in WEBTOON_ART_PREFIX + MANHWA_STYLE, so allow
+  // generous headroom before the longest pages would trip validation. Still well
+  // under MAX_BODY_BYTES.
+  prompt: z.string().min(1).max(2800),
   imageType: z.enum(['cover', 'banner', 'webtoon']),
   // Webtoon panels only: the camera framing (sets the tall aspect ratio) and an
   // optional per-chapter seed so every panel shares one coherent look/lighting.
@@ -184,16 +192,22 @@ Return ONLY the image prompt text.`,
       // the bubble-aware suffix; covers/banners keep the plain "no text" one.
       const suffix = imageType === 'webtoon' ? WEBTOON_STYLE_SUFFIX : STYLE_SUFFIX
 
-      // For a SHORT subject ("bow"), repeat it up front and mark it as the main
-      // subject so it stays dominant over the style descriptors instead of being
-      // swamped and mis-rendered (verified against the live Flux service). But an
-      // already-long, detailed prompt (the agent workflow's art-directed panel
-      // prompts) needs NO doubling — repeating it only lengthens the URL and slows
-      // generation, which pushed panels past the timeout and left them blank.
+      // Webtoon panels arrive pre-styled from the client (WEBTOON_ART_PREFIX +
+      // scene + MANHWA_STYLE) and are always long, so they take the plain path —
+      // never the short-subject doubling below, which is a covers-only trick.
+      //
+      // For a SHORT cover/banner subject ("bow"), repeat it up front and mark it as
+      // the main subject so it stays dominant over the style descriptors instead of
+      // being swamped and mis-rendered (verified against the live Flux service). An
+      // already-long, detailed prompt needs NO doubling — repeating it only
+      // lengthens the URL and slows generation, which pushed panels past the
+      // timeout and left them blank.
       const styledPrompt =
-        prompt.length <= 120
-          ? `${prompt}. ${prompt}, as the main subject of the image${suffix}`
-          : `${prompt}${suffix}`
+        imageType === 'webtoon'
+          ? `${prompt}${suffix}`
+          : prompt.length <= 120
+            ? `${prompt}. ${prompt}, as the main subject of the image${suffix}`
+            : `${prompt}${suffix}`
 
       // A per-chapter seed (passed by the agent workflow) keeps every panel's
       // global lighting/line-weight coherent, so stacked panels don't jump in
