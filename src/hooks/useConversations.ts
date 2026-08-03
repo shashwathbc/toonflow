@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase/db'
 import { getUserProfile } from '@/lib/firebase/firestore'
+import { logListenerError } from '@/lib/firebase/errors'
 import type { Conversation, UserProfile } from '@/types'
 
 export interface ConversationRow {
@@ -68,7 +69,7 @@ export function useConversations(uid: string | null): UseConversationsResult {
         }
       },
       (e) => {
-        console.error('[useConversations] listener error:', e)
+        logListenerError('[useConversations]', e)
         setLoading(false)
       }
     )

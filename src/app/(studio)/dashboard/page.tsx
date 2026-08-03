@@ -726,7 +726,9 @@ export default function DashboardPage() {
       <CreatorMonetization stats={monetizationStats} />
 
       {/* Creator analytics — views, revenue, subscribers, top content */}
-      <CreatorAnalyticsSection />
+      <div data-tour="dashboard-analytics">
+        <CreatorAnalyticsSection />
+      </div>
 
       {/* Content Performance */}
       <section aria-labelledby="performance-heading" className="bg-bg-card border border-bg-border rounded-2xl overflow-hidden">

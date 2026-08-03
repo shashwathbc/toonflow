@@ -94,6 +94,7 @@ function Navbar() {
           <Tooltip label="Search">
             <Link
               href="/browse"
+              data-tour="nav-search"
               className="btn-ghost p-2 rounded-full"
               aria-label="Search content"
             >
@@ -106,6 +107,7 @@ function Navbar() {
             <Tooltip label="Messages">
               <Link
                 href="/messages"
+                data-tour="nav-messages"
                 className={cn(
                   'relative btn-ghost p-2 rounded-full',
                   messagesActive && 'bg-bg-elevated text-text'

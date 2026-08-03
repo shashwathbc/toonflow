@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { LogOut, User, LayoutDashboard, Star } from 'lucide-react'
+import { LogOut, User, LayoutDashboard, Star, Compass } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import * as Avatar from '@radix-ui/react-avatar'
 import { useAuth } from '@/hooks/useAuth'
 import { logout } from '@/lib/firebase/auth'
+import { useTourStore } from '@/store/useTourStore'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 import toast from 'react-hot-toast'
@@ -47,6 +48,7 @@ export default function UserMenu() {
         <DropdownMenu.Trigger asChild>
           <button
             type="button"
+            data-tour="nav-profile"
             className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             aria-label={`Account menu for ${userProfile?.displayName ?? 'user'}`}
           >
@@ -118,6 +120,21 @@ export function UserDropdownContent({
         {isSuperAdmin && (
           <MenuItem href="/admin/super" icon={<Star size={14} />} label="Super Admin" />
         )}
+
+        <DropdownMenu.Separator className="my-1 h-px bg-bg-border" />
+
+        {/* Help → replay the product tour from the start */}
+        <DropdownMenu.Item
+          className={cn(
+            'flex items-center gap-2 px-2 py-1.5 text-sm text-text-secondary rounded-lg cursor-pointer',
+            'hover:bg-bg-elevated hover:text-text focus-visible:bg-bg-elevated focus-visible:text-text outline-none'
+          )}
+          onSelect={() => useTourStore.getState().start(0)}
+          role="menuitem"
+        >
+          <Compass size={14} aria-hidden="true" />
+          Product tour
+        </DropdownMenu.Item>
 
         <DropdownMenu.Separator className="my-1 h-px bg-bg-border" />
 

@@ -25,6 +25,12 @@ export interface UserProfile {
   totalViews: number
   totalEarnings: number
   balance: number
+  /** True once the user has finished (or skipped) the product tour — gates the
+   *  first-run onboarding so it auto-starts only once. */
+  hasOnboarded?: boolean
+  /** Where the user first heard about Toonflow, captured on the tour's welcome
+   *  screen (e.g. 'x', 'youtube', 'instagram', 'linkedin'). */
+  referralSource?: string
   createdAt: FirestoreTimestamp
   updatedAt: FirestoreTimestamp
 }

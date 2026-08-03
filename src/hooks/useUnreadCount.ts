@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase/db'
+import { logListenerError } from '@/lib/firebase/errors'
 import { useAuth } from '@/hooks/useAuth'
 
 /**
@@ -28,7 +29,7 @@ export function useUnreadCount(): number {
         })
         setCount(total)
       },
-      (e) => console.error('[useUnreadCount] listener error:', e)
+      (e) => logListenerError('[useUnreadCount]', e)
     )
     return () => unsub()
   }, [uid])

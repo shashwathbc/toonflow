@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase/db'
+import { logListenerError } from '@/lib/firebase/errors'
 import { useAuth } from '@/hooks/useAuth'
 import type { AppNotification } from '@/types'
 
@@ -41,7 +42,9 @@ export function useNotifications(): UseNotificationsResult {
         setLoading(false)
       },
       (e) => {
-        console.error('[useNotifications] listener error:', e)
+        // permission-denied here (e.g. notification rules not deployed) is benign
+        // — degrade to an empty feed instead of popping the dev error overlay.
+        logListenerError('[useNotifications]', e)
         setLoading(false)
       },
     )

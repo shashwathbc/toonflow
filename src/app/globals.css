@@ -99,6 +99,27 @@ body {
   color: #FFFFFF;
 }
 
+/* ── Hide native password reveal / autofill affordances ─────
+   Password fields render our own eye toggle (components/ui/Input), so suppress
+   the browser's built-in controls that would otherwise sit beside it: Edge's
+   reveal "eye"/dots (::-ms-reveal), the clear "×" (::-ms-clear) and WebKit's
+   autofill key/dots buttons. NOTE: password-manager EXTENSIONS inject their own
+   icon into a shadow root we cannot style — those are outside CSS control. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-strong-password-auto-fill-button,
+input::-webkit-contacts-auto-fill-button {
+  visibility: hidden;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  width: 0;
+  margin: 0;
+}
+
 /* ── Skip-to-main link (WCAG 2.4.1) ──────────────────── */
 .skip-to-main {
   position: absolute;

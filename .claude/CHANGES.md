@@ -2439,3 +2439,83 @@ Follow-up correction to the previous entry after creator feedback (with a full e
 - **`src/components/editor/SidebarRight.tsx` / `SidebarLeft.tsx` / `useAgentWorkflow.ts`** — placeholder/helper copy + comments updated: bubbles are drawn empty into the image, dialogue is lettered afterwards with the text tool; pages carry matching page-to-page colors.
 
 Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
+
+---
+
+## 2026-08-03 — First-run welcome tour + "How did you hear about us?" survey
+
+Added a one-time onboarding modal on the creator dashboard, modelled on the reference welcome card. It runs a short 3-slide tour introducing Toonflow Studio Paint (create → publish & earn) and finishes with a "Where did you hear about us?" survey (X, YouTube, Instagram, LinkedIn, Somewhere else). The answer + a `hasOnboarded` flag are saved to the user's profile so the tour shows only once; the "other" option reveals an optional free-text note.
+
+- **`src/components/dashboard/WelcomeModal.tsx`** (new) — Radix `Dialog` (proper focus trap / Escape) + Framer Motion for the scale-in and slide-between-steps. `forceMount` on Portal/Overlay/Content so `AnimatePresence` can play exit. Progress dots, Skip + Next/Get-started, serif editorial headings (`font-serif`), design-token colors only. Outside-click is blocked (must Skip/Escape/X). On finish/skip it calls `updateUserProfile({ hasOnboarded: true, referralSource? })` then `refreshProfile()`; always closes even on write error so the user is never trapped. WCAG: `Dialog.Title`/`Description` (auto-wired ids), `aria-live` step announcer, `aria-label` on the icon-only close, `focus-visible` rings, decorative icons `aria-hidden`.
+- **`src/components/ui/BrandIcons.tsx`** — added `XIcon` and `LinkedinIcon` (lucide ships no brand marks) alongside the existing YouTube/Instagram.
+- **`src/types/user.ts`** — `UserProfile` gains optional `hasOnboarded?: boolean` and `referralSource?: string`.
+- **`firestore.rules`** — owner `users/{id}` update `onlyUpdates([...])` allow-list extended with `hasOnboarded` and `referralSource` (without this the write is rejected). ⚠️ Needs `firebase deploy --only firestore:rules` (project `toonflow-studio-paint-f76d5`) before the survey can persist in prod.
+- **`src/app/(studio)/dashboard/page.tsx`** — renders `<WelcomeModal>`; visibility derived (`!welcomeDismissed && userProfile && !userProfile.hasOnboarded`) to avoid setState-in-effect; `welcomeDismissed` hides it instantly while the write settles.
+
+Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
+
+---
+
+## 2026-08-04 — Fix: welcome tour never appeared after login (was dashboard-only)
+
+The first-run WelcomeModal was mounted only on `/dashboard`, but signup and login both `router.push('/')` (home) — so a brand-new user landed on the home page and never saw it. Made the tour global instead of moving it around.
+
+- **`src/components/onboarding/WelcomeGate.tsx`** (new) — client gate mounted once in the root layout. Decides visibility on ANY page: `loading` false + signed in + profile loaded + `!hasOnboarded`. Adds a per-device localStorage fallback (`toonflow:onboarded:<uid>`) via module-scope helpers (keeps localStorage reads out of the render body for react-hooks/purity) so the tour doesn't re-nag on the same browser even if the Firestore write hasn't landed (e.g. rules not yet deployed). Returns null for signed-out / already-onboarded users, so no empty dialog portal is mounted for them.
+- **`src/components/onboarding/WelcomeModal.tsx`** — moved here from `src/components/dashboard/` (it's global now, not dashboard-scoped). Content unchanged.
+- **`src/app/layout.tsx`** — renders `<WelcomeGate />` inside `AuthProvider` + `TooltipProvider` (the modal's close button uses `Tooltip`).
+- **`src/app/(studio)/dashboard/page.tsx`** — reverted the earlier local wiring (import, `welcomeDismissed` state, `showWelcome`, render) now that the gate is global.
+
+Note on the `FirebaseError: Missing or insufficient permissions` seen in the dev overlay: it is a pre-existing, non-fatal caught listener error (notifications/messaging subcollections whose rules were never deployed), unrelated to the welcome card — the profile read is public so the tour is unaffected. The same `firebase deploy --only firestore:rules` (project `toonflow-studio-paint-f76d5`) that lets the survey persist also clears that console error.
+
+Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
+
+---
+
+## 2026-08-04 — Fix: welcome card pinned to a corner instead of centered
+
+The card rendered in the bottom-right instead of the screen center. Cause: the centering `-translate-x-1/2 -translate-y-1/2` classes were on the same `motion.div` Framer Motion animates — Framer writes an inline `transform` for the `scale`/`y` animation, overriding the Tailwind translate, so the element's top-left corner sat at screen center.
+
+- **`src/components/onboarding/WelcomeModal.tsx`** — restructured the Radix `Dialog.Content` into a transparent full-screen flex wrapper (`fixed inset-0 flex items-center justify-center`, Framer animates opacity only — no positioning transform to fight) with the card as an inner `motion.div` centered by flex and free to `scale`/`y` animate. Mirrors the working `BuyTokensModal` pattern. `tsc`/`eslint` clean.
+
+---
+
+## 2026-08-04 — Password reveal eye-toggle + silence benign permission-denied overlay
+
+Two auth-UX fixes.
+
+1. **Custom password reveal.** Replaced the browser's native reveal/autofill controls (the "⋯" icons on the signup email/password fields) with our own eye toggle, applied centrally in the shared `Input` so signup, login and reset-password all get it.
+   - **`src/components/ui/Input.tsx`** — now `'use client'`; for `type="password"` it renders an `Eye`/`EyeOff` toggle button (Tooltip + `aria-label` + `aria-pressed`, focus ring) that flips the input to `type="text"`. Adds `pr-11` so text clears the button. Non-password inputs unchanged.
+   - **`src/app/globals.css`** — hide `::-ms-reveal`/`::-ms-clear` (Edge) and WebKit `::-webkit-*-auto-fill-button` so no native control sits beside ours. (Password-manager *extensions* inject shadow-root icons CSS can't touch — noted in a comment.)
+
+2. **Stop the `FirebaseError: Missing or insufficient permissions` dev overlay hampering new users.** The navbar's notification + unread-message listeners `console.error` on failure, and Next 16's dev overlay surfaces any `console.error`. A `permission-denied` there is benign (rules not deployed yet / transient auth-token race / listener attached across sign-out) — the feature just shows empty.
+   - **`src/lib/firebase/errors.ts`** (new) — `isPermissionDenied(e)` + `logListenerError(scope, e)` which swallows permission-denied and logs everything else.
+   - **`src/hooks/useNotifications.ts`, `useUnreadCount.ts`, `useConversations.ts`** — route listener errors through `logListenerError`.
+   - This overlay is DEV-ONLY (production end-users never see it); the functional fix for notifications/messaging is still to deploy the Firestore rules.
+
+Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
+
+---
+
+## 2026-08-04 — Interactive product tour (custom spotlight engine, cross-page)
+
+Replaced the card-only welcome (WelcomeGate/WelcomeModal — deleted) with a full custom, cross-page spotlight product tour (Notion/Linear style). Auto-starts once per new account on whatever page they land on, walks them from Home → Search → Read → Profile → Community → Create → AI tools → Canvas → Publish → Dashboard, and finishes with a confetti "You're ready" screen. Modular, data-driven step config; graceful degradation when a target isn't present.
+
+Engine (all new):
+- **`src/lib/tour/steps.ts`** — modular `TourStep[]` config. Each step = a `[data-tour="…"]` target + copy (+ optional `route` for cross-page nav, `placement`, `padding`). Reader/canvas/publish are anchored to their *entry points* on reachable pages (a brand-new account has no real reader/editor id to deep-link) and described there.
+- **`src/store/useTourStore.ts`** — Zustand store for pure UI state (active/index/referralSource/startedAt). Using a store (not React state) lets TourManager's auto-start effect trigger it without tripping react-hooks/set-state-in-effect.
+- **`src/components/tour/TourOverlay.tsx`** — the visual engine: blurred 4-pane cutout + glowing pulsing ring around the target, floating tooltip that auto-scrolls to / stays glued to the element (resize/scroll/interval), flips to stay on-screen, progress bar + Step X of Y, Back/Next/Skip. Welcome screen carries the "where did you hear about us" survey (X/YouTube/Instagram/LinkedIn); finish screen fires confetti + "Create my first webtoon"/"Explore comics". Cross-page auto-navigation via router.push; blocks unrelated clicks; ESC closes; Arrow keys navigate; Tab is focus-trapped; honours prefers-reduced-motion (framer `useReducedMotion`). All in-effect state writes deferred into rAF/listeners. Centered cards translate via Framer x/y '-50%' (not a Tailwind class) to avoid the transform-override centering bug.
+- **`src/components/tour/Confetti.tsx`** — dependency-free canvas confetti, self-cleaning, no-op under reduced motion.
+- **`src/components/tour/TourManager.tsx`** — mounted once in the root layout (replaces WelcomeGate). Auto-starts for signed-in users without `hasOnboarded` (+ localStorage guard so it doesn't re-nag before the rules deploy lands, and resumes from the saved step if closed mid-way). Always renders the overlay so manual replay works anywhere.
+- **`src/lib/tour/storage.ts`** — per-device localStorage: seen flag + resume-from-step index (module-scope, SSR-guarded).
+- **`src/lib/tour/analytics.ts`** — best-effort `trackTour()` → gtag/dataLayer + dev breadcrumb. Fires tour_started / tour_step_viewed / tour_skipped / tour_completed / tour_time_spent.
+
+Anchors + wiring:
+- **`src/app/layout.tsx`** — renders `<TourManager />`.
+- **`src/components/layout/Navbar.tsx`** — `data-tour` on Search + Messages.
+- **`src/components/layout/UserMenu.tsx`** — `data-tour="nav-profile"` on the avatar trigger + a "Product tour" replay item (Account menu → replays from step 0).
+- **`src/app/(main)/HomeFeed.tsx`** — `home-feed` (Trending section) + `content-card` (cards).
+- **`src/app/(main)/create/page.tsx`** — `create-studios` / `create-novel` / `create-webtoon`.
+- **`src/app/(studio)/dashboard/page.tsx`** — `dashboard-analytics` wrapper.
+- **`src/types/user.ts`** — comment updated (hasOnboarded/referralSource now feed the tour).
+
+Persistence unchanged: completion writes `hasOnboarded` (+ `referralSource`) — still needs `firebase deploy --only firestore:rules` to persist server-side (localStorage covers the same device until then). Verified: `tsc --noEmit` clean, `eslint` clean on all touched files. Not yet run in a live browser (auth-gated).

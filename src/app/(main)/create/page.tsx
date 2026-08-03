@@ -38,10 +38,11 @@ export default async function CreateHubPage() {
         </div>
 
         {/* Studio cards — fill the row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-8">
+        <div data-tour="create-studios" className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-8">
           {/* Novel Studio */}
           <Link
             href="/create/novel"
+            data-tour="create-novel"
             className="group relative card p-8 lg:p-12 flex flex-col gap-5 overflow-hidden hover:border-accent/40 hover:-translate-y-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             aria-label="Open Novel Studio — write and publish novels"
           >
@@ -69,6 +70,7 @@ export default async function CreateHubPage() {
           {canUseWebtoon ? (
             <Link
               href="/create/webtoon"
+              data-tour="create-webtoon"
               className="group relative card p-8 lg:p-12 flex flex-col gap-5 overflow-hidden hover:border-accent/40 hover:-translate-y-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               aria-label="Open Webtoon Studio — create and publish webtoons"
             >
@@ -93,6 +95,7 @@ export default async function CreateHubPage() {
             </Link>
           ) : (
             <div
+              data-tour="create-webtoon"
               className="relative card p-8 lg:p-12 flex flex-col gap-5 overflow-hidden opacity-80"
               aria-label="Webtoon Studio — coming soon"
             >

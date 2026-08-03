@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'react-hot-toast'
 import PwaRegister from '@/components/pwa/PwaRegister'
 import { TooltipProvider } from '@/components/ui/Tooltip'
+import TourManager from '@/components/tour/TourManager'
 import JsonLd from '@/components/seo/JsonLd'
 import { organizationSchema, websiteSchema } from '@/lib/seo/schema'
 import { APP_NAME, APP_URL, SOCIAL_HANDLE } from '@/lib/utils/constants'
@@ -86,6 +87,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               skipDelayDuration: move between adjacent tooltips (toolbars) without re-waiting. */}
           <TooltipProvider delayDuration={200} skipDelayDuration={300}>
             {children}
+            {/* First-run interactive product tour — auto-starts once per new user
+                on whatever page they land on; replayable from the account menu. */}
+            <TourManager />
           </TooltipProvider>
           <Toaster
             position="bottom-right"

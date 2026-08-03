@@ -31,6 +31,7 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
   return (
     <Link
       href={href}
+      data-tour="content-card"
       className="group block relative rounded-xl overflow-hidden bg-bg-card border border-bg-border hover:border-white/20 transition-all duration-200"
       aria-label={cardLabel}
     >
@@ -206,7 +207,7 @@ export function HomeFeed() {
     <div className="space-y-0">
       {/* Trending Now */}
       {allTrending.length > 0 && (
-        <section className="max-w-screen-xl mx-auto px-4 py-8" aria-labelledby="trending-heading">
+        <section data-tour="home-feed" className="max-w-screen-xl mx-auto px-4 py-8" aria-labelledby="trending-heading">
           <SectionHeader
             id="trending-heading"
             title="Trending Now"

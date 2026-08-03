@@ -100,7 +100,7 @@ service cloud.firestore {
       // client must never write them, or a user could self-grant tokens or
       // escalate to superadmin by writing to their own document.
       allow update: if isAdmin()
-        || (isOwner(userId) && onlyUpdates(['displayName', 'bio', 'photoURL', 'bannerURL', 'socialLinks', 'updatedAt']))
+        || (isOwner(userId) && onlyUpdates(['displayName', 'bio', 'photoURL', 'bannerURL', 'socialLinks', 'hasOnboarded', 'referralSource', 'updatedAt']))
         // Following someone bumps THEIR followerCount by exactly ±1 (any signed-in
         // user). Bounding the delta stops arbitrary count injection / griefing.
         // .get(key, 0) tolerates legacy docs that predate the counter field.
