@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Heart, MessageCircle, Star, Share2, UserPlus } from 'lucide-react'
-import { APP_URL } from '@/lib/utils/constants'
+import { APP_URL, DISCORD_URL } from '@/lib/utils/constants'
+import { DiscordIcon } from '@/components/ui/BrandIcons'
 import type { Webtoon, Episode } from '@/types'
 
 // Mandatory branded closing page of every episode — the structural twin of
@@ -78,22 +79,40 @@ export function EpisodeOutroPage({ webtoon, episode, interactive = true, authorN
           ))}
         </ul>
 
-        {/* Follow the creator */}
-        <div className="flex flex-col items-center gap-1.5">
-          {interactive ? (
-            <Link
-              href={`/profile/${webtoon.authorId}`}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-            >
-              <UserPlus size={16} aria-hidden="true" />
-              Follow {authorDisplay}
-            </Link>
-          ) : (
-            <span className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black font-bold text-sm">
-              <UserPlus size={16} aria-hidden="true" />
-              Follow {authorDisplay}
-            </span>
-          )}
+        {/* Follow the creator + join the community */}
+        <div className="flex flex-col items-center gap-2.5">
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {interactive ? (
+              <Link
+                href={`/profile/${webtoon.authorId}`}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+              >
+                <UserPlus size={16} aria-hidden="true" />
+                Follow {authorDisplay}
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black font-bold text-sm">
+                <UserPlus size={16} aria-hidden="true" />
+                Follow {authorDisplay}
+              </span>
+            )}
+            {interactive ? (
+              <a
+                href={DISCORD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full border border-white/15 bg-white/[0.06] text-white font-semibold text-sm hover:bg-white/[0.12] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+              >
+                <DiscordIcon size={16} />
+                Join our Discord
+              </a>
+            ) : (
+              <span className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full border border-white/15 bg-white/[0.06] text-white font-semibold text-sm">
+                <DiscordIcon size={16} />
+                Join our Discord
+              </span>
+            )}
+          </div>
           {handle && <p className="text-[11px] text-white/40">{handle}</p>}
         </div>
 

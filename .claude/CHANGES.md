@@ -2519,3 +2519,32 @@ Anchors + wiring:
 - **`src/types/user.ts`** — comment updated (hasOnboarded/referralSource now feed the tour).
 
 Persistence unchanged: completion writes `hasOnboarded` (+ `referralSource`) — still needs `firebase deploy --only firestore:rules` to persist server-side (localStorage covers the same device until then). Verified: `tsc --noEmit` clean, `eslint` clean on all touched files. Not yet run in a live browser (auth-gated).
+
+---
+
+## 2026-08-04 — Tour fixes: referral selection persistence, mobile popover, first-login error overlay
+
+Three follow-up fixes to the product tour.
+
+1. **Referral selection now sticks + is obvious.** The welcome-screen "where did you hear about us" chips were toggle buttons (a second click cleared the choice) with only a subtle border change. Changed to proper **radio** semantics (`role="radiogroup"`/`radio`, `aria-checked`) that always select (never toggle off), with a prominent selected style (accent border + white/10 fill + ring) and a check icon. `src/components/tour/TourOverlay.tsx`.
+
+2. **Mobile popover visibility.** The tour panel could overflow a phone screen with no way to scroll, and spotlight tooltips got squeezed beside tiny targets. Added `max-h-[85dvh] overflow-y-auto` to the panel, and on `<640px` viewports the spotlight tooltip is now **pinned to the bottom** (mini bottom-sheet) instead of side-placed. `src/components/tour/TourOverlay.tsx`.
+
+3. **First-login `Missing or insufficient permissions` overlay.** The remaining surfaced error was `console.error('[Auth] createUserDocument error', …)` — an owner can't backfill server-managed fields (role/createdAt) under the rules, so a permission-denied there is benign; it also fires when an ad-blocker blocks Firestore. Generalized the error helper to `logFirebaseError(scope, e)` (skips permission-denied) and routed the auth doc-create + profile-fetch catches through it (`src/lib/firebase/errors.ts`, `src/lib/firebase/auth.ts`, `src/contexts/AuthContext.tsx`). `logListenerError` now wraps it.
+
+Note: the console also shows `net::ERR_BLOCKED_BY_CLIENT` on `firestore.googleapis.com` — that's a browser ad-blocker/privacy extension blocking Firestore, not app code; it can cause real write failures and should be disabled for the site while testing.
+
+Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
+
+---
+
+## 2026-08-04 — Discord button on chapter/episode outros + Share button on detail pages
+
+- **`src/lib/utils/constants.ts`** — new `DISCORD_URL` (the footer's invite, `https://discord.gg/5TuFeezv8`) declared once so the footer and outros can't drift.
+- **`src/components/ui/BrandIcons.tsx`** — added exported `DiscordIcon`.
+- **`src/components/layout/Footer.tsx`** — Discord social link now points at `DISCORD_URL`.
+- **`src/components/reader/EndingPoster.tsx`** (novel chapter outro) & **`src/components/webtoon/EpisodeOutroPage.tsx`** (webtoon episode outro) — added a "Join our Discord" button beside the Follow button, same invite as the footer. On the webtoon outro it respects the existing `interactive` prop (renders a non-clickable span in the editor preview, an `<a target="_blank">` in the reader).
+- **`src/components/ui/ShareButton.tsx`** (new) — reusable share control: native share sheet where available (mobile), clipboard-copy fallback with a toast + brief "Copied" check. Icon-only (tooltip) or labelled.
+- **`src/app/(main)/novel/[id]/page.tsx`** & **`src/app/(main)/webtoon/[id]/page.tsx`** — added `ShareButton` to the title/action row (shares the current page URL; title/synopsis feed the native sheet). Icon-only on the novel page, labelled on the webtoon page, matching each page's existing bookmark button.
+
+Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.

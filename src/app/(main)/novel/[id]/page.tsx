@@ -14,6 +14,7 @@ import { getNovelById } from '@/lib/firebase/firestore'
 import { formatCount, formatDate, fromTimestamp, toTitleCase } from '@/lib/utils/formatters'
 import BookmarkButton from '@/components/reader/BookmarkButton'
 import RatingControl from '@/components/reader/RatingControl'
+import ShareButton from '@/components/ui/ShareButton'
 import AuthorCard from '@/components/social/AuthorCard'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -247,6 +248,7 @@ export default function NovelDetailPage() {
                   </Link>
                 )}
                 <BookmarkButton contentId={id} contentType="novel" />
+                <ShareButton title={toTitleCase(novel.title)} text={synopsis || undefined} />
                 <RatingControl
                   contentType="novel"
                   contentId={id}

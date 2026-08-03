@@ -44,6 +44,10 @@ export const SUPPORT_EMAIL = 'toonflowstudiopaint@gmail.com'
 /** X/Twitter handle — drives the twitter:site and twitter:creator card tags. */
 export const SOCIAL_HANDLE = '@toonflowstudiopaint'
 
+/** Community Discord invite — shown in the footer, and on every chapter/episode
+ *  outro page. Declared once so those places can never link to different invites. */
+export const DISCORD_URL = 'https://discord.gg/5TuFeezv8'
+
 /** Effective date shown on all three legal pages. Declared once so Terms,
  *  Privacy and AI Policy can never drift apart. Update when any of them change. */
 export const LEGAL_LAST_UPDATED = 'July 23, 2026'

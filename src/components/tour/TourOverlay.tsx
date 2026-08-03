@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { X, ArrowRight, ArrowLeft, Sparkles, PartyPopper, Compass } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Check, Sparkles, PartyPopper, Compass } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { updateUserProfile } from '@/lib/firebase/firestore'
 import { TOUR_STEPS, type TourPlacement } from '@/lib/tour/steps'
@@ -241,9 +241,14 @@ export default function TourOverlay() {
       }
     : null
 
+  const isMobile = vp.w > 0 && vp.w < 640
   const showSpotlight = !isBigCard && hole !== null
+  // On phones the tooltip is pinned to the bottom (a mini bottom-sheet) rather
+  // than squeezed beside a small target — far more legible than side placement.
   const tipPos = showSpotlight
-    ? computeTooltipPos(hole!, step.placement ?? 'bottom', tipSize, vp)
+    ? isMobile
+      ? { top: Math.max(8, vp.h - tipSize.h - 16), left: Math.max(8, (vp.w - tipSize.w) / 2) }
+      : computeTooltipPos(hole!, step.placement ?? 'bottom', tipSize, vp)
     : null
 
   // Centering translate is driven through Framer (x/y '-50%') rather than a
@@ -307,7 +312,7 @@ export default function TourOverlay() {
           key={`panel-${step.id}`}
           className={cn(
             'absolute w-[calc(100vw-2rem)] bg-bg-card border border-bg-border rounded-2xl shadow-2xl',
-            'p-5 focus:outline-none',
+            'p-5 focus:outline-none max-h-[85dvh] overflow-y-auto overscroll-contain',
             centered ? 'max-w-md' : 'max-w-sm',
           )}
           style={panelStyle}
@@ -354,23 +359,27 @@ export default function TourOverlay() {
               <legend className="flex items-center gap-1.5 text-xs font-medium text-text-muted mb-2">
                 <Compass size={13} aria-hidden="true" /> Where did you hear about us?
               </legend>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Where did you hear about us">
                 {REFERRAL_OPTIONS.map(({ id, label, icon: Icon }) => {
                   const selected = referralSource === id
                   return (
                     <button
                       key={id}
                       type="button"
-                      onClick={() => setReferral(selected ? null : id)}
-                      aria-pressed={selected}
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setReferral(id)}
                       className={cn(
                         'flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-medium transition-all',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                        selected ? 'border-accent bg-white/[0.06] text-text' : 'border-bg-border text-text-secondary hover:border-bg-border-strong',
+                        selected
+                          ? 'border-accent bg-white/10 text-text shadow-[0_0_0_1px_rgba(255,255,255,0.35)]'
+                          : 'border-bg-border text-text-secondary hover:border-bg-border-strong hover:text-text',
                       )}
                     >
                       <Icon size={15} className={selected ? 'text-accent' : 'text-text-muted'} aria-hidden={true} />
                       <span className="flex-1 text-left truncate">{label}</span>
+                      {selected && <Check size={14} className="shrink-0 text-accent" aria-hidden="true" />}
                     </button>
                   )
                 })}

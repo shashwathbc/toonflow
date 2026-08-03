@@ -13,6 +13,7 @@ import { useLiveViewCount } from '@/hooks/useLiveViewCount'
 import { formatCount, formatDate, toTitleCase } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
+import ShareButton from '@/components/ui/ShareButton'
 import DownloadEpisodeMenu from '@/components/reader/DownloadEpisodeMenu'
 import AuthorCard from '@/components/social/AuthorCard'
 import { cn } from '@/lib/utils/cn'
@@ -171,6 +172,7 @@ export default function WebtoonDetailPage() {
             )}
             <LikeButton contentType="webtoon" contentId={id} initialCount={webtoon.likeCount ?? 0} authorId={webtoon.authorId} contentTitle={webtoon.title} />
             <BookmarkButton contentId={id} contentType="webtoon" showLabel />
+            <ShareButton title={toTitleCase(webtoon.title)} text={synopsis || undefined} showLabel />
           </div>
         </div>
       </div>

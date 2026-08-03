@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { onIdTokenChanged, type User as FirebaseUser } from 'firebase/auth'
 import { auth } from '@/lib/firebase/config'
+import { logFirebaseError } from '@/lib/firebase/errors'
 import type { UserProfile } from '@/types'
 import { SUPER_ADMIN_EMAIL } from '@/lib/utils/constants'
 
@@ -98,16 +99,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const { getUserProfile, createUserDocument } = await firestoreService()
 
-        // Never let document-creation or profile-fetch errors block auth from resolving
+        // Never let document-creation or profile-fetch errors block auth from
+        // resolving. permission-denied is benign here (see logFirebaseError) and
+        // must not surface as a dev error overlay on first login.
         try { await createUserDocument(firebaseUser) } catch (e) {
-          console.error('[Auth] createUserDocument error:', e)
+          logFirebaseError('[Auth] createUserDocument error', e)
         }
 
         let profile: UserProfile | null = null
         try {
           profile = await getUserProfile(firebaseUser.uid)
         } catch (e) {
-          console.error('[Auth] profile fetch error:', e)
+          logFirebaseError('[Auth] profile fetch error', e)
           // Fall through — auth still resolves with firebaseUser but no profile
         }
 

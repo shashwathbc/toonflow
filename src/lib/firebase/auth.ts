@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth'
 import { auth } from './config'
 import { createUserDocument } from './firestore'
+import { logFirebaseError } from './errors'
 
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
@@ -25,7 +26,10 @@ async function ensureUserDocument(
   try {
     await createUserDocument(...args)
   } catch (e) {
-    console.error('[Auth] createUserDocument error:', e)
+    // permission-denied here is benign (owner can't backfill server-managed
+    // fields like role; also fires when Firestore is blocked by an ad-blocker) —
+    // don't surface it as a dev error overlay. Real errors still log.
+    logFirebaseError('[Auth] createUserDocument error', e)
   }
 }
 

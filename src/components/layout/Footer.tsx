@@ -5,7 +5,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import type { SupportType } from '@/components/support/SupportModal'
 import { Logo } from '@/components/ui/Logo'
-import { SUPPORT_EMAIL } from '@/lib/utils/constants'
+import { SUPPORT_EMAIL, DISCORD_URL } from '@/lib/utils/constants'
 
 // Brand icons — lucide-react no longer ships brand logos, so these are inline
 function InstagramIcon({ size = 18 }: { size?: number }) {
@@ -79,7 +79,7 @@ const SOCIAL_LINKS = [
     Icon: LinkedinIcon,
   },
   {
-    href: 'https://discord.gg/5TuFeezv8',
+    href: DISCORD_URL,
     label: 'Join the Toonflow Discord (opens in new tab)',
     Icon: DiscordIcon,
   },

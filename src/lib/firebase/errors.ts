@@ -20,11 +20,17 @@ export function isPermissionDenied(e: unknown): boolean {
 }
 
 /**
- * Log a realtime-listener error unless it's a benign permission-denied (see above).
- * Keeps real bugs visible in the console while not hampering the user with an error
- * overlay for a feature that just isn't available to them yet.
+ * Log a Firebase error unless it's a benign permission-denied (see above). Keeps
+ * real bugs visible in the console while not hampering the user with a dev error
+ * overlay for something that's expected (rules not deployed yet, a best-effort
+ * backfill an owner isn't allowed to write, a request blocked by an ad-blocker…).
  */
-export function logListenerError(scope: string, e: unknown): void {
+export function logFirebaseError(scope: string, e: unknown): void {
   if (isPermissionDenied(e)) return
-  console.error(`${scope} listener error:`, e)
+  console.error(`${scope}:`, e)
+}
+
+/** Convenience wrapper for realtime-listener error callbacks. */
+export function logListenerError(scope: string, e: unknown): void {
+  logFirebaseError(`${scope} listener error`, e)
 }
