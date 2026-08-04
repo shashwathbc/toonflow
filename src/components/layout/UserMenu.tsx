@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { LogOut, User, LayoutDashboard, Star, Compass } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import * as Avatar from '@radix-ui/react-avatar'
@@ -84,11 +85,15 @@ export function UserDropdownContent({
   sideOffset?: number
 }) {
   const { userProfile, isSuperAdmin } = useAuth()
+  const router = useRouter()
 
   const handleLogout = async () => {
     try {
       await logout()
       toast.success('Signed out successfully')
+      // Always land signed-out users on the homepage — a protected page like
+      // /create would otherwise sit stale until the next navigation.
+      router.replace('/')
     } catch {
       toast.error('Failed to sign out')
     }

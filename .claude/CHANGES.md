@@ -1,5 +1,10 @@
 # Toonflow Studio Paint — Change Log
 
+## Redirect to homepage on logout (2026-08-04)
+- Request: "if user is logged in and goes to create page and then logs out, redirect user to homepage by default whenever a user logs out."
+- Root cause: the shared logout handler (`handleLogout` in `src/components/layout/UserMenu.tsx`, used by both desktop `UserMenu` and mobile nav via `UserDropdownContent`) only called `logout()` + a success toast — it never navigated. Signing out from a protected page like `/create` left the stale page mounted until the next navigation.
+- Fix — `src/components/layout/UserMenu.tsx`: added `useRouter` from `next/navigation` and `router.replace('/')` after a successful `logout()`, so every logout lands the user on the homepage (`replace`, not `push`, so the protected page isn't left in history). Single change covers desktop + mobile since both share `UserDropdownContent`.
+
 ## Product tour: first spotlight box clipped/off-screen in phone view (2026-08-04)
 - Request: "product tour first box not showing properly in phone view" — the first spotlight step (index 1, "Your Home feed") rendered with its left half cut off the screen; only the right portion (×, "Skip tour", "Next") was visible.
 - Root cause (found by triggering the tour in the REAL running app via Playwright and dumping the panel's computed styles — a standalone repro hid it): the panel's CSS box was correct (`left:16 right:16 width:380` on a 412px viewport) but it carried `transform: translateX(-190px)` (≈ −50% of its width), dragging it off-screen. That −50% is Framer's **centering transform leaking from a previous state**. Every spotlight step first renders as a *centered card* for the frame(s) before its target element is measured (`hole` is null → `centered` → Framer `x:'-50%'`). When the panel then switched to the tooltip/sheet layout, its new `animate` no longer listed `x`, so Framer **froze `x` at its last value (`-50%`)** — CSS pinned the sheet correctly while the transform shoved it half its width to the left. Deterministic (the pre-measure centered frame always happens), and it also mis-shifted desktop side-tooltips.
