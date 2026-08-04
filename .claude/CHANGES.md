@@ -1,5 +1,14 @@
 # Toonflow Studio Paint — Change Log
 
+## Product tour: first spotlight box clipped/off-screen in phone view (2026-08-04)
+- Request: "product tour first box not showing properly in phone view" — the first spotlight step (index 1, "Your Home feed") rendered with its left half cut off the screen; only the right portion (×, "Skip tour", "Next") was visible.
+- Root cause (found by triggering the tour in the REAL running app via Playwright and dumping the panel's computed styles — a standalone repro hid it): the panel's CSS box was correct (`left:16 right:16 width:380` on a 412px viewport) but it carried `transform: translateX(-190px)` (≈ −50% of its width), dragging it off-screen. That −50% is Framer's **centering transform leaking from a previous state**. Every spotlight step first renders as a *centered card* for the frame(s) before its target element is measured (`hole` is null → `centered` → Framer `x:'-50%'`). When the panel then switched to the tooltip/sheet layout, its new `animate` no longer listed `x`, so Framer **froze `x` at its last value (`-50%`)** — CSS pinned the sheet correctly while the transform shoved it half its width to the left. Deterministic (the pre-measure centered frame always happens), and it also mis-shifted desktop side-tooltips.
+- Fix — `src/components/tour/TourOverlay.tsx`:
+  - Render the phone tooltip as a bottom sheet **immediately** (it's CSS-pinned with `inset-x-4 w-auto max-w-none` + inline `bottom:16`, so it never needs the centered pre-measure state) instead of only after the target is measured — no centered flash, nothing for `x` to leak from. New `bottomSheet` / `sideTooltip` / `centered` split makes the layout explicit.
+  - Control the Framer transform in **every** state: `x`/`y` are always set explicitly (`-50%` for centered cards, `0%` for sheets/tooltips) so a value can never stick across a layout switch, with a per-axis `{ duration: 0 }` transition so x/y snap instantly (no slide when a desktop step transitions centered→tooltip).
+  - Also raised the phone breakpoint `isMobile` from `<640px` to `<768px` so it matches the app's own `md` mobile-layout switch (`MobileNav` is `md:hidden`), closing the 640–767px dead zone where the app showed mobile UI but the tour used desktop tooltips.
+- Verified in the live dev app (Playwright): computed `transform` is now `none`; step 1 sits at `left:16 right:396` on a 412px viewport; steps 1–3 render as fully-visible full-width bottom sheets at 412/700/767px, and desktop (1000px) still uses the side tooltip on-screen. `tsc --noEmit` and `eslint` clean.
+
 ## Webtoon AI panels: fixed generated art not looking like webtoon/manhwa (2026-08-02)
 - Request: "images generated in webtoon don't have webtoon format" — AI panels came out as glossy, semi-realistic digital paintings instead of flat webtoon/manhwa art.
 - Diagnosis (verified against the LIVE Flux/Pollinations service, side-by-side test gens saved to scratchpad):

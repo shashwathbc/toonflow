@@ -241,31 +241,49 @@ export default function TourOverlay() {
       }
     : null
 
-  const isMobile = vp.w > 0 && vp.w < 640
-  const showSpotlight = !isBigCard && hole !== null
-  // On phones the tooltip is pinned to the bottom (a mini bottom-sheet) rather
-  // than squeezed beside a small target — far more legible than side placement.
-  const tipPos = showSpotlight
-    ? isMobile
-      ? { top: Math.max(8, vp.h - tipSize.h - 16), left: Math.max(8, (vp.w - tipSize.w) / 2) }
-      : computeTooltipPos(hole!, step.placement ?? 'bottom', tipSize, vp)
+  // Match the app's own layout breakpoint (`md`, 768px — where MobileNav takes
+  // over) so "phone" here means exactly what it means everywhere else. This closes
+  // the 640–767px dead zone where the app showed its mobile UI but the tour still
+  // squeezed a desktop side-tooltip beside the target (which, under a scaled/framed
+  // preview viewport, landed off-screen and clipped).
+  const isMobile = vp.w > 0 && vp.w < 768
+  const isSpotlightStep = !isBigCard
+  const hasHole = hole !== null
+  // The dimmed cutout (spotlight panes + ring) appears once the target is measured.
+  const showSpotlight = isSpotlightStep && hasHole
+  // Panel layout, chosen so the panel NEVER flashes through the centered state on its
+  // way to the phone bottom-sheet — that transient is what left a sticky x:'-50%'
+  // transform (see below) and dragged the sheet off-screen:
+  //  • bottomSheet — spotlight steps on phones. CSS-pinned to the bottom (`inset-x-4`
+  //    + `bottom`), independent of the measured target, so it renders correctly
+  //    immediately — even before the hole is found.
+  //  • sideTooltip — spotlight steps on desktop, positioned beside the measured target.
+  //  • centered — welcome/finish cards, plus the brief pre-measure state on desktop.
+  const bottomSheet = isSpotlightStep && isMobile
+  const sideTooltip = isSpotlightStep && !isMobile && hasHole
+  const centered = !bottomSheet && !sideTooltip
+  const tipPos = sideTooltip
+    ? computeTooltipPos(hole!, step.placement ?? 'bottom', tipSize, vp)
     : null
 
-  // Centering translate is driven through Framer (x/y '-50%') rather than a
-  // Tailwind -translate class, because Framer writes an inline transform for the
-  // scale/opacity animation that would otherwise override the class and shove the
-  // card into a corner.
-  const centered = !showSpotlight
-  const centerT = centered ? { x: '-50%', y: '-50%' } : {}
+  // Framer owns the transform, so EVERY state must set x/y explicitly. Otherwise a
+  // value from a previous state (notably the centered card's x/y:'-50%') sticks when
+  // the panel switches layout and drags it out of view. Centered cards translate by
+  // -50%/-50% to self-center; sheets and side tooltips sit at 0/0. x/y snap instantly
+  // (per-axis transition on the panel) so a layout switch never slides the panel across.
+  const tx = centered ? '-50%' : '0%'
+  const ty = centered ? '-50%' : '0%'
   const panelStyle = centered
     ? { left: '50%', top: '50%' }
-    : tipPos ? { top: tipPos.top, left: tipPos.left } : undefined
+    : bottomSheet
+      ? { bottom: 16 }
+      : tipPos ? { top: tipPos.top, left: tipPos.left } : undefined
   const panelInitial = reduceMotion
-    ? { opacity: 0, ...centerT }
-    : centered ? { opacity: 0, scale: 0.98, ...centerT } : { opacity: 0, y: 8, scale: 0.98 }
+    ? { opacity: 0, x: tx, y: ty }
+    : { opacity: 0, scale: 0.98, x: tx, y: ty }
   const panelAnimate = reduceMotion
-    ? { opacity: 1, ...centerT }
-    : centered ? { opacity: 1, scale: 1, ...centerT } : { opacity: 1, y: 0, scale: 1 }
+    ? { opacity: 1, x: tx, y: ty }
+    : { opacity: 1, scale: 1, x: tx, y: ty }
 
   const dim = 'bg-black/70 backdrop-blur-sm'
 
@@ -311,14 +329,16 @@ export default function TourOverlay() {
           ref={tipRef}
           key={`panel-${step.id}`}
           className={cn(
-            'absolute w-[calc(100vw-2rem)] bg-bg-card border border-bg-border rounded-2xl shadow-2xl',
+            'absolute bg-bg-card border border-bg-border rounded-2xl shadow-2xl',
             'p-5 focus:outline-none max-h-[85dvh] overflow-y-auto overscroll-contain',
-            centered ? 'max-w-md' : 'max-w-sm',
+            bottomSheet
+              ? 'inset-x-4 w-auto max-w-none'
+              : cn('w-[calc(100vw-2rem)]', centered ? 'max-w-md' : 'max-w-sm'),
           )}
           style={panelStyle}
           initial={panelInitial}
           animate={panelAnimate}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
+          transition={{ duration: 0.2, ease: 'easeOut', x: { duration: 0 }, y: { duration: 0 } }}
         >
           <PanelHeader onClose={handleClose} />
 
