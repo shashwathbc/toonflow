@@ -2619,3 +2619,19 @@ Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
 - **Action for operator:** set a funded `POLLINATIONS_TOKEN` in `.env.local` (dev) and App Hosting secrets (prod). Code already sends it as `Authorization: Bearer`.
 
 Verified: `tsc --noEmit` clean on changed files.
+
+---
+
+## 2026-08-05 — Audit fixes batch 1: AI spend guard, moderation hardening, sitemap cap
+
+Grounded in the enterprise audit (see scratchpad `toonflow-audit.html`). This batch covers the SAFE, self-contained, additive items only. The larger P0s (SSR conversion of content pages, edge read API, provider failover, self-serve account deletion, search index) are intentionally NOT touched here — they are multi-file refactors / irreversible operations that need dedicated passes and, in several cases, external provisioning.
+
+- **`src/lib/api/spendGuard.ts`** (new) — global, cross-instance AI spend guard. `enforceGlobalAiBudget('image'|'text')` provides (1) an instant config-only kill switch via `AI_GENERATION_DISABLED`, and (2) a daily platform-wide generation ceiling per kind, counted in Firestore (`aiUsage/{YYYY-MM-DD}`, Admin-SDK only) so it holds across every autoscaled App Hosting instance — unlike the per-process in-memory limiter. Caps tunable via `AI_DAILY_IMAGE_CAP` / `AI_DAILY_TEXT_CAP` (defaults 20k / 40k). Fails OPEN on Firestore error (guard, not the auth gate); kill switch always wins.
+- **Wired the guard** into `src/app/api/ai/generate-image/route.ts` (image + prompt-draft), `src/app/api/ai/novel-content/route.ts`, and `src/app/api/ai/storyboard/route.ts` — right after the per-user `aiRateLimited` check, before contacting the vendor.
+- **`src/lib/ai/moderation.ts`** — hardened `screenContent` with an obfuscation-resistant compact pass (NFKC → lowercase → de-leetspeak → strip to `[a-z0-9]`) that defeats spacing/punctuation/leetspeak evasion ("l0li", "l o l i", "c-s-a-m", "under4ge … expl1cit"). Tokens that occur inside innocent words (e.g. "child" in "childhood") are excluded from the compact pass to avoid false positives. Added `moderateContent(text)` async — an OPTIONAL external-classifier wire-point (`AI_MODERATION_URL` / `AI_MODERATION_KEY`, fail-open) so a real hosted moderation vendor can be dropped in without changing behaviour until configured. NOTE: this is still only a "floor" — the audit's real fix (image-output classifier + hash matching + human review queue) remains open.
+- **`src/lib/ai/moderation.test.ts`** (new) — 8 unit tests covering hard blocks, leet/spacing obfuscation, and no-false-positive on mature adult fiction & innocent substrings. All pass.
+- **`src/app/sitemap.ts`** — raised the per-collection cap from 5,000 → 20,000 (keeps static + landing + both collections under the 50k single-file limit) with a clear STOPGAP comment: real fix is a sitemap index via `generateSitemaps()` once the catalog nears the ceiling.
+
+Verified: `tsc --noEmit` clean · `eslint` clean on touched files (only pre-existing unrelated warning in `bubbleLayout.ts`) · `vitest run` moderation suite 8/8 green.
+
+Operator action required to activate: set `AI_DAILY_IMAGE_CAP` / `AI_DAILY_TEXT_CAP` (optional; sane defaults apply), keep `AI_GENERATION_DISABLED` unset (set to `1` to pause all AI generation instantly), and optionally set `AI_MODERATION_URL` (+ `AI_MODERATION_KEY`) to enable the external moderation classifier. No Firestore rules change needed — `aiUsage` is Admin-SDK-only and denied to clients by default.

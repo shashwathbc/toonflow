@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
 import { aiRateLimited } from '@/lib/api/aiRateLimit'
+import { enforceGlobalAiBudget } from '@/lib/api/spendGuard'
 import { AI_MODELS } from '@/lib/ai/models'
 import { SHOT_TYPES } from '@/lib/editor/webtoonFormat'
 
@@ -201,6 +202,10 @@ export async function POST(request: NextRequest) {
 
     const limited = await aiRateLimited(uid, 'text')
     if (limited) return limited
+
+    // Global platform-wide kill switch + daily ceiling (cross-instance).
+    const budget = await enforceGlobalAiBudget('text')
+    if (budget) return budget
 
     if (action === 'calculate') {
       const response = await client.messages.create({

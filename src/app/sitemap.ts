@@ -34,13 +34,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Best-effort: include published novels AND webtoons. Webtoons were omitted
   // before, so half the catalog was never submitted for indexing. Never let a
   // Firestore/credential failure break the sitemap — fall back to static routes.
+  //
+  // STOPGAP (audit P2): a single sitemap file holds at most 50,000 URLs. The cap
+  // below keeps static + landing + both collections under that ceiling. Once the
+  // published catalog approaches this size, split into a sitemap INDEX with
+  // paginated child sitemaps via Next's `generateSitemaps()` — until then this
+  // just ensures far more than the old 5k/collection is actually submitted.
+  const MAX_URLS_PER_COLLECTION = 20_000
   try {
     const { adminDb } = await import('@/lib/firebase/serverApp')
     const db = adminDb()
     const PUBLISHED = ['published', 'ongoing', 'completed']
     const [novelSnap, webtoonSnap] = await Promise.all([
-      db.collection('novels').where('status', 'in', PUBLISHED).select('updatedAt').limit(5000).get(),
-      db.collection('webtoons').where('status', 'in', PUBLISHED).select('updatedAt').limit(5000).get(),
+      db.collection('novels').where('status', 'in', PUBLISHED).select('updatedAt').limit(MAX_URLS_PER_COLLECTION).get(),
+      db.collection('webtoons').where('status', 'in', PUBLISHED).select('updatedAt').limit(MAX_URLS_PER_COLLECTION).get(),
     ])
     for (const [prefix, snap] of [['/novel', novelSnap], ['/webtoon', webtoonSnap]] as const) {
       for (const doc of snap.docs) {

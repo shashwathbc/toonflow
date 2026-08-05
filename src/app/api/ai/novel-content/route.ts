@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
 import { aiRateLimited } from '@/lib/api/aiRateLimit'
+import { enforceGlobalAiBudget } from '@/lib/api/spendGuard'
 
 export const runtime = 'nodejs'
 
@@ -36,6 +37,10 @@ export async function POST(request: NextRequest) {
   // Free to users, but every call spends on Anthropic — cap per account.
   const limited = await aiRateLimited(uid, 'text')
   if (limited) return limited
+
+  // Global platform-wide kill switch + daily ceiling (cross-instance).
+  const budget = await enforceGlobalAiBudget('text')
+  if (budget) return budget
 
   try {
     const parsed = bodySchema.safeParse(await request.json())

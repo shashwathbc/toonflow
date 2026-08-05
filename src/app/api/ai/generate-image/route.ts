@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { verifiedUid } from '@/lib/auth/serverUser'
 import { bodyTooLarge } from '@/lib/api/guard'
 import { aiRateLimited } from '@/lib/api/aiRateLimit'
+import { enforceGlobalAiBudget } from '@/lib/api/spendGuard'
 import { SHOT_TYPES, panelSize, type ShotType } from '@/lib/editor/webtoonFormat'
 import { generateImageBytes } from '@/lib/ai/imageProvider'
 import { screenContent } from '@/lib/ai/moderation'
@@ -117,6 +118,10 @@ export async function POST(request: NextRequest) {
       const limited = await aiRateLimited(uid, 'text')
       if (limited) return limited
 
+      // Global platform-wide kill switch + daily ceiling (cross-instance).
+      const budget = await enforceGlobalAiBudget('text')
+      if (budget) return budget
+
       const isCover = imageType === 'cover'
 
       const response = await client.messages.create({
@@ -176,6 +181,11 @@ Return ONLY the image prompt text.`,
       // account can spend that shared balance / hammer the upstream service.
       const limited = await aiRateLimited(uid, 'image')
       if (limited) return limited
+
+      // Global platform-wide kill switch + daily image ceiling (cross-instance) —
+      // the last line of defence against a total vendor-spend blowout.
+      const budget = await enforceGlobalAiBudget('image')
+      if (budget) return budget
 
       // Flux-friendly dimensions (multiples of 64). Cover = 2:3 portrait,
       // banner = 16:9 landscape, webtoon = a TALL panel whose exact aspect comes
