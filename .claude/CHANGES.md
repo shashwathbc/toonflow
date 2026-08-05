@@ -1,5 +1,11 @@
 # Toonflow Studio Paint — Change Log
 
+## Wire Cloudflare image provider into production (App Hosting) (2026-08-05)
+- Symptom: local image generation worked, but the hosted site still showed "service credits exhausted" — because `.env.local` is git-ignored, so prod had no `IMAGE_PROVIDER`/Cloudflare config and defaulted to Pollinations (0 balance → 402). The provider CODE was already live (committed in `c410f25`); only the prod env was missing.
+- **`apphosting.yaml`**: added `IMAGE_PROVIDER=cloudflare` and `CLOUDFLARE_ACCOUNT_ID=2f2c85bb…` as RUNTIME env (account id isn't sensitive), plus a `CLOUDFLARE_API_TOKEN` Secret Manager reference. Refreshed the stale STABILITY/Pollinations comment.
+- **Secret Manager**: created `CLOUDFLARE_API_TOKEN` (version 1) via `apphosting:secrets:set --data-file - --force` and granted the `toonflow` backend access (`apphosting:secrets:grantaccess --backend toonflow`), project `toonflow-studio-paint-f76d5`.
+- Deployed by pushing `apphosting.yaml` to `origin/main` (App Hosting auto-rollout). After rollout, prod image generation uses the free Cloudflare SDXL path.
+
 ## Add free Cloudflare Workers AI image provider (2026-08-05)
 - Request: images fail with "service credits exhausted"; user asked for a free image-generation path.
 - Diagnosis: Pollinations has no free-forever path — it only serves CACHED prompts free; every unique webtoon prompt costs pollen (dreamshaper ~0.0001, flux more) and 402s at 0 balance. Confirmed live: a cached "a red apple" returned free, but unique prompts on both the old keyless host and the new host returned "Insufficient balance … available balance is 0".
