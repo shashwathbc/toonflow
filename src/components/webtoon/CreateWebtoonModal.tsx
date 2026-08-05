@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createWebtoon, updateWebtoon } from '@/lib/firebase/firestore'
-import { uploadWebtoonCover, uploadWebtoonBanner } from '@/lib/firebase/storage'
+import { uploadWebtoonCover } from '@/lib/firebase/storage'
 import { GENRES } from '@/lib/utils/constants'
 import { slugify } from '@/lib/utils/formatters'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -172,9 +172,10 @@ export function CreateWebtoonModal({
   })
 
   const [coverURL, setCoverURL] = useState<string | null>(editWebtoon?.coverURL ?? null)
-  const [bannerURL, setBannerURL] = useState<string | null>(editWebtoon?.bannerURL ?? null)
+  // Webtoons can carry a banner, but this modal has no banner editor — hold the
+  // existing value read-only so saving an edit preserves it instead of wiping it.
+  const [bannerURL] = useState<string | null>(editWebtoon?.bannerURL ?? null)
   const [coverProgress, setCoverProgress] = useState(0)
-  const [bannerProgress, setBannerProgress] = useState(0)
   const [newTag, setNewTag] = useState('')
   const [genreOpen, setGenreOpen] = useState(false)
 
@@ -193,29 +194,15 @@ export function CreateWebtoonModal({
     [authorId]
   )
 
-  const handleBannerUpload = useCallback(
-    async (file: File, webtoonId: string) => {
-      const url = await uploadWebtoonBanner(authorId, webtoonId, file, ({ progress }) =>
-        setBannerProgress(progress)
-      )
-      setBannerURL(url)
-      return url
-    },
-    [authorId]
-  )
-
   const [pendingCover, setPendingCover] = useState<File | null>(null)
-  const [pendingBanner, setPendingBanner] = useState<File | null>(null)
-  const [aiPanel, setAiPanel] = useState<'cover' | 'banner' | null>(null)
+  const [aiPanel, setAiPanel] = useState<'cover' | null>(null)
   const [synopsisLoading, setSynopsisLoading] = useState(false)
 
   const coverObjectURL = useRef<string | null>(null)
-  const bannerObjectURL = useRef<string | null>(null)
 
   useEffect(() => {
     return () => {
       if (coverObjectURL.current) URL.revokeObjectURL(coverObjectURL.current)
-      if (bannerObjectURL.current) URL.revokeObjectURL(bannerObjectURL.current)
     }
   }, [])
 
@@ -227,14 +214,6 @@ export function CreateWebtoonModal({
     setCoverURL(url)
   }
 
-  function handleBannerFile(file: File) {
-    if (bannerObjectURL.current) URL.revokeObjectURL(bannerObjectURL.current)
-    const url = URL.createObjectURL(file)
-    bannerObjectURL.current = url
-    setPendingBanner(file)
-    setBannerURL(url)
-  }
-
   function handleRemoveCover() {
     if (coverObjectURL.current) {
       URL.revokeObjectURL(coverObjectURL.current)
@@ -243,16 +222,6 @@ export function CreateWebtoonModal({
     setPendingCover(null)
     setCoverURL(null)
     setCoverProgress(0)
-  }
-
-  function handleRemoveBanner() {
-    if (bannerObjectURL.current) {
-      URL.revokeObjectURL(bannerObjectURL.current)
-      bannerObjectURL.current = null
-    }
-    setPendingBanner(null)
-    setBannerURL(null)
-    setBannerProgress(0)
   }
 
   async function handleSynopsisAI(action: 'generate-synopsis' | 'improve-synopsis' | 'expand-synopsis') {
@@ -309,23 +278,19 @@ export function CreateWebtoonModal({
   async function onSubmit(data: FormData) {
     try {
       // Base on current state so an explicit removal (null) persists on save,
-      // not just a swap. Pending files overwrite these via upload below.
+      // not just a swap. A pending cover file overwrites this via upload below.
       let finalCoverURL = coverURL
-      let finalBannerURL = bannerURL
 
       if (isEditing && editWebtoon) {
-        // Upload images if pending
+        // Upload the cover if a new one is pending
         if (pendingCover) {
           finalCoverURL = await handleCoverUpload(pendingCover, editWebtoon.id)
-        }
-        if (pendingBanner) {
-          finalBannerURL = await handleBannerUpload(pendingBanner, editWebtoon.id)
         }
         await updateWebtoon(editWebtoon.id, {
           ...data,
           genres: data.genres as Webtoon['genres'],
           coverURL: finalCoverURL,
-          bannerURL: finalBannerURL,
+          bannerURL, // preserved as-is — no banner editor in this modal
         })
         toast.success('Webtoon updated')
         onCreated(editWebtoon.id)
@@ -345,10 +310,6 @@ export function CreateWebtoonModal({
         if (pendingCover) {
           finalCoverURL = await handleCoverUpload(pendingCover, id)
           await updateWebtoon(id, { coverURL: finalCoverURL })
-        }
-        if (pendingBanner) {
-          finalBannerURL = await handleBannerUpload(pendingBanner, id)
-          await updateWebtoon(id, { bannerURL: finalBannerURL })
         }
 
         toast.success('Webtoon created!')
@@ -388,46 +349,46 @@ export function CreateWebtoonModal({
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Left Col: Cover */}
-            <div className="space-y-4">
-              <UploadBox
-                label="Cover Art (2:3)"
-                aspect="aspect-[2/3] max-w-[200px] mx-auto"
-                value={coverURL}
-                progress={coverProgress}
-                onChange={handleCoverFile}
-                onRemove={handleRemoveCover}
-              />
-              <button
-                type="button"
-                onClick={() => setAiPanel('cover')}
-                className="w-full btn-ghost border border-bg-border text-xs flex items-center justify-center gap-1.5 py-2 hover:border-accent/40"
-              >
-                <Sparkles size={13} className="text-accent" aria-hidden="true" />
-                Generate Cover with AI
-              </button>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <div className="px-6 py-5 space-y-5">
+            {/* Cover */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+              <div className="space-y-2">
+                <UploadBox
+                  label="Cover Art (2:3)"
+                  aspect="aspect-[2/3]"
+                  value={coverURL}
+                  progress={coverProgress}
+                  onChange={handleCoverFile}
+                  onRemove={handleRemoveCover}
+                />
+                <button
+                  type="button"
+                  onClick={() => setAiPanel(aiPanel === 'cover' ? null : 'cover')}
+                  className="w-full flex items-center justify-center gap-1.5 text-[11px] text-white/50 hover:text-white border border-bg-border hover:border-white/30 rounded-lg py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
+                >
+                  <Sparkles size={10} aria-hidden="true" />
+                  Generate Cover with AI
+                </button>
+              </div>
 
-              {aiPanel === 'cover' && (
-                <div className="mt-4 border border-bg-border rounded-xl p-3 bg-bg-elevated/40">
-                  <AIImageGenerator
-                    imageType="cover"
-                    onAccept={handleCoverFile}
-                    onClose={() => setAiPanel(null)}
-                  />
-                </div>
-              )}
+              {/* Helper copy keeps the cover row balanced (webtoons have no banner) */}
+              <div className="sm:col-span-2 flex flex-col justify-center">
+                <p className="text-sm font-medium text-white/80 mb-1">Cover art</p>
+                <p className="text-xs text-white/40 leading-relaxed">
+                  Upload a 2:3 portrait image (JPG, PNG or WebP), or generate one with AI.
+                  This is the thumbnail readers see across Browse, Originals and your webtoon page.
+                </p>
+              </div>
             </div>
 
-            {/* AI Image Generator panel */}
+            {/* AI Image Generator panel — rendered once, toggled by the button above */}
             {aiPanel && (
               <AIImageGenerator
-                imageType={aiPanel}
+                imageType="cover"
                 userId={userId}
                 onAccept={(file) => {
-                  if (aiPanel === 'cover') handleCoverFile(file)
-                  else handleBannerFile(file)
+                  handleCoverFile(file)
                   setAiPanel(null)
                 }}
                 onClose={() => setAiPanel(null)}

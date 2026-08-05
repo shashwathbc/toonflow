@@ -1,5 +1,44 @@
 # Toonflow Studio Paint — Change Log
 
+## Add free Cloudflare Workers AI image provider (2026-08-05)
+- Request: images fail with "service credits exhausted"; user asked for a free image-generation path.
+- Diagnosis: Pollinations has no free-forever path — it only serves CACHED prompts free; every unique webtoon prompt costs pollen (dreamshaper ~0.0001, flux more) and 402s at 0 balance. Confirmed live: a cached "a red apple" returned free, but unique prompts on both the old keyless host and the new host returned "Insufficient balance … available balance is 0".
+- Fix: added a genuinely-free provider behind the existing `IMAGE_PROVIDER` abstraction.
+- **`src/lib/ai/imageProvider.ts`** — new `cloudflare()` provider (Cloudflare Workers AI, ~10k free neurons/day, no card). Defaults to **SDXL** (`@cf/stabilityai/stable-diffusion-xl-base-1.0`) because it honours width/height (2:3 covers, 16:9 banners, tall panels); dims clamped to 256–2048. FLUX-schnell selectable via `CLOUDFLARE_IMAGE_MODEL` but square-only so off by default. Handles both CF response shapes (SDXL raw bytes; FLUX JSON `result.image` base64). Errors: 429 → `rate_limited` (free daily budget spent), 401/403 → `unavailable` with a "check CLOUDFLARE_API_TOKEN" log. Registered in the PROVIDERS map alongside `pollinations`.
+- **`.env.local` / `.env.example`** — set `IMAGE_PROVIDER=cloudflare`; added `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (blank, with how-to-get instructions), optional `CLOUDFLARE_IMAGE_MODEL`. Pollinations key kept as fallback.
+- `tsc --noEmit` clean. **Live-verified (2026-08-05)** with the operator's CF account: SDXL returned HTTP 200 `image/png` at the requested 768×1152 in ~9.5s; FLUX-schnell returned JSON `result.image` base64 decoding to a valid JPEG — both response shapes match the provider's handling. Credentials set in `.env.local` (CLOUDFLARE_ACCOUNT_ID + Workers-AI token).
+
+## Enable Webtoon Studio for shashwathbc@gmail.com (super admin) (2026-08-05)
+- Request: "enable webtoon studio for shashwathbc@gmail.com".
+- Webtoon Studio is release-gated: `FEATURE_FLAGS.webtoonStudio` is `false`, so `canUseWebtoonStudio(email)` only admits emails in `WEBTOON_STUDIO_ALLOWED_EMAILS`. The super-admin email wasn't on it (despite the flag comment implying a super-admin bypass — the function has none).
+- **`src/lib/utils/constants.ts`**: added the super admin to the allowlist as `[SUPER_ADMIN_EMAIL, 'toonflowstudiopaint@gmail.com']` (referencing the existing constant so it can't drift from the single source of truth on line 1).
+- Because `canUseWebtoonStudio` is the one gate used by the middleware deep-link check (`src/proxy.ts`) and every UI entry point (Creator Hub card, dashboard, studio sidebar, profile "Create a Webtoon"), this single line opens all of them for that account. UX/release gate only — webtoon data access is still governed by Firestore rules. Requires the account to be signed in as shashwathbc@gmail.com (server-set email cookie).
+
+## Migrate image provider to gen.pollinations.ai (key-authenticated API) (2026-08-05)
+- Request: migrate the Pollinations image integration to the new API (user pasted the gen.pollinations.ai reference; chose the minimal "migrate image provider" scope).
+- Root cause of the outage: `imageProvider.ts` still called the retired keyless host `https://image.pollinations.ai/prompt/…`. Pollinations moved all generation behind gen.pollinations.ai and now requires a funded API key per request; keyless/old-host calls fail.
+- **`src/lib/ai/imageProvider.ts`**:
+  - Endpoint → `https://gen.pollinations.ai/image/{prompt}` (was `image.pollinations.ai/prompt/{prompt}`).
+  - Auth: reads `POLLINATIONS_API_KEY` (new, `sk_…`) with fallback to legacy `POLLINATIONS_TOKEN`; sent as `Authorization: Bearer`. Logs a clear error if unset (request will 401). Dropped the obsolete `referrer`/`POLLINATIONS_REFERRER` param (attribution now rides the key).
+  - Error mapping: 401 (missing/invalid key), 402 (insufficient pollen) and 403 (key lacks permission) all → `no_credits` with a distinct operator log ("check POLLINATIONS_API_KEY (valid + funded)"). 429 → `rate_limited`, non-image → `bad_prompt`, abort → `timeout`. Route/client contract unchanged.
+- **`src/app/api/ai/generate-image/route.ts`**: corrected the stale "keyless, no-billing, no credits" comment to reflect that vendor cost is now borne by our funded server-side key (creator still pays nothing).
+- **`.env.local`** (git-ignored): set `POLLINATIONS_API_KEY=sk_…` (user-provided). **`.env.example`**: replaced the `POLLINATIONS_TOKEN`/`POLLINATIONS_REFERRER` block with a `POLLINATIONS_API_KEY=sk_xxxxx` note pointing at https://enter.pollinations.ai/keys.
+- Verification: `tsc --noEmit` clean. Live smoke test with the provided key returns HTTP **402 "Insufficient balance … available balance is 0.0000"** — i.e. auth/endpoint work (a bad key would 401), and the code correctly surfaces it as `no_credits`.
+- **BLOCKER (operator action, not code)**: the Pollinations account has **0 pollen**. The secret key's "Budget: 10p" is only a spending cap, not funds — `/account/balance` returns the key budget, but real available balance is 0. Fund the account (quest pollen via quests, or paid pollen) at enter.pollinations.ai before image generation will succeed.
+- The shared **app key (`pk_…`) is NOT used** by this server-side path — it's only for the BYOP client-side "users spend their own pollen" flow (a separate, unbuilt feature). Not stored anywhere.
+
+## Fix Create/Edit Webtoon modal: duplicate AI panel + scattered form layout (2026-08-04)
+- Request: "fix edit and add [create] form in webtoon ui, it's overlapping and the UI is not smooth for form filling" (screenshot showed two overlapping "AI Generate Cover" panels in the Edit Webtoon dialog).
+- Root cause — `src/components/webtoon/CreateWebtoonModal.tsx` (a diverged copy of the clean `CreateNovelModal`):
+  1. **Duplicate AI panel**: `AIImageGenerator` was rendered twice — once nested inside the left cover column (`aiPanel === 'cover'`) AND again as a separate grid cell (`{aiPanel && …}`). Clicking "Generate Cover with AI" showed both. The nested one also never passed `userId`, so its AI generation couldn't charge tokens / would fail auth.
+  2. **Scattered layout**: the entire form was wrapped in a single `grid grid-cols-1 md:grid-cols-3`, so every field (Cover, Title, Synopsis, Genres, Tags, Status) became a grid cell fanned across 3 columns instead of a clean top-to-bottom form.
+- Fix (mirrors the working `CreateNovelModal` structure):
+  - Removed the duplicate — now ONE `AIImageGenerator`, rendered once below the cover, toggled by the button (`setAiPanel(aiPanel === 'cover' ? null : 'cover')`), and always passed `userId`.
+  - Replaced the `grid-cols-3` form wrapper with a single padded stacked column (`px-6 py-5 space-y-5`); the cover sits in its own `grid-cols-3` header row (cover box + helper copy) so webtoons (which have no banner box) don't leave a lopsided empty column.
+  - Form is now `noValidate` with a sibling sticky footer, matching the novel modal.
+  - Removed vestigial banner-editing machinery (`uploadWebtoonBanner` import, `handleBannerFile`/`handleRemoveBanner`, `bannerProgress`/`pendingBanner`/`handleBannerUpload`, `bannerObjectURL`) that had no UI. `bannerURL` is now held read-only and preserved untouched on edit-save (never wiped). Cleared 3 pre-existing/introduced eslint no-unused-vars warnings.
+- Verified: `tsc --noEmit` and `eslint src/components/webtoon/CreateWebtoonModal.tsx` both clean (0 errors, 0 warnings).
+
 ## Redirect to homepage on logout (2026-08-04)
 - Request: "if user is logged in and goes to create page and then logs out, redirect user to homepage by default whenever a user logs out."
 - Root cause: the shared logout handler (`handleLogout` in `src/components/layout/UserMenu.tsx`, used by both desktop `UserMenu` and mobile nav via `UserDropdownContent`) only called `logout()` + a success toast — it never navigated. Signing out from a protected page like `/create` left the stale page mounted until the next navigation.
@@ -2562,3 +2601,15 @@ Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
 - **`src/app/(main)/novel/[id]/page.tsx`** & **`src/app/(main)/webtoon/[id]/page.tsx`** — added `ShareButton` to the title/action row (shares the current page URL; title/synopsis feed the native sheet). Icon-only on the novel page, labelled on the webtoon page, matching each page's existing bookmark button.
 
 Verified: `tsc --noEmit` clean, `eslint` clean on all touched files.
+
+---
+
+## 2026-08-04 — Fix broken AI cover/banner/panel generation (Pollinations dropped free tier)
+
+- **Root cause (not a code bug):** Pollinations retired its free keyless tier. New (uncached) generations now cost "pollen" per image and return `402 PAYMENT_REQUIRED` (wrapped in a `500` JSON body) with a 0.0000 balance. Since covers, banners and webtoon panels all funnel through `generateImageBytes` → Pollinations, every real prompt failed with the generic "temporarily unavailable". Cached common prompts still returned 200, which made it look intermittent. Live-tested: `https://image.pollinations.ai` model list is now `["sana"]`; unique prompts 402, cached ones 200.
+- **`src/lib/ai/imageProvider.ts`** — added `no_credits` to the `ImageResult` union; the pollinations() error path now reads the (small) error body and, on a 402 / `PAYMENT_REQUIRED` / "Insufficient balance", returns `no_credits` and logs "set/top up POLLINATIONS_TOKEN" instead of a phantom "service down".
+- **`src/app/api/ai/generate-image/route.ts`** — handles `no_credits` with a clear `503` message ("service credits exhausted") so creators aren't blamed for a billing/config state.
+- **`.env.example`** — rewrote the Pollinations note: `POLLINATIONS_TOKEN` is now REQUIRED (funded with pollen at https://auth.pollinations.ai), not an optional throttle-lifter.
+- **Action for operator:** set a funded `POLLINATIONS_TOKEN` in `.env.local` (dev) and App Hosting secrets (prod). Code already sends it as `Authorization: Bearer`.
+
+Verified: `tsc --noEmit` clean on changed files.

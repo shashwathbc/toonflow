@@ -170,10 +170,10 @@ Return ONLY the image prompt text.`,
         return NextResponse.json({ error: 'This request was blocked by our content policy.' }, { status: 422 })
       }
 
-      // AI image generation is free for all users. We use Pollinations (Flux) —
-      // a keyless, no-billing image service — so there are no credits to run out
-      // of. Auth (above) + a per-user hourly cap bound how fast one account can
-      // hammer the upstream service.
+      // AI image generation is free for all users. Vendor cost is borne by our
+      // funded Pollinations key (POLLINATIONS_API_KEY) server-side — the creator
+      // is never charged. Auth (above) + a per-user hourly cap bound how fast one
+      // account can spend that shared balance / hammer the upstream service.
       const limited = await aiRateLimited(uid, 'image')
       if (limited) return limited
 
@@ -243,6 +243,14 @@ Return ONLY the image prompt text.`,
             return NextResponse.json(
               { error: 'Image generation is taking longer than usual. Please try again.' },
               { status: 504 },
+            )
+          case 'no_credits':
+            // The image provider account has no balance (Pollinations now charges
+            // "pollen" per generation). This is a server-side config issue — the
+            // creator did nothing wrong — so say so plainly and log for the operator.
+            return NextResponse.json(
+              { error: 'AI image generation is temporarily unavailable (service credits exhausted). Please try again later.' },
+              { status: 503 },
             )
           default:
             return NextResponse.json(

@@ -20,7 +20,7 @@ export const FEATURE_FLAGS = {
  * Webtoon Studio is locked for everyone EXCEPT these emails. Flip the flag to
  * true to open it to all users (this allowlist then becomes a no-op).
  */
-export const WEBTOON_STUDIO_ALLOWED_EMAILS: readonly string[] = ['toonflowstudiopaint@gmail.com']
+export const WEBTOON_STUDIO_ALLOWED_EMAILS: readonly string[] = [SUPER_ADMIN_EMAIL, 'toonflowstudiopaint@gmail.com']
 
 /**
  * Whether the given account email may enter the Webtoon Studio. Single source of
