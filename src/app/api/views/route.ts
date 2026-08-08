@@ -66,8 +66,18 @@ async function getVerifiedUid(req: NextRequest): Promise<string | null> {
 
 // Rejections return 200 {counted:false} on purpose: abusive clients get no
 // oracle for which check they tripped.
-function notCounted(): NextResponse {
-  return NextResponse.json({ counted: false })
+//
+// The reason is ALWAYS logged, and echoed in the response only outside
+// production. "Views silently stopped counting" has now cost two debugging
+// rounds (the App Hosting same-origin regression, then a client-side Strict Mode
+// teardown) precisely because every rejection looked identical from both sides —
+// a server log plus a dev-only reason removes that black hole without giving a
+// real attacker anything.
+function notCounted(reason: string): NextResponse {
+  console.warn('[views] not counted:', reason)
+  return NextResponse.json(
+    process.env.NODE_ENV === 'production' ? { counted: false } : { counted: false, reason }
+  )
 }
 
 export async function POST(req: NextRequest) {
@@ -84,7 +94,7 @@ export async function POST(req: NextRequest) {
       forwardedHost: req.headers.get('x-forwarded-host'),
       nextUrlHost: req.nextUrl.host,
     })
-    return notCounted()
+    return notCounted('not-same-origin')
   }
 
   let body: unknown
@@ -108,11 +118,11 @@ async function handleBegin(req: NextRequest, body: unknown, ip: string) {
 
   const { beginPerIp } = VIEW_CONFIG.rateLimits
   if (!(await checkRateLimitAsync(`begin:ip:${ip}`, beginPerIp.limit, beginPerIp.windowMs)).allowed) {
-    return notCounted()
+    return notCounted('begin:rate-limited')
   }
 
   const bot = detectBot(req, parsed.data.webdriver)
-  if (bot.isBot) return notCounted()
+  if (bot.isBot) return notCounted(`begin:bot:${bot.reason}`)
 
   // Reuse the authenticated visitor cookie or mint a new signed one
   let visitorId = verifyVisitorCookie(req.cookies.get(VIEW_CONFIG.visitorCookieName)?.value)
@@ -154,12 +164,12 @@ async function handleComplete(req: NextRequest, body: unknown, ip: string, ua: s
       reason: `bot:${bot.reason}`, contentId: data.contentId, contentType,
       hashedIp: saltedHash(ip), userAgentHash: saltedHash(ua),
     })
-    return notCounted()
+    return notCounted(`bot:${bot.reason}`)
   }
 
   // The visitor cookie must exist and verify — it was set during begin
   const visitorId = verifyVisitorCookie(req.cookies.get(VIEW_CONFIG.visitorCookieName)?.value)
-  if (!visitorId) return notCounted()
+  if (!visitorId) return notCounted('missing-or-invalid-visitor-cookie')
 
   // Rate limits: per IP, per visitor, per session
   const rl = VIEW_CONFIG.rateLimits
@@ -177,7 +187,7 @@ async function handleComplete(req: NextRequest, body: unknown, ip: string, ua: s
           hashedIp: saltedHash(ip), userAgentHash: saltedHash(ua),
         })
       }
-      return notCounted()
+      return notCounted(`rate-limited:${key.split(':').slice(0, 2).join(':')}`)
     }
   }
 
@@ -193,17 +203,19 @@ async function handleComplete(req: NextRequest, body: unknown, ip: string, ua: s
       reason: 'invalid-view-token', contentId: data.contentId, contentType,
       hashedIp: saltedHash(ip), userAgentHash: saltedHash(ua),
     })
-    return notCounted()
+    return notCounted('invalid-view-token')
   }
 
   const dwellMs = Date.now() - token.iat
-  if (dwellMs < 0 || dwellMs > VIEW_CONFIG.tokenMaxAgeMs) return notCounted()
+  if (dwellMs < 0 || dwellMs > VIEW_CONFIG.tokenMaxAgeMs) return notCounted('stale-view-token')
 
-  // Engagement gate — dwell is measured by OUR clock, not claimed by the client
+  // Engagement gate — dwell is measured by OUR clock, not claimed by the client.
+  // Both thresholds are 0 (a view counts on open), so this passes for any live
+  // token; it stays wired up so raising VIEW_CONFIG re-arms the gate.
   const qualifies =
     dwellMs >= VIEW_CONFIG.minDwellMs ||
     (data.scrollPercentage >= VIEW_CONFIG.minScrollPercent && dwellMs >= VIEW_CONFIG.minDwellWithScrollMs)
-  if (!qualifies) return notCounted()
+  if (!qualifies) return notCounted('below-engagement-threshold')
 
   // Claimed visible-time can never exceed real elapsed time (plus small slack)
   const engagementMs = Math.min(data.engagementDurationMs, dwellMs + 5_000)
@@ -223,7 +235,8 @@ async function handleComplete(req: NextRequest, body: unknown, ip: string, ua: s
       engagementDurationMs: engagementMs,
       scrollPercentage: data.scrollPercentage,
     })
-    return NextResponse.json({ counted: result.counted })
+    if (!result.counted) return notCounted(result.reason)
+    return NextResponse.json({ counted: true })
   } catch (err) {
     console.error('[views] recordView failed:', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

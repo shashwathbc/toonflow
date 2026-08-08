@@ -1,10 +1,14 @@
 'use client'
 
 // Client half of the two-phase view protocol (see /api/views).
-// Measures only VISIBLE time (Page Visibility API) and max scroll depth, and
-// fires the complete request once the local threshold is met. The server
-// re-validates everything — this hook merely decides when to ask.
-import { useEffect, useRef } from 'react'
+//
+// A view is earned the moment a chapter/episode is OPENED — there is no reading
+// time to wait out. The hook asks the server for a signed token and immediately
+// completes it. Everything that decides whether the view is REAL (bot signals,
+// token authenticity, visitor identity, duplicate suppression, rate limits)
+// lives on the server; this hook only reports "this reader just opened this".
+import { useEffect } from 'react'
+import { invalidateRequest } from '@/lib/utils/requestCache'
 
 export interface ViewTrackingTarget {
   contentType: 'chapter' | 'episode'
@@ -12,35 +16,17 @@ export interface ViewTrackingTarget {
   parentId: string
 }
 
-// A view counts as soon as the chapter/episode is OPENED — there is no minimum
-// reading time (the server thresholds are 0 too, see VIEW_CONFIG.minDwellMs).
-// The visible-time and scroll accumulators below are kept only to report
-// engagement/scroll depth to the server for analytics; they no longer decide
-// whether the view fires.
-const MIN_VISIBLE_MS = 0
-const MIN_SCROLL_PCT = 50
-const MIN_VISIBLE_WITH_SCROLL_MS = 0
-const GUARD_WINDOW_MS = 24 * 60 * 60 * 1000
-
-function guardKey(t: ViewTrackingTarget) {
-  return `tf_viewed_${t.contentType}_${t.contentId}`
-}
-
-function isGuarded(t: ViewTrackingTarget): boolean {
-  try {
-    const raw = localStorage.getItem(guardKey(t))
-    if (!raw) return false
-    if (Date.now() - Number(raw) < GUARD_WINDOW_MS) return true
-    localStorage.removeItem(guardKey(t))
-    return false
-  } catch {
-    return false
-  }
-}
-
-function setGuard(t: ViewTrackingTarget) {
-  try { localStorage.setItem(guardKey(t), String(Date.now())) } catch { /* private mode */ }
-}
+// One open must produce exactly one view — but the effect is torn down and
+// re-run more than once per open: React Strict Mode double-mounts every effect
+// in development, and a fast soft navigation can remount the reader within
+// milliseconds. A module-scope stamp per target swallows those repeats.
+//
+// The window is deliberately short. It is NOT a per-day cap: re-opening the
+// chapter later counts again, which is the product rule ("every open is a
+// view"). Abuse is bounded server-side by the per-IP / per-visitor / per-session
+// rate limits in VIEW_CONFIG, not here.
+const SAME_OPEN_WINDOW_MS = 5_000
+const firedAt = new Map<string, number>()
 
 function getSessionId(): string {
   try {
@@ -56,137 +42,85 @@ function getSessionId(): string {
   }
 }
 
-/** Pass null until the content has loaded; the hook activates once per target. */
+/** Current scroll depth, reported for analytics only (it no longer gates the view). */
+function scrollPercentage(): number {
+  const max = document.documentElement.scrollHeight - window.innerHeight
+  if (max <= 0) return 100 // content fits in one screen → fully visible
+  return Math.max(0, Math.min(100, Math.round(((window.scrollY + window.innerHeight * 0.5) / max) * 100)))
+}
+
+/** Home-page carousels serve from a 60s promise cache, so a freshly counted view
+ *  would otherwise stay invisible there until the TTL lapsed. */
+function refreshCachedFeeds(): void {
+  invalidateRequest('trending-')
+  invalidateRequest('new-releases')
+}
+
+/** Pass null until the content has loaded; the hook fires once per open. */
 export function useViewTracking(target: ViewTrackingTarget | null): void {
-  const startedFor = useRef<string | null>(null)
+  const contentType = target?.contentType
+  const contentId = target?.contentId
+  const parentId = target?.parentId
 
   useEffect(() => {
-    if (!target) return
-    const targetKey = `${target.contentType}:${target.contentId}`
-    if (startedFor.current === targetKey) return
-    startedFor.current = targetKey
-
+    if (!contentType || !contentId || !parentId) return
     if (typeof window === 'undefined') return
     if (navigator.webdriver) return
-    if (isGuarded(target)) return
 
-    let token: string | null = null
-    let sent = false
-    let disposed = false
+    const key = `${contentType}:${contentId}`
+    const now = Date.now()
+    const last = firedAt.get(key)
+    if (last !== undefined && now - last < SAME_OPEN_WINDOW_MS) return
+    firedAt.set(key, now)
 
-    // ── Visible-time accumulator ────────────────────────────
-    let visibleMs = 0
-    let visibleSince: number | null = document.visibilityState === 'visible' ? Date.now() : null
-
-    const flushVisible = () => {
-      if (visibleSince !== null) {
-        visibleMs += Date.now() - visibleSince
-        visibleSince = null
-      }
-    }
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        if (visibleSince === null) visibleSince = Date.now()
-      } else {
-        flushVisible()
-      }
-    }
-
-    // ── Scroll depth ────────────────────────────────────────
-    let maxScrollPct = 0
-    const onScroll = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight
-      const pct = max > 0
-        ? Math.min(100, Math.round(((window.scrollY + window.innerHeight * 0.5) / max) * 100))
-        : 100 // content fits in one screen → fully visible
-      if (pct > maxScrollPct) maxScrollPct = pct
-    }
-
-    const currentVisibleMs = () =>
-      visibleMs + (visibleSince !== null ? Date.now() - visibleSince : 0)
-
-    const thresholdMet = () => {
-      const v = currentVisibleMs()
-      return v >= MIN_VISIBLE_MS || (maxScrollPct >= MIN_SCROLL_PCT && v >= MIN_VISIBLE_WITH_SCROLL_MS)
-    }
-
-    const buildPayload = () => JSON.stringify({
-      phase: 'complete',
-      token,
-      contentType: target.contentType,
-      contentId: target.contentId,
-      parentId: target.parentId,
-      sessionId: getSessionId(),
-      engagementDurationMs: Math.round(currentVisibleMs()),
-      scrollPercentage: maxScrollPct,
-      webdriver: !!navigator.webdriver,
-    })
-
-    const complete = async () => {
-      if (sent || !token || !thresholdMet()) return
-      sent = true
-      try {
-        const res = await fetch('/api/views', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: buildPayload(),
-          keepalive: true,
-        })
-        if (res.ok) setGuard(target) // counted OR deduped — either way, don't retry today
-      } catch {
-        sent = false // network hiccup: allow the interval to retry
-      }
-    }
-
-    // Last-chance send when the reader leaves mid-read but already qualifies
-    const onPageHide = () => {
-      flushVisible()
-      if (sent || !token || !thresholdMet()) return
-      sent = true
-      const blob = new Blob([buildPayload()], { type: 'application/json' })
-      if (navigator.sendBeacon?.('/api/views', blob)) setGuard(target)
-    }
-
-    document.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('pagehide', onPageHide)
-
-    // Retry net: the view normally fires the moment the begin token arrives
-    // (below). This 1s poll re-attempts if that first send failed (network
-    // hiccup reset `sent`) or if the token arrived before listeners were ready.
-    const interval = setInterval(() => { void complete() }, 1_000)
-
-    // ── Begin phase: get the server-timestamped view token ──
-    fetch('/api/views', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phase: 'begin',
-        contentType: target.contentType,
-        contentId: target.contentId,
-        parentId: target.parentId,
-        webdriver: !!navigator.webdriver,
-      }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { token?: string } | null) => {
-        if (disposed || !data?.token) return
-        token = data.token
-        // Count the view immediately now that the chapter is open — no need to
-        // wait for the poll interval. (The interval remains as a retry safety net
-        // if this first attempt hits a network hiccup and resets `sent`.)
-        void complete()
+    // Deliberately NOT cancelled on unmount. The view is earned as soon as the
+    // page opens, and Strict Mode tears this effect down within milliseconds —
+    // aborting here is exactly what used to make views never count. `keepalive`
+    // lets the request outlive the page if the reader navigates away instantly.
+    const post = (body: unknown) =>
+      fetch('/api/views', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        keepalive: true,
       })
-      .catch(() => { /* tracking is best-effort; never break reading */ })
 
-    return () => {
-      disposed = true
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('pagehide', onPageHide)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target?.contentType, target?.contentId, target?.parentId])
+    // Failed attempts release the stamp so the next render/open can retry;
+    // tracking is best-effort and must never break reading.
+    const release = () => { firedAt.delete(key) }
+
+    void (async () => {
+      try {
+        const beginRes = await post({
+          phase: 'begin',
+          contentType,
+          contentId,
+          parentId,
+          webdriver: !!navigator.webdriver,
+        })
+        if (!beginRes.ok) return release()
+
+        const { token } = (await beginRes.json()) as { token?: string }
+        if (!token) return release()
+
+        const completeRes = await post({
+          phase: 'complete',
+          token,
+          contentType,
+          contentId,
+          parentId,
+          sessionId: getSessionId(),
+          engagementDurationMs: Math.max(0, Date.now() - now),
+          scrollPercentage: scrollPercentage(),
+          webdriver: !!navigator.webdriver,
+        })
+        if (!completeRes.ok) return release()
+
+        const result = (await completeRes.json()) as { counted?: boolean }
+        if (result.counted) refreshCachedFeeds()
+      } catch {
+        release()
+      }
+    })()
+  }, [contentType, contentId, parentId])
 }

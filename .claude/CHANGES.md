@@ -2635,3 +2635,32 @@ Grounded in the enterprise audit (see scratchpad `toonflow-audit.html`). This ba
 Verified: `tsc --noEmit` clean · `eslint` clean on touched files (only pre-existing unrelated warning in `bubbleLayout.ts`) · `vitest run` moderation suite 8/8 green.
 
 Operator action required to activate: set `AI_DAILY_IMAGE_CAP` / `AI_DAILY_TEXT_CAP` (optional; sane defaults apply), keep `AI_GENERATION_DISABLED` unset (set to `1` to pause all AI generation instantly), and optionally set `AI_MODERATION_URL` (+ `AI_MODERATION_KEY`) to enable the external moderation classifier. No Firestore rules change needed — `aiUsage` is Admin-SDK-only and denied to clients by default.
+
+---
+
+## 2026-08-08 — Views never counted: fixed the client hook that aborted its own request
+
+**Symptom:** chapters and episodes showed 0 views no matter how many times they were read, everywhere in the app.
+
+**Root cause — `src/hooks/useViewTracking.ts`, not the server.** The hook kept a `startedFor` ref and a `disposed` flag. React Strict Mode (on by default in the App Router in dev) mounts → cleans up → remounts every effect, so on every open:
+
+1. run #1 fired `phase:'begin'`, then cleanup set `disposed = true`;
+2. the begin token arrived and hit `if (disposed) return` — the `complete` call was never made;
+3. run #2 bailed immediately because `startedFor.current` already matched the target.
+
+Net result: the completion request that actually increments the counter was never sent. Verified against the running dev server — the whole server pipeline (same-origin, bot detection, visitor cookie, rate limits, token HMAC, Admin SDK transaction) passes end to end and increments both the chapter and the parent novel from 0 → 1; the synthetic test views were reset afterwards.
+
+A second, quieter bug in the same file: the 24h `localStorage` guard was set whenever the response was `res.ok`, which is true for `{counted:false}` rejections too — so one silent rejection blocked that reader for a full day.
+
+### Changes
+
+- **`src/hooks/useViewTracking.ts`** — rewritten. Begin → complete fires immediately on open and is **deliberately not cancelled on unmount** (the view is earned when the page opens; Strict Mode tears the effect down milliseconds later). The 24h `localStorage` guard is gone, replaced by a 5s module-scope stamp per target that only swallows duplicate fires from the *same* open. Failed attempts release the stamp so a later open can retry; a counted view invalidates the home feed's 60s promise cache so trending/new-release carousels don't serve a stale number.
+- **`src/lib/views/config.ts`** — `dedupWindowMs` 24h → **10s**. It is now a duplicate-*request* window (Strict Mode remounts, retried fetches, double-tapped links), not a per-day cap: re-opening a chapter later counts again, which is the product rule. Inflation stays bounded by the per-IP/visitor/session rate limits.
+- **`src/app/api/views/route.ts`** — every rejection now carries a reason: always `console.warn`ed, and echoed in the response body outside production. "Views silently stopped counting" has now cost two debugging rounds precisely because every rejection looked identical; that black hole is closed.
+- **`src/hooks/useLiveCounts.ts`** (replaces `useLiveViewCount.ts`) — one document listener now returns both `viewCount` and `likeCount`, so likes from *other* readers update live too, not just views.
+- **`src/app/(main)/novel/[id]/page.tsx`**, **`src/app/(main)/webtoon/[id]/page.tsx`** — wired to `useLiveCounts`; the webtoon page's header "N likes" and its `LikeButton` seed now come from the live value instead of the fetch-time snapshot.
+- **`docs/view-tracking.md`** — brought back in sync (it still documented the 20s dwell gate removed in July), plus a "One open, one view" section and a regression-history note so the next person doesn't reintroduce the unmount abort.
+
+**Behaviour now:** every open of a chapter/episode counts a view immediately, per visitor (verified uid when signed in, signed httpOnly `tf_vid` cookie otherwise); the same visitor re-opening later counts again; duplicate requests from a single open never double-count. Both the chapter/episode doc and its parent novel/webtoon are incremented in one transaction, so detail pages, profile totals, originals, browse and the home feed all read the same number.
+
+Verified: `tsc --noEmit` clean · `eslint` clean on touched files · `vitest run` 75/75 green · live two-phase API test against the dev server (`counted:true`, counters 0→1, duplicate inside 10s → `duplicate-in-window`, re-open after → counts again).

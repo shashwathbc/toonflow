@@ -9,7 +9,7 @@ import {
   Clock, Play,
 } from 'lucide-react'
 import { getWebtoonById, getEpisodesByWebtoon } from '@/lib/firebase/firestore'
-import { useLiveViewCount } from '@/hooks/useLiveViewCount'
+import { useLiveCounts } from '@/hooks/useLiveCounts'
 import { formatCount, formatDate, toTitleCase } from '@/lib/utils/formatters'
 import LikeButton from '@/components/reader/LikeButton'
 import BookmarkButton from '@/components/reader/BookmarkButton'
@@ -36,8 +36,12 @@ export default function WebtoonDetailPage() {
   const [loading, setLoading] = useState(true)
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
 
-  // Live view count — reflects /api/views increments without a page refresh.
-  const liveViews = useLiveViewCount('webtoons', id, webtoon?.viewCount ?? 0)
+  // Live counters — reflect /api/views increments and other readers' likes
+  // without a page refresh.
+  const { viewCount: liveViews, likeCount: liveLikes } = useLiveCounts('webtoons', id, {
+    viewCount: webtoon?.viewCount ?? 0,
+    likeCount: webtoon?.likeCount ?? 0,
+  })
 
   useEffect(() => {
     Promise.all([getWebtoonById(id), getEpisodesByWebtoon(id)])
@@ -143,7 +147,7 @@ export default function WebtoonDetailPage() {
               the unit ("1.2K views"), so no extra screen-reader text is needed. */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
             <span className="flex items-center gap-1" title="Views"><Eye size={13} aria-hidden="true" /> {formatCount(liveViews)} views</span>
-            <span className="flex items-center gap-1" title="Likes"><Heart size={13} aria-hidden="true" /> {formatCount(webtoon.likeCount ?? 0)} likes</span>
+            <span className="flex items-center gap-1" title="Likes"><Heart size={13} aria-hidden="true" /> {formatCount(liveLikes)} likes</span>
             <span className="flex items-center gap-1" title="Episodes"><ImageIcon size={13} aria-hidden="true" /> {webtoon.episodeCount ?? episodes.length} episodes</span>
             {(webtoon.rating ?? 0) > 0 && (
               <span className="flex items-center gap-1" title="Average rating">
@@ -170,7 +174,7 @@ export default function WebtoonDetailPage() {
             ) : (
               <button type="button" disabled className="btn-accent text-sm opacity-50">No episodes yet</button>
             )}
-            <LikeButton contentType="webtoon" contentId={id} initialCount={webtoon.likeCount ?? 0} authorId={webtoon.authorId} contentTitle={webtoon.title} />
+            <LikeButton contentType="webtoon" contentId={id} initialCount={liveLikes} authorId={webtoon.authorId} contentTitle={webtoon.title} />
             <BookmarkButton contentId={id} contentType="webtoon" showLabel />
             <ShareButton title={toTitleCase(webtoon.title)} text={synopsis || undefined} showLabel />
           </div>

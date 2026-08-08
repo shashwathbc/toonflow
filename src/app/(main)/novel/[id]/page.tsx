@@ -9,7 +9,7 @@ import {
   Activity, Hash, Calendar, ArrowUpDown, Search, ChevronsRight,
 } from 'lucide-react'
 import { useChapters } from '@/hooks/useChapters'
-import { useLiveViewCount } from '@/hooks/useLiveViewCount'
+import { useLiveCounts } from '@/hooks/useLiveCounts'
 import { getNovelById } from '@/lib/firebase/firestore'
 import { formatCount, formatDate, fromTimestamp, toTitleCase } from '@/lib/utils/formatters'
 import BookmarkButton from '@/components/reader/BookmarkButton'
@@ -73,8 +73,12 @@ export default function NovelDetailPage() {
   const [chapterQuery, setChapterQuery] = useState('')
   const [sortAsc, setSortAsc] = useState(true)
 
-  // Live view count — reflects /api/views increments without a page refresh.
-  const liveViews = useLiveViewCount('novels', id, novel?.viewCount ?? 0)
+  // Live counters — reflect /api/views increments and other readers' likes
+  // without a page refresh.
+  const { viewCount: liveViews } = useLiveCounts('novels', id, {
+    viewCount: novel?.viewCount ?? 0,
+    likeCount: novel?.likeCount ?? 0,
+  })
 
   // Real-time chapter listener — updates immediately when chapters are published
   const { chapters: allChapters, loading: chaptersLoading } = useChapters(id)

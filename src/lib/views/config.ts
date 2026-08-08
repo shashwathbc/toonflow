@@ -2,8 +2,18 @@
 // the client mirrors them only to decide when to fire the request.
 
 export const VIEW_CONFIG = {
-  /** One counted view per visitor per content within this rolling window. */
-  dedupWindowMs: 24 * 60 * 60 * 1000, // 24h
+  /** Duplicate-REQUEST window, not a per-day cap.
+   *
+   *  Product rule: every time a chapter/episode is opened it counts as a view.
+   *  A single open can still produce more than one `complete` request though —
+   *  React Strict Mode remounts the reader in development, a retried fetch can
+   *  land twice, a double-tapped link mounts the page twice — so the first
+   *  completion inside this window wins and the rest are dropped. Re-opening the
+   *  same chapter after the window counts again, on purpose.
+   *
+   *  Inflation is bounded by the per-IP / per-visitor / per-session rate limits
+   *  below, which is where abuse is actually handled. */
+  dedupWindowMs: 10 * 1000, // 10s
 
   /** Server-measured dwell (token issue → completion) required to qualify a view.
    *  Product choice: a view counts as soon as the chapter/episode is OPENED —
