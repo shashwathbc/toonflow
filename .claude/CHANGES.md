@@ -2993,3 +2993,27 @@ CI deploys `firestore.rules` automatically on merge to `main`, so an authorizati
 ### Not covered — stated plainly
 
 No live DAST against production, no Cloudflare/DNS/Vercel review (the app is on Firebase App Hosting and no such credentials were in scope), no MFA enablement (console action), and no backup restore test. On that last point: **nothing in this repo or the Firebase config schedules a Firestore export**, so there is currently no proven recovery path from destructive compromise — `SECURITY.md` §8 ranks it as the largest unmitigated risk, above the code findings fixed here.
+
+---
+
+## 2026-08-11 — App Hosting rollout fix: `npm ci` lockfile desync
+
+`firebase deploy` pushed rules and indexes fine, but the App Hosting rollout for backend `toonflow` failed at Cloud Build step #3:
+
+```
+npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync.
+npm error Missing: @emnapi/runtime@1.11.3 from lock file
+npm error Missing: @emnapi/core@1.11.3 from lock file
+```
+
+**Cause.** `package-lock.json` was internally inconsistent, not stale relative to `package.json`. `node_modules/@img/sharp-wasm32` (pulled in by the `sharp` devDependency + the `sharp ^0.35.3` override) declares `@emnapi/runtime: ^1.11.1`, and `@napi-rs/wasm-runtime` declares `@emnapi/core`, but neither had a hoisted `node_modules/@emnapi/*` entry — only a nested copy under `@unrs/resolver-binding-wasm32-wasi` and a stray top-level `@emnapi/wasi-threads`. `npm ci` refuses to install a tree with unresolvable nodes.
+
+**Why it was invisible locally.** npm 11.6.2 (this machine) does not require those wasm32-only optional deps when validating an existing lock, so `npm install` reported "up to date" against the broken file. The Cloud Build image runs npm 11.16.0, which does. Reproduced exactly with `npx npm@11.16.0 ci --dry-run`.
+
+**Fix.** Repaired the lock with the builder's own npm rather than regenerating it: `npx npm@11.16.0 install --package-lock-only`. Diff is **+2 entries** (`@emnapi/core@1.11.3`, `@emnapi/runtime@1.11.3`, both `optional`), 0 removed, **0 version changes** — plus some `peer`/`license` metadata flags npm 11.16 recalculates.
+
+Deliberately *not* done: deleting the lock and regenerating from scratch. That resolves every `^` range to latest and churns **263 packages** (firebase 12.15→12.17, tiptap 3.27→3.29, lucide-react 1.21→1.31, recharts, react-hook-form, @sentry 10.68→10.70, typescript-eslint 8.62→8.67) — an unrelated dependency bump riding along on a deploy fix.
+
+**Verification.** `npx npm@11.16.0 ci --dry-run` → "added 958 packages", no EUSAGE · `next build` succeeds locally.
+
+**Pre-existing, not fixed:** the builder warns `EBADENGINE` — `package.json` pins `engines.node: "22"` but App Hosting builds on Node v24.18.0. Warning only; it did not fail the build. Worth reconciling separately, since the pin is currently being ignored rather than honoured.
