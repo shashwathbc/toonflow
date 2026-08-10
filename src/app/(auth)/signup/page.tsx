@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import SignupForm from '@/components/auth/SignupForm'
+import Skeleton from '@/components/ui/Skeleton'
 
 export const metadata: Metadata = {
   title: 'Create Account',
@@ -7,5 +9,11 @@ export const metadata: Metadata = {
 }
 
 export default function SignupPage() {
-  return <SignupForm />
+  // SignupForm reads `redirect` from the query string, so it needs a boundary
+  // to prerender behind — same shape as the sign-in page.
+  return (
+    <Suspense fallback={<Skeleton className="h-64 w-full" aria-label="Loading sign-up form" />}>
+      <SignupForm />
+    </Suspense>
+  )
 }

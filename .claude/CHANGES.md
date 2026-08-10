@@ -2664,3 +2664,59 @@ A second, quieter bug in the same file: the 24h `localStorage` guard was set whe
 **Behaviour now:** every open of a chapter/episode counts a view immediately, per visitor (verified uid when signed in, signed httpOnly `tf_vid` cookie otherwise); the same visitor re-opening later counts again; duplicate requests from a single open never double-count. Both the chapter/episode doc and its parent novel/webtoon are incremented in one transaction, so detail pages, profile totals, originals, browse and the home feed all read the same number.
 
 Verified: `tsc --noEmit` clean · `eslint` clean on touched files · `vitest run` 75/75 green · live two-phase API test against the dev server (`counted:true`, counters 0→1, duplicate inside 10s → `duplicate-in-window`, re-open after → counts again).
+
+---
+
+## 2026-08-10 — Broken cover images + super-admin sub-pages 404ing
+
+Two separate reports, two unrelated causes.
+
+### 1. Cover image showing the browser's broken-image glyph
+
+**Symptom:** on the home feed, one card ("Beyond Mount Kailash") rendered the broken-image icon with its alt text spilling out over the status badges and past the card edge, while its neighbours loaded normally.
+
+**Investigated first, guessed second.** Dumped every stored `coverURL` from Firestore with the Admin SDK and fetched each one: all 24 covers return 200 from allowed hosts (`firebasestorage.googleapis.com`, `picsum.photos` — both in `next.config.js` `remotePatterns` and the CSP `img-src`), correct magic bytes, valid dimensions. The reported file is a healthy 1024x1536 PNG, 2.65 MB, and `/_next/image` served it fine on retest. So the URL was never the problem — the *request* failed once and nothing recovered it.
+
+**Root cause is the missing recovery, not the URL.** Several covers are 2–4 MB PNGs; the optimizer re-fetches and resizes each one with sharp and gives up on slow or oversized sources, which is exactly why one card breaks while the rest load. `src/components/content/CoverImage.tsx` already existed for this and already had an `onError` fallback — but only `NovelCard`/`WebtoonCard` used it. Every other surface rendered a bare `<Image>` with no `onError` at all, so a single failed request was permanent, and because `fill` images have no intrinsic box the alt text overflowed the card.
+
+### Changes
+
+- **`src/components/content/CoverImage.tsx`** — a failed load now **retries once with `unoptimized`**, pulling the original bytes straight from Storage (allowed by CSP) instead of through `/_next/image`. That actually recovers an optimizer failure rather than papering over it with a placeholder; the "No Cover" placeholder is now reserved for covers that are genuinely gone. The retry carries a `_r=1` cache-buster so the browser can't replay the failed response, remounts via `key` to force a new request, and waits 500 ms first (an instant retry hits the same transient condition). Attempt state is stored alongside the src it belongs to, so a swapped cover resets without an effect — no `set-state-in-effect` lint violation.
+- **`src/app/(main)/HomeFeed.tsx`**, **`src/app/(main)/browse/BrowseClient.tsx`**, **`src/app/(main)/originals/OriginalsClient.tsx`**, **`src/app/(main)/profile/[uid]/ProfilePageClient.tsx`** — the four card surfaces that rendered bare `<Image>` covers now go through `CoverImage`. Each also drops its hand-rolled `BookOpen` empty-state branch, which `CoverImage` already handles for a null src.
+
+`src/app/(studio)/dashboard/page.tsx` was left alone — its local `CoverThumb` already tracks a `failed` state.
+
+### 2. Users (and every other) sub-page of `/admin/super` returning 404
+
+**Symptom:** clicking "Users" in the super-admin sidebar didn't open the page.
+
+**Not a code bug.** Probed the dev server directly with the super-admin cookies: `/admin/super` returned 200 while `/admin/super/users`, `/novels`, `/webtoons`, `/requests`, `/settings` and `/seed` all returned **404** — even though `.next/dev/server/app-paths-manifest.json` listed all seven. Ruled out the other candidates on the way: `src/proxy.ts` gates every `/admin/super*` path identically, `firestore.rules` allows listing `users`, and all 27 user docs have clean `role`/`displayName`/`createdAt`/`photoURL` shapes on allowed image hosts.
+
+Same corrupted Turbopack dev cache documented before: routes compile into the manifest, then stop resolving. Fix is unchanged — stop dev, delete `.next\dev`, restart. Done; all six sub-routes now return 200.
+
+Verified: `tsc --noEmit` clean · `eslint` clean on touched files · optimizer serves the reported cover as 23 KB AVIF and the unoptimized retry path returns the 2.65 MB PNG · all `/admin/super/*` routes 200.
+
+---
+
+## 2026-08-11 — Google is now the only way to sign in
+
+Sign-up and sign-in are Google-only. The email/password forms are gone from both pages.
+
+### Changes
+
+- **`src/components/auth/GoogleAuthButton.tsx`** (new) — the Google button, its provider call, loading state, toast and redirect in one place. Once the forms lost their credential fields both pages contained nothing *but* this button plus a 20-line inline SVG, duplicated; extracting it leaves each page as pure copy and links.
+- **`src/components/auth/LoginForm.tsx`** — reduced to the Google button. Removed the email/password form, the zod schema, react-hook-form, and the "Forgot password?" link — which pointed at `/forgot-password`, **a route that has never existed in this app** and was already a dead 404. The "Sign up" link now carries the `redirect` param through, which it previously dropped (sign-up already did this).
+- **`src/components/auth/SignupForm.tsx`** — same reduction: no display-name/email/password/confirm fields, no schema. Terms and Privacy copy kept, reworded from "By signing up" to "By continuing".
+- **`src/app/(auth)/signup/page.tsx`** — wrapped in `<Suspense>` with a skeleton. `SignupForm` reads `redirect` via `useSearchParams` and had no boundary to prerender behind; sign-in already had one, so this just closes the gap.
+- **`e2e/basic.spec.ts`** — the two auth tests asserted a visible `input[type="email"]`, so they would now fail. They assert the Google button is present and that the pages carry **zero** email/password inputs instead — the regression worth guarding is a credential field reappearing.
+
+### Not changed, deliberately
+
+- **`src/lib/firebase/auth.ts`** still exports `signInWithEmail`, `signUpWithEmail` and `resetPassword`. They have no callers now, but the accounts they were created for still exist in Firebase Auth, and re-enabling the path is a one-import change. Say the word to delete them.
+- **The super-admin "Reset password" action** (`sendUserPasswordReset` in `src/lib/firebase/admin.ts`) is untouched and still works — it is the only remaining way to help a password-account holder.
+
+### Consequence to be aware of
+
+Removing the UI does not remove the accounts or disable the provider. **Roughly six existing accounts signed up with email/password** (`devil@`, `god@`, `angel@`, `atem3013@`, `anjanbg04@`, `testuser_july2026@` — the ones with no `photoURL`) and can no longer sign in through the app; the Google button only helps them if that address is also a Google account. The Email/Password provider is also still enabled in the Firebase console, so the credential path stays open to anything that calls the SDK directly — turn it off there if the intent is to close it, not just hide it.
+
+Verified: `tsc --noEmit` clean · `eslint` clean on touched files · `/login`, `/signup` and `/signup?redirect=…` all render 200 with the Google button and **0** email/password inputs.

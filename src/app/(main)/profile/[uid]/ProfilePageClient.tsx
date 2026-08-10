@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
+import CoverImage from '@/components/content/CoverImage'
 import Link from 'next/link'
 import {
   BookOpen, ImageIcon, Users, Heart, Eye, Bookmark, Edit3, Camera,
@@ -38,13 +39,7 @@ function ContentCard({ title, coverURL, href, chapterCount, viewCount, status }:
   return (
     <Link href={href} className="group block rounded-xl overflow-hidden bg-bg-card border border-bg-border hover:border-white/20 transition-all">
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
-        {coverURL ? (
-          <Image src={coverURL} alt={title} fill className="object-cover group-hover:scale-105 transition-transform duration-300" sizes="160px" />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <BookOpen size={24} className="text-white/20" aria-hidden="true" />
-          </div>
-        )}
+        <CoverImage src={coverURL} alt={title} sizes="160px" className="object-cover group-hover:scale-105 transition-transform duration-300" />
         <span className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 rounded-full bg-black/70 text-white border border-white/10 capitalize">{status}</span>
       </div>
       <div className="p-2.5">

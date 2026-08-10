@@ -70,17 +70,17 @@ test.describe('404 page', () => {
 })
 
 test.describe('Auth pages', () => {
-  test('should load login page', async ({ page }) => {
+  // Google is the only identity provider — neither page has a credential form.
+  test('should load login page with Google as the only option', async ({ page }) => {
     await page.goto('/login')
-    // Login form should have email/ password fields
-    const emailInput = page.locator('input[type="email"]')
-    await expect(emailInput).toBeVisible()
+    await expect(page.getByRole('button', { name: /sign in with google/i })).toBeVisible()
+    await expect(page.locator('input[type="email"], input[type="password"]')).toHaveCount(0)
   })
 
-  test('should load signup page', async ({ page }) => {
+  test('should load signup page with Google as the only option', async ({ page }) => {
     await page.goto('/signup')
-    const emailInput = page.locator('input[type="email"]')
-    await expect(emailInput).toBeVisible()
+    await expect(page.getByRole('button', { name: /sign up with google/i })).toBeVisible()
+    await expect(page.locator('input[type="email"], input[type="password"]')).toHaveCount(0)
   })
 })
 

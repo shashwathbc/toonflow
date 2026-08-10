@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
+import CoverImage from '@/components/content/CoverImage'
 import { BookOpen, Eye, Heart, Layers, Star, Tv2, TrendingUp, Clock, StarIcon } from 'lucide-react'
 import { browseContent } from '@/lib/firebase/firestore'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
@@ -52,19 +52,12 @@ function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | '
       aria-label={cardLabel}
     >
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
-        {item.coverURL ? (
-          <Image
-            src={item.coverURL}
-            alt={item.title}
-            fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <BookOpen size={28} className="text-white/20" aria-hidden="true" />
-          </div>
-        )}
+        <CoverImage
+          src={item.coverURL}
+          alt={item.title}
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
+        />
         <div className="absolute top-2 left-2">
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent text-accent-foreground font-semibold">
             Original
