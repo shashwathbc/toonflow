@@ -1,27 +1,24 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { BookOpen, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'lucide-react'
 import CoverImage from '@/components/content/CoverImage'
-import { getTrendingNovels, getTrendingWebtoons, getNewReleases } from '@/lib/firebase/firestore'
-import { cachedRequest } from '@/lib/utils/requestCache'
+import { fetchHomeFeed } from '@/lib/home/clientHomeFeed'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
-import { compareTimestampsDesc } from '@/lib/utils/timestamps'
 import { Stat } from '@/components/ui/Stat'
 import { HorizontalScroller } from '@/components/ui/HorizontalScroller'
-import type { Novel, Webtoon } from '@/types'
+import type { HomeFeedData, HomeItem } from '@/types/home'
 
-function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }) {
-  const chapterCount = 'chapterCount' in item ? item.chapterCount : (item as Webtoon).episodeCount
-  const href = `/${type}/${item.id}`
-  const unitLabel = type === 'novel' ? 'Chapters' : 'Episodes'
+function ContentCard({ item, eager }: { item: HomeItem; eager?: boolean }) {
+  const href = `/${item.type}/${item.id}`
+  const unitLabel = item.type === 'novel' ? 'Chapters' : 'Episodes'
 
   // The link's aria-label overrides its inner content for the accessible name,
   // so the stats have to be folded in here or they're never announced at all.
   const cardLabel = [
-    `${item.title} — ${type}`,
-    `${chapterCount} ${unitLabel.toLowerCase()}`,
+    `${item.title} — ${item.type}`,
+    `${item.partCount} ${unitLabel.toLowerCase()}`,
     `${formatCount(item.viewCount)} views`,
     item.rating > 0 ? `rated ${item.rating.toFixed(1)} out of 5` : null,
   ]
@@ -39,7 +36,11 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
         <CoverImage
           src={item.coverURL}
           alt={item.title}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
+          sizes="(max-width: 640px) 44vw, (max-width: 768px) 176px, 192px"
+          // The first row is above the fold on every viewport, so its covers are
+          // the LCP candidates — fetched eagerly at high priority instead of
+          // waiting for the lazy-load intersection check.
+          eager={eager}
           className="object-cover transition-transform duration-300 group-hover:scale-105"
         />
         <div className="absolute top-2 left-2">
@@ -49,10 +50,10 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
         </div>
         <div className="absolute top-2 right-2">
           <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-black/60 text-white border border-white/10">
-            {type === 'novel'
+            {item.type === 'novel'
               ? <BookOpen size={9} aria-hidden="true" />
               : <Tv2 size={9} aria-hidden="true" />}
-            {type === 'novel' ? 'Novel' : 'Webtoon'}
+            {item.type === 'novel' ? 'Novel' : 'Webtoon'}
           </span>
         </div>
       </div>
@@ -60,14 +61,14 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
         <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1 min-h-[2.5em]">
           {toTitleCase(item.title)}
         </h3>
-        {item.genres?.length > 0 && (
+        {item.genres.length > 0 && (
           <p className="text-[11px] text-white/50 mb-1.5 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
         )}
         {/* Wraps instead of clipping: on ≤360px phones the card is ~44vw wide and
             three stats at gap-3 overran the card's overflow-hidden edge, cutting
             the rating. gap-y lets the third stat drop to a second line if needed. */}
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-white/60">
-          <Stat icon={Layers} value={chapterCount} label={unitLabel} />
+          <Stat icon={Layers} value={item.partCount} label={unitLabel} />
           <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
           {item.rating > 0 && (
             <Stat icon={Star} value={item.rating.toFixed(1)} label="Rating" />
@@ -107,68 +108,45 @@ function SectionHeader({ id, title, href, linkLabel }: { id: string; title: stri
 
 const GRID = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'
 
-/** A row of content cards that scrolls horizontally with left/right arrows. */
-function CardRow({ items, label }: { items: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }[]; label: string }) {
+/** A row of content cards that scrolls horizontally with left/right arrows.
+ *  `eagerCount` marks the leading cards — the ones on screen without scrolling —
+ *  as high-priority loads; the rest stay lazy. */
+function CardRow({ items, label, eagerCount = 0 }: { items: HomeItem[]; label: string; eagerCount?: number }) {
   return (
     <HorizontalScroller ariaLabel={label}>
-      {items.map(({ item, type }) => (
-        <div key={`${type}-${item.id}`} className="w-[44vw] sm:w-44 md:w-48 shrink-0 snap-start">
-          <ContentCard item={item} type={type} />
+      {items.map((item, i) => (
+        <div key={`${item.type}-${item.id}`} className="w-[44vw] sm:w-44 md:w-48 shrink-0 snap-start">
+          <ContentCard item={item} eager={i < eagerCount} />
         </div>
       ))}
     </HorizontalScroller>
   )
 }
 
-export function HomeFeed() {
-  const [novels, setNovels] = useState<Novel[]>([])
-  const [webtoons, setWebtoons] = useState<Webtoon[]>([])
-  const [newNovels, setNewNovels] = useState<Novel[]>([])
-  const [newWebtoons, setNewWebtoons] = useState<Webtoon[]>([])
-  const [loading, setLoading] = useState(true)
+const EMPTY_FEED: HomeFeedData = { trending: [], newReleases: [], novels: [], webtoons: [] }
+
+export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
+  const [feed, setFeed] = useState<HomeFeedData>(initialFeed ?? EMPTY_FEED)
+  // Server data means there is nothing to wait for — render the cards (and
+  // therefore the cover <img> tags) on the very first paint. The skeleton only
+  // appears on the fallback path.
+  const serverRendered = (initialFeed?.trending.length ?? 0) > 0
+  const [loading, setLoading] = useState(!serverRendered)
 
   useEffect(() => {
-    // Firestore calls aren't abortable, so the guard gates the setState rather
-    // than the request — same idiom as hooks/useFirestore.ts.
+    if (serverRendered) return
+    // Fallback only: the server render came back empty (no Admin credentials,
+    // or Firestore was unavailable). Firestore calls aren't abortable, so the
+    // guard gates the setState rather than the request.
     let cancelled = false
 
-    // Shared 60s cache: HeroSlider reuses the same two trending requests,
-    // and back-navigation to the home page renders instantly from cache.
-    Promise.all([
-      cachedRequest('trending-novels-12', 60_000, () => getTrendingNovels(12)),
-      cachedRequest('trending-webtoons-12', 60_000, () => getTrendingWebtoons(12)),
-      cachedRequest('new-releases-6', 60_000, () => getNewReleases(6)),
-    ])
-      .then(([n, w, releases]) => {
-        if (cancelled) return
-        setNovels(n)
-        setWebtoons(w)
-        setNewNovels(releases.novels)
-        setNewWebtoons(releases.webtoons)
-      })
+    fetchHomeFeed()
+      .then((data) => { if (!cancelled) setFeed(data) })
       .catch((e) => { if (!cancelled) console.error(e) })
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [])
-
-  // Memoized: these spread + sort + slice both arrays on every render, and this
-  // component re-renders on each of the four setState calls above.
-  const allTrending = useMemo(() => [
-    ...novels.map((n) => ({ item: n, type: 'novel' as const })),
-    ...webtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
-  ].sort((a, b) => b.item.viewCount - a.item.viewCount).slice(0, 12), [novels, webtoons])
-
-  // Sort the MERGED list newest-first so the single latest release leads,
-  // instead of listing every novel before every webtoon. publishedAt falls back
-  // to createdAt for items that were never through a publish step (empty
-  // publishedAt would otherwise sort to the bottom). Mirrors getNewReleases.
-  const newReleases = useMemo(() => [
-    ...newNovels.map((n) => ({ item: n, type: 'novel' as const })),
-    ...newWebtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
-  ]
-    .sort((a, b) => compareTimestampsDesc(a.item.publishedAt ?? a.item.createdAt, b.item.publishedAt ?? b.item.createdAt))
-    .slice(0, 6), [newNovels, newWebtoons])
+  }, [serverRendered])
 
   if (loading) {
     return (
@@ -185,7 +163,7 @@ export function HomeFeed() {
     )
   }
 
-  if (allTrending.length === 0 && newReleases.length === 0) {
+  if (feed.trending.length === 0 && feed.newReleases.length === 0) {
     return (
       <section className="max-w-screen-xl mx-auto px-4 py-16 text-center" aria-labelledby="empty-heading">
         <Globe size={40} className="text-white/20 mx-auto mb-4" aria-hidden="true" />
@@ -199,7 +177,7 @@ export function HomeFeed() {
   return (
     <div className="space-y-0">
       {/* Trending Now */}
-      {allTrending.length > 0 && (
+      {feed.trending.length > 0 && (
         <section data-tour="home-feed" className="max-w-screen-xl mx-auto px-4 py-8" aria-labelledby="trending-heading">
           <SectionHeader
             id="trending-heading"
@@ -207,12 +185,18 @@ export function HomeFeed() {
             href="/browse?sort=trending"
             linkLabel="View all trending content"
           />
-          <CardRow items={allTrending} label="Trending content" />
+          {/* Deliberately only 2. The hero owns the top of the fold and its
+              background is the LCP element — every extra high-priority image
+              competes with it for the same connection. Two covers is what
+              actually peeks above the fold on a phone (cards are 44vw, so two
+              per row); the rest sit within the browser's native lazy-load
+              margin and get fetched on their own at normal priority. */}
+          <CardRow items={feed.trending} label="Trending content" eagerCount={2} />
         </section>
       )}
 
       {/* New Releases */}
-      {newReleases.length > 0 && (
+      {feed.newReleases.length > 0 && (
         <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="new-releases-heading">
           <SectionHeader
             id="new-releases-heading"
@@ -220,12 +204,12 @@ export function HomeFeed() {
             href="/browse?sort=newest"
             linkLabel="View all new releases"
           />
-          <CardRow items={newReleases} label="New releases" />
+          <CardRow items={feed.newReleases} label="New releases" />
         </section>
       )}
 
       {/* Popular Novels */}
-      {novels.length > 0 && (
+      {feed.novels.length > 0 && (
         <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="novels-heading">
           <SectionHeader
             id="novels-heading"
@@ -233,12 +217,12 @@ export function HomeFeed() {
             href="/browse?type=novel"
             linkLabel="View all novels"
           />
-          <CardRow items={novels.slice(0, 12).map((n) => ({ item: n, type: 'novel' as const }))} label="Popular novels" />
+          <CardRow items={feed.novels} label="Popular novels" />
         </section>
       )}
 
       {/* Popular Webtoons */}
-      {webtoons.length > 0 && (
+      {feed.webtoons.length > 0 && (
         <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="webtoons-heading">
           <SectionHeader
             id="webtoons-heading"
@@ -246,7 +230,7 @@ export function HomeFeed() {
             href="/browse?type=webtoon"
             linkLabel="View all webtoons"
           />
-          <CardRow items={webtoons.slice(0, 12).map((w) => ({ item: w, type: 'webtoon' as const }))} label="Popular webtoons" />
+          <CardRow items={feed.webtoons} label="Popular webtoons" />
         </section>
       )}
 

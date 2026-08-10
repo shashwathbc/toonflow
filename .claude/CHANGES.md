@@ -2720,3 +2720,276 @@ Sign-up and sign-in are Google-only. The email/password forms are gone from both
 Removing the UI does not remove the accounts or disable the provider. **Roughly six existing accounts signed up with email/password** (`devil@`, `god@`, `angel@`, `atem3013@`, `anjanbg04@`, `testuser_july2026@` — the ones with no `photoURL`) and can no longer sign in through the app; the Google button only helps them if that address is also a Google account. The Email/Password provider is also still enabled in the Firebase console, so the credential path stays open to anything that calls the SDK directly — turn it off there if the intent is to close it, not just hide it.
 
 Verified: `tsc --noEmit` clean · `eslint` clean on touched files · `/login`, `/signup` and `/signup?redirect=…` all render 200 with the Google button and **0** email/password inputs.
+
+---
+
+## 2026-08-11 — Firestore rules: close privilege-escalation and follow-edge forgery
+
+Account-security pass on the money path (wallets, token purchases, withdrawals). Three rule-level holes, all exploitable by an ordinary signed-in user against other people's accounts. `firestore.rules` only — no application code touched.
+
+### Changes
+
+- **`firestore.rules` — `users/{userId}` create was unrestricted.** `allow create: if isOwner(userId)` validated *who* was writing but nothing about *what*. Because the document does not exist yet, none of the update-rule field pins applied, so the first write to one's own user doc could seed `role: 'superadmin'` and any `balance`. Nothing forces a caller through the app: the web API key is public by design and the Email/Password provider is still enabled in the console (see the Google-only auth entry above), so the whole attack is `signUp` against the Auth REST endpoint, then one `setDoc`. `isAdmin()` reads that same `role`, so the payoff was write access across the entire database — including `allow update: if isAdmin()` on `withdrawals`, i.e. self-approving a payout. Create now pins `balance`/`totalEarnings`/`totalViews`/`followerCount`/`followingCount` to `0` and `role` to `'user'`, mirroring the update rule.
+- **`firestore.rules` — added `isSuperAdminEmail()`.** Reads `request.auth.token.email`, the one identity signal that does not route through a client-writable document. The super-admin's own first sign-in legitimately seeds `role: 'superadmin'` / `isCreator: true`, so the two create carve-outs are keyed to this rather than to `isAdmin()` — which would be circular, since `isAdmin()` is exactly what the seeding grants.
+- **`firestore.rules` — `isAdmin()` no longer applies to an admin's own user doc.** It granted unrestricted writes to *any* `users/{id}`, so a moderator-level `admin` could promote itself to `superadmin` or credit itself `balance`. Admins now manage other users only; on their own document they fall through to the owner clause and get profile fields. The super-admin keeps full reach via the token check.
+- **`firestore.rules` — `follows/{followId}` create now binds the doc ID to the body.** The body was validated (`request.auth.uid == followerId`) but the *path* was free, so A could write the edge at `follows/{B}_{A}` while still setting `followerId: A` — forging the half of the pair only B can legitimately create. `mutualFollow()` is just `exists(follows/a_b) && exists(follows/b_a)`, so this bypassed the mutual-follow gate on messaging entirely: A could DM a stranger who had never followed back. ID is now pinned to `{followerId}_{followingId}`, which only the follower's own uid can mint. Self-follow is blocked in rules too (previously client-side only).
+
+### Not changed, deliberately
+
+- **`followerCount` / `likeCount` are still bumpable ±1 by any signed-in user, unbounded in repetition.** The correct fix is server-side counters (as `viewCount` and `rating` already are). It cannot be done in rules: the bump ships in the same transaction as the follow-edge create, and rules evaluate against pre-transaction state, so `exists(follows/…)` is false at evaluation time and any such check would break following outright.
+- **Withdrawal amounts are still unvalidated server-side.** Rules require only `amount > 0 && status == 'pending'`, and the comment claiming "balance sufficiency is verified admin-side" is not true of any code. A rules-level check on `totalEarnings` would block *every* withdrawal, because that field is initialised to `0` and never written again — `/wallet` reads it (so it always shows ₹0) while `/dashboard` computes earnings from `viewCount`. Needs a server route plus one real earnings ledger; flagged, not attempted.
+
+### Deployment
+
+**These rules are not live until deployed** — `firebase deploy --only firestore:rules`. Until then the escalation path is open in production.
+
+Verified: `firebase deploy --only firestore:rules --dry-run` → "rules file compiled successfully" (validated against the real Rules API, nothing published). Traced every write path against the new rules by hand — normal signup, super-admin first sign-in, profile edit, admin role change on another user, follow/unfollow, conversation create — no emulator run possible (Firestore emulator needs Java, not installed).
+
+---
+
+## Catalog SEO + sanitizer hardening (audit pass)
+
+Full-app audit. Foundations (CSP/headers, session-cookie auth, Firestore rules, focus management, reduced motion, design tokens) were already in good shape and were left alone. Two real gaps were found and fixed. Note: a concurrent session was editing the home-feed/image-perf path during this work; none of those files were touched here.
+
+### The finding: the entire content catalog had no metadata
+
+`/novel/[id]`, `/webtoon/[id]`, `/novel/[id]/chapter/[chapterId]` and `/webtoon/[id]/episode/[episodeId]` are client components, so none of them could export `metadata`. Every one of those URLs rendered the root layout's generic `Toonflow Studio Paint` title with no description, no canonical and no share image — while `sitemap.ts` was actively submitting all of them to Google. That is the whole readable catalog presenting as duplicate, contentless pages, and every shared link producing an identical card. Social scrapers (Slack/X/WhatsApp/Discord) execute no JS, so the client-rendered `<JsonLd>` was invisible to all of them.
+
+### Changes
+
+- **`src/lib/seo/contentMeta.ts` (new).** Server-side Admin-SDK lookups for novel/webtoon/chapter/episode metadata, wrapped in React `cache` so `generateMetadata` and the page body share one Firestore read. Every helper is fail-soft: a missing credential returns `null` and the page falls back to generic metadata rather than 500ing. Also exports `isIndexable()` — the single definition of "publicly indexable" (`status ∈ PUBLIC_STATUSES && visibility === 'public'`).
+- **Four new server `page.tsx` shells** wrapping the existing client components (renamed to `*Client.tsx`, `git mv` so history follows). Each supplies title, description, canonical, OG (`og:image` = the real cover), Twitter card, and server-rendered `Book`/`ComicSeries`/`Chapter` + `BreadcrumbList` JSON-LD. The client-side `<JsonLd>` blocks were removed so the entity is not emitted twice.
+- **`noindex` for non-public content.** Drafts, `private` novels and `unlisted` webtoons were fully indexable. They now emit `robots: noindex, nofollow` and are excluded from structured data.
+- **`src/app/sitemap.ts` — filtered on visibility, not just status.** It queried `status in [...]` only, so a `published` + `private` novel or a `published` + `unlisted` webtoon was submitted to Google. Now filtered through the same `isIndexable()` the pages use, so sitemap and page robots can never disagree. Filtered in memory rather than in the query so no new composite index is needed.
+- **`toDescription`/`stripMarkdown`/`synopsisSnippet`.** Verified against real catalog data and caught a live defect: synopses are authored as Markdown, so the first description rendered was `# Lord Krishna In the shadow of prophecy…` — a literal `#` plus the title echoed back. Markdown is now stripped and a leading heading that repeats the title is dropped.
+- **`src/lib/seo/schema.ts`.** Added `catalogItemSchema()` and `chapterSchema()`. `aggregateRating` is emitted only when real ratings exist — never a fabricated or zero rating.
+
+### Sanitizer: server path was a denylist
+
+`sanitizeHtml`'s server fallback stripped a handful of named tags plus `on\w+=`. It let through `formaction="javascript:"` (not `href`/`src`, so the URL regex never saw it), `href="jav&#97;script:…"` (browsers decode entities in attributes; the regex did not), and any handler on a tag it wasn't looking for. Not exploitable today — reader content hydrates client-side, so the DOM path runs — but it becomes the live path the moment any of this is server-rendered, which the SEO work above makes materially more likely.
+
+Rewritten as a fail-closed tokenizer sharing the browser path's allowlists: unknown tag dropped, unknown attribute dropped, non-allowlisted URL scheme dropped, raw-text/foreign elements (`script`, `style`, `svg`, `math`, …) removed with their contents, URL values entity-decoded and control-stripped before the scheme test.
+
+- **`src/app/layout.tsx`** — toast colours were design-token drift: `#00C896` is the *old* accent (accent is now white) and `#272727` was never a token. Now `success` `#2DCA72` and `bg-border` `#3F3F3F`, with a note to keep them in sync with `tailwind.config.ts`.
+
+### Verification
+
+`tsc --noEmit` clean · `eslint` 0 errors (1 pre-existing warning in `bubbleLayout.ts`) · **125/125 unit tests pass**, up from 75 — added `sanitizeHtml.test.ts` (15 cases, each a payload the old denylist let through) and `contentMeta.test.ts` (18 cases). Production build succeeds, all 57 routes intact.
+
+Checked live against `next start` + real Firestore data: `/novel/5vTt5fybY28C65PNbw7w` now serves `<title>Lord Krishna | Toonflow Studio Paint</title>`, a real description, canonical, `og:image` pointing at the actual cover, and `Book` + `BreadcrumbList` JSON-LD in the raw HTML. Unknown ids return HTTP 200 with `noindex, follow` (fail-soft path confirmed, not a 500).
+
+### Not changed, deliberately
+
+- **Reader/detail bodies still render client-side.** Metadata and structured data are now server-rendered, which is what crawlers and social scrapers actually consume, but the *prose* is still behind hydration. Full SSR of chapter content is a larger change (view tracking, reader chrome, realtime counters all assume the client) and should be its own pass.
+- **Chapter/episode URLs are still absent from the sitemap** — only title pages are submitted. Adding them needs the sitemap-index split already flagged in that file, since the per-file 50k cap would be reached quickly.
+- **`APP_URL` — checked, no action needed.** Canonicals/OG URLs render as `http://localhost:3000` locally, which looks alarming in the verification output above. That is `.env.local` only; `apphosting.yaml` sets `NEXT_PUBLIC_APP_URL=https://toonflowstudiopaint.com` for both BUILD and RUNTIME, and `constants.ts` falls back to the same origin. Production canonicals are correct.
+
+---
+
+## 2026-08-11 — Security audit: two unvalidated user-controlled URL sinks
+
+Zero-trust audit pass over the full attack surface (14 API routes, middleware, Firestore + Storage rules, session/crypto libs, secrets, dependencies). The foundations built in the 2026-07-05 audit and the 2026-08-11 rules pass held up — session minting, token/balance accounting, view counting, the image proxy, the sanitizer and the Razorpay webhook were all re-reviewed and needed no change. Two real defects were found in the **newer social surface** (notifications + DMs), which no prior pass had covered. Both are the same class: a user-controlled string reaching a navigation sink with no scheme validation.
+
+### F-17 — Notification `link` is an open redirect / script sink · HIGH
+
+- **Files:** `src/components/layout/NotificationBell.tsx`, `firestore.rules`
+- **Vector:** any signed-in user → any other user, no relationship required.
+- **Before:** `users/{uid}/notifications` create is deliberately open cross-user (that is what makes "X liked your chapter" work). `validNotification()` bounded `link` to `is string && size() <= 300` — its type and length, never its meaning. `NotificationBell.tsx:79` then did `router.push(n.link)` unchecked.
+- **Attack:** write a notification into a victim's feed with `link: "https://toonflow-studio-paint.evil.test/login"` and an `actorName`/`preview` of the attacker's choosing. The victim sees a genuine-looking in-product notification; one click silently navigates them to a credential-harvesting clone. Because `router.push` hands an off-origin URL to `window.location.href`, a `javascript:` value is additionally a script-execution context. CSP does not help here — no CSP directive governs top-level navigation (`navigate-to` was never shipped).
+- **Fix:** new `safeInternalPath()` in `src/lib/utils/url.ts` — requires a single leading `/`, rejects `//host` and `/\host` (both parse as an authority), rejects C0 controls/whitespace, then resolves against a throwaway origin and confirms the value never left it. Applied at the sink; a non-conforming link renders as a no-op rather than navigating. Pinned at rest too: rules now require `link.matches('/[^/\\].*')`. Every link the app itself writes is already a rooted in-app path, so this is lossless.
+
+### F-18 — DM `imageURL` unvalidated in an `<a href>` · MEDIUM
+
+- **Files:** `src/app/(main)/messages/[conversationId]/ThreadClient.tsx`, `firestore.rules`
+- **Vector:** a mutual-follow counterparty (messaging is gated on mutual follow, so exploitability is bounded).
+- **Before:** message create validated `imageURL is string && size() < 2000` — no scheme. `ThreadClient.tsx:371` rendered `<a href={message.imageURL} target="_blank">`, i.e. a click-to-execute XSS against the recipient for a `javascript:` value.
+- **Fix:** `safeHttpUrl()` at the sink (bubble renders as nothing if the URL isn't http(s)); the `<Image>` inside now uses the same validated value. Rules require `imageURL.matches('https://.*')` — legitimate uploads are always https Storage download URLs.
+
+### Verification
+
+`tsc --noEmit` clean · `eslint` 0 errors on changed files · **136/136 unit tests pass**, up from 125 — added `src/lib/utils/url.test.ts` (11 cases: absolute URLs of every scheme, `//host`, `/\host`, tab/newline/space smuggling, dot-segment traversal, and the in-app routes that must keep working). Rules validated against the real Rules API: `firebase deploy --only firestore:rules --dry-run` → "rules file compiled successfully" (nothing published).
+
+### Reviewed, no change needed
+
+Re-audited and found already sound: `/api/session` (verifyIdToken → revocable session cookie, role from Firestore, HttpOnly/Secure/SameSite=Lax), `verifiedUid()` (checkRevoked=true on the AI/payment surface), `/api/img` (bucket-scoped allowlist, `redirect: 'manual'`, content-type re-derived, sandbox CSP, size/time caps), `sanitizeHtml` (fail-closed allowlist on both paths), `/api/webhooks` (constant-time HMAC, catalog-priced, amount-checked, idempotent transaction), `/api/ratings` + `/api/views` (Admin SDK, server-authoritative), `/api/support` (per-IP + per-email throttle, escaped HTML, regex blocks CRLF header injection), `proxy.ts` gates, AI routes (auth + zod caps + body gates + per-user rate limit + global budget kill switch + prompt-injection framing + output moderation). Secrets: no `.env`/key file has ever been committed (verified against full history, not just HEAD); `apphosting.yaml` carries only public config and Secret Manager references.
+
+### Not fixed — flagged for the operator
+
+- **Rate limiting is still per-instance.** `checkRateLimitAsync` is wired everywhere and falls back to an in-memory counter until `UPSTASH_REDIS_REST_URL`/`_TOKEN` exist in Secret Manager. With `maxInstances: 100`, published limits are effectively multiplied by the live instance count. Deployment step, not a code change.
+- **Withdrawal amounts remain unvalidated server-side** (carried over from the previous pass): rules require only `amount > 0 && status == 'pending'`, and no code verifies balance sufficiency. Needs a server route plus a real earnings ledger.
+- **`npm audit`: transitive `uuid` advisory** (GHSA-w5hq-g745-h8pq) via `firebase-admin → @google-cloud/storage → gaxios/teeny-request`. Not reachable in our usage (needs a `buf` argument we never pass); `--force` downgrades `firebase-admin` to 10.3.0, a breaking change. Monitor.
+- **These rules are not live until deployed** — `firebase deploy --only firestore:rules`. The client-side fix ships with the next app deploy; the rules half needs that explicit command.
+
+---
+
+## 2026-08-11 — Home page: server-render the feed, fix the broken hero image, cut optimizer cost
+
+**Reported symptom:** "when the website is opening all the images should appear instant — it's taking a lot of loading time, website is slow."
+
+### Root cause
+
+The home page shipped a skeleton and nothing else. The real sequence every visitor
+experienced was:
+
+```
+HTML (skeletons only) → download + parse JS → hydrate → init Firebase web SDK →
+4 Firestore queries → render cards → *now* the <img> tags finally exist →
+/_next/image fetches + resizes ~30 covers
+```
+
+Covers could not begin downloading until step 6. The browser's preload scanner —
+the thing that normally has images in flight before React has even booted — had
+no `src` to find, because there were no `<img>` elements in the document.
+
+Two multipliers on top of that:
+
+1. **Every hero background was returning HTTP 400.** `HeroSlider` passed
+   `quality={80}`, and Next 16 defaults `images.qualities` to `[75]` and rejects
+   any other value: `"q" parameter (quality) of 80 is not allowed`. Verified
+   against the built app — `q=80 → 400`, `q=75 → 200`.
+2. **`minimumCacheTTL: 3600`.** Cover sources are 2–4 MB PNGs (measured: 2.95 MB
+   for the first trending cover). Every hour, each variant expired and the next
+   visitor paid for a full re-fetch from Storage plus a sharp re-encode, on the
+   request path.
+
+### Changes
+
+**Server-rendered feed (the main fix)**
+- `src/lib/home/homeData.ts` (new) — `getHomeFeed()`, Admin SDK, `cache()`d.
+  Two collection reads (`visibility == public`, single-field filter so no
+  composite index is ever required) rank in memory and serve all four sections,
+  replacing the four separate client queries. Fail-soft: no credentials or a
+  Firestore blip returns empty arrays rather than 500ing the home page.
+- `src/app/(main)/page.tsx` — now an async server component, `revalidate = 300`.
+  Route table confirms `○ / 5m` (prerendered, ISR).
+- `src/types/home.ts` (new) — `HomeItem`/`HomeFeedData`. Flattened, serializable,
+  and only the fields the hero and cards actually read; a full `Novel` doc
+  carries ~25 unused fields and non-serializable `Timestamp` instances across
+  the RSC boundary, ~30 times per page.
+- `src/lib/home/clientHomeFeed.ts` (new) — the old browser-side fetch, kept as
+  the fallback for the empty-server-data case and shared by both components so
+  it fires one set of queries, not two.
+- `HomeFeed.tsx` / `HeroSlider.tsx` — take `initialFeed` / `initialSlides` and
+  render straight from them: no skeleton, no client fetch, cover `<img>` tags in
+  the initial HTML. Both keep the client path for the fallback case.
+
+**Image pipeline**
+- `next.config.js`: `minimumCacheTTL` 1h → 1y (Storage cover URLs are immutable —
+  the download token is part of the URL, so a cached variant can never go stale);
+  `qualities: [65, 75]`; `deviceSizes` drops 3840 (nothing is served at 4K and
+  resizing a multi-MB source to 3840 is the most expensive job in the set);
+  `imageSizes` trimmed to the range a 192px card can request.
+- `CoverImage`: `quality` defaults to 65 — **55 KB vs 80 KB at q=75 for the same
+  cover, 31% smaller**, and indistinguishable at thumbnail size. New `eager` prop
+  for above-the-fold covers.
+- `HeroSlider`: `quality={80}` → `75` (fixes the 400); backgrounds mount as a
+  sliding window (previous/current/next) instead of all five at once — they all
+  sit inside the viewport, so `loading="lazy"` never deferred them and four
+  full-viewport images were competing with the LCP element. Non-current layers
+  now carry `fetchPriority="low"`.
+- Home card `sizes` corrected to the real card widths
+  (`44vw / 176px / 192px` — was `50vw / 33vw / 16vw`, which over-requested: 16vw
+  on a 1920px screen asked for 307px of a 192px slot).
+- Critical-path preloads are now 4 (logo, hero, 2 trending covers), down from an
+  initial draft of 8 — `eagerCount` is deliberately 2, since Next hoists a
+  `<link rel=preload>` for every `fetchPriority="high"` image and a page full of
+  high-priority images has no priorities at all.
+
+### Verification
+
+`tsc --noEmit` clean · `eslint src` 0 errors (1 pre-existing unrelated warning) ·
+136/136 unit tests pass · `next build` exit 0, `/` listed as `○` static with a 5m
+revalidate. Prerendered `.next/server/app/index.html` inspected directly: contains
+"Popular Novels" and real `firebasestorage.googleapis.com` cover URLs, 35 `<img>`
+tags, and 4 image preloads — i.e. the covers are in the HTML with no JS executed.
+Optimizer probed against `next start`: `q=65 → 200`, `q=75 → 200`, `q=80 → 400`,
+`w=3840 → 400`.
+
+### Not fixed — flagged for the operator
+
+- **The build has no Admin credentials, so the build-time prerender of `/` is
+  empty.** `apphosting.yaml` marks `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`
+  and the `FIREBASE_PRIVATE_KEY` secret `availability: [RUNTIME]`. The page still
+  works (the client fallback fills it in) and ISR regenerates it with real data on
+  the first runtime request, but the first request or two after each deploy gets
+  the old slow behaviour. To close that window, add `BUILD` to those three — the
+  secret additionally needs
+  `firebase apphosting:secrets:grantaccess FIREBASE_PRIVATE_KEY --project toonflow-studio-paint-f76d5`
+  first, or the build hard-fails with `fah/misconfigured-secret`. Left alone here
+  because it is a deploy-config change that can break the build.
+- **`/browse`, `/originals` and `/profile/[uid]` still fetch on the client** and
+  have exactly the same skeleton-then-images sequence. `getHomeFeed` is the
+  pattern to copy; not touched because the report was about the landing page.
+
+---
+
+## 2026-08-11 — View counts: shown on every chapter/episode surface, totals reconciled
+
+**Diagnosis first.** Audited the live Firestore data before changing anything (read-only Admin SDK scripts against `toonflow-studio-paint-f76d5`): every novel/webtoon's `viewCount` equalled the sum of its chapters'/episodes' `viewCount`, and both matched `viewStats/{type}_{id}.totalViews`. Grouping the `chapterViews` log by content and comparing with the stored counter matched exactly for every surviving document — the 8 "extra" log rows all belong to chapters/episodes that were later deleted. **The counting pipeline is correct and nothing was lost.** What was wrong was the DISPLAY: most surfaces either hid the number or never showed it.
+
+### Per-chapter / per-episode counts
+
+- **`src/app/(main)/novel/[id]/NovelDetailClient.tsx`** — the chapter row rendered its view badge only when `viewCount > 0`, and then only at `sm:` and up. A brand-new chapter and an untracked one looked identical (nothing at all), and phones never saw the column. Now always rendered, at every width, via `<Stat>`; the count is folded into the row's `aria-label` (which otherwise overrides the row contents for screen readers). The date moves to `sm:` instead.
+- **`src/app/(main)/webtoon/[id]/WebtoonDetailClient.tsx`** — same `> 0` gate removed. Bigger fix: episodes came from a one-shot `getEpisodesByWebtoon`, so reading an episode and pressing Back restored the page from the router cache with the pre-read number still on screen. Switched to the live `useEpisodes` listener, matching what the novel page already did with `useChapters`.
+- **`src/components/editor/ChapterSidebar.tsx` / `EpisodeSidebar.tsx`** — the studio showed word/panel counts but **no view counts anywhere per chapter or episode**; a creator could only see the work-wide total. Added an eye + count to each row (both sidebars are already fed by `onSnapshot`, so they update live).
+- **Both readers** (`ChapterReaderClient`, `EpisodeReaderClient`) — tracked views but never displayed one. The chapter reader now shows it under the title and in the chapter-list dropdown; the episode reader in the header (`sm:` and up) and above the end-of-episode nav (always). New `useLivePartCounts()` in `src/hooks/useLiveCounts.ts` listens to the chapter/episode document itself, because the doc is fetched *before* `/api/views` records the open — the fetched figure is stale on arrival and used to only catch up on a hard refresh.
+
+### Totals
+
+- **`src/hooks/useLiveCounts.ts`** — refactored around a shared `useLiveDocCounts(path)`; `useLiveCounts` (work) and the new `useLivePartCounts` (chapter/episode) are thin wrappers. Fallback is now keyed by path, so navigating between works never shows the previous one's counts.
+- **`src/app/(main)/profile/[uid]/ProfilePageClient.tsx`** — `novels.reduce((s, n) => s + n.viewCount, 0)` had no `?? 0`: one legacy document missing the field turned the whole sum into `NaN` and blanked the stat card. Added a `sumBy()` helper used for views and likes. `StatCard` now carries the exact figure in a hover `title` (the card itself shows the abbreviated "1.2K").
+- **Detail pages** — the hero stat and the "Views" tile (relabelled **Total Views**) carry `title="N views across all chapters"`, so the abbreviated figure is always readable in full.
+
+### Deleting a chapter no longer inflates the work's total — `POST /api/views/reconcile` (new)
+
+`/api/views` increments the part and its parent in one transaction, so the parent total *is* the sum of its parts — until a part is deleted. `deleteChapter`/`deleteEpisode` removed the child and its views with it while the parent kept them, so the description page's total would sit permanently above the sum of the chapters listed under it, and `/api/creator/analytics` would keep pricing payouts off the deleted content. Clients cannot repair this (rules deny every client write to `viewCount`, by design), so the correction runs on the Admin SDK keyed to the verified uid: owner-or-admin only, `select('viewCount')` over the subcollection, parent set to the sum. It is a recomputation, not an adjustment — calling it repeatedly changes nothing. `src/lib/views/reconcileClient.ts` calls it best-effort after both deletes (a delete must never appear to fail because a totals correction didn't land).
+
+### Verification
+
+`tsc --noEmit` clean · `eslint` 0 problems on all changed files · **136/136 unit tests pass**. Live-checked against the running dev server with a temporary Playwright spec (since deleted): all 4 chapters of *The Viking* show a count including the three at 0, the detail-page total (1) equals the sum of its chapter rows, the chapter reader reads "282 words · ~2 min read · 1 view", *Ravana* episode 1 shows 3 in the list and "3 views · Ep. 1" in the reader — every figure matching the Firestore audit. Note that Playwright sets `navigator.webdriver`, which `useViewTracking` and the server's `detectBot` both reject, so **the e2e run wrote no views**; the increment path is the one proven by the data audit above. `/api/views/reconcile` returns 401 unauthenticated; its computation was dry-run read-only against both works (`changed=false` — today's data is already consistent).
+
+### Known, unchanged
+
+The home page is ISR-cached for 5 minutes (`export const revalidate = 300` in `src/app/(main)/page.tsx`), so a card there can trail a detail page by up to that long. That is a deliberate performance trade-off, left as-is.
+
+---
+
+## Zero-Trust security audit — 6 findings fixed, 34 regression tests, rules gate in CI
+
+Full defensive audit of everything built since the 2026-07-05 pass (image proxy, ratings, analytics, messaging, notifications, storyboard AI) plus a re-review of `firestore.rules` against the current revenue logic. Every one of the 15 API routes was checked individually for its auth guard. Written up in full in `SECURITY.md` (**Audit 2**); the previous report is retained below it as the baseline.
+
+### `/api/img` was an open relay serving attacker content from our own origin — HIGH
+
+`isStorageUrl()` allowlisted the **hosts** `storage.googleapis.com`, `*.appspot.com` and `*.firebasestorage.app`, then the route streamed the response back **copying the upstream `Content-Type` verbatim**. All three namespaces are open to public registration, so anyone could create a bucket, upload `evil.html` as `text/html`, and have `https://toonflowstudiopaint.com/api/img?u=…` serve it — attacker script executing **in our origin** (our CSP allows `script-src 'unsafe-inline'`). The session cookie is `HttpOnly`, but the script could still drive every authenticated same-origin API as the victim and phish behind a real address bar.
+
+- **`src/lib/utils/imageProxy.ts`** — the allowlist is now **bucket-scoped**: the target's bucket is resolved out of all three URL shapes (`/v0/b/<bucket>/o/…`, `storage.googleapis.com/<bucket>/…`, host-as-bucket) and must be one of *this deployment's* buckets, derived from `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`/`_PROJECT_ID` so preview projects lock to their own. Credentials in the authority and explicit ports are refused.
+- **`src/app/api/img/route.ts`** — stops trusting upstream entirely: `Content-Type` re-derived from a raster allowlist (415 otherwise, so `text/html` and `image/svg+xml` can never leave this origin), `redirect: 'manual'` (a 3xx from an allowed host was an SSRF pivot), 15 s timeout, 30 MB streaming ceiling, plus `nosniff` and `default-src 'none'; sandbox` on the response.
+
+### Firestore rules asserted protections they did not implement
+
+- **Creators could rewrite their own `viewCount`** (HIGH). `allow update: if isOwner(...)` was unrestricted, directly under a comment claiming `viewCount` and the rating aggregate were server-managed. That field is what `/api/creator/analytics` turns into money via `viewsToCreatorInr()`, and it drives ranking/trending. The same write could set `rating`/`ratingCount` — undoing the whole point of moving ratings behind `/api/ratings` — or reassign `authorId`, the anchor every ownership check keys off. New `contentServerFieldsUnchanged()` pins all five fields for owner *and* admin writes on novels, webtoons, chapters and episodes; `authorId`/`likeCount` likewise pinned on `comments`. Writing an identical value isn't a diff, so normal edits are unaffected.
+- **Like counts were inflatable by replay** (MEDIUM). The ±1 bound was tied to nothing, so any signed-in user could loop a single-field `likeCount` write to inflate their own story or grind a rival's to zero. The bump is now bound to the caller's like **edge** via `exists()`/`existsAfter()`: the edge at `{uid}_{contentType}_{contentId}` must actually appear (+1) or disappear (−1) in the same commit. `toggleLike()` already wrote both in one transaction, so no client change was needed. The `likes` doc id is now pinned to that format too.
+- **Every user's email and balance was publicly dumpable** (HIGH). `allow read: if true` on `users/{userId}` covers **`list`**, and the document carries `email`, `balance` and `totalEarnings` — one unauthenticated query returned the whole userbase. Split into `allow get: if true` / `allow list: if isAdmin()`. `fetchProfiles()` in `src/lib/firebase/social.ts` was the only non-admin caller needing a list; it now issues per-document `getDoc`s (same billing, one round trip per uid instead of per 30). Residual single-doc exposure needs the fields moved off the document — a money-path migration, specified step-by-step in `SECURITY.md` §7 rather than done blind.
+- **`reports` accepted any document from any signed-in user** (MEDIUM) — unbounded free storage, and a report could be filed under someone else's `reporterId`. Reporter bound to caller, `status` pinned to `pending`, `targetType` whitelisted, text capped.
+- **Withdrawals** gained an upper sanity bound; **`/api/webhooks`** no longer echoes `err.message`, and **`create-order`** returns a generic message instead of Razorpay's own error description (both still logged server-side).
+
+### Regression tests + a gate in front of the rules deploy
+
+CI deploys `firestore.rules` automatically on merge to `main`, so an authorization regression would have shipped unreviewed.
+
+- **`src/lib/utils/imageProxy.test.ts`** (new, 17 cases) — every bypass above, plus metadata/loopback/private-IP targets and scheme/credential confusion.
+- **`security/firestore.rules.test.ts`** (new, 17 cases) — counter integrity, like replay, enumeration, report shape and the money paths, against the emulator. Each fix is paired with a positive case proving the legitimate path still works.
+- **`vitest.rules.config.ts`** + `npm run test:rules` + an `emulators` block in `firebase.json`. Kept out of `npm test`, which stays emulator-free and instant.
+- **`.github/workflows/ci.yml`** — new `rules` job (with a JRE for the emulator); `deploy` now `needs: [e2e, rules]`.
+
+### Supply chain
+
+`fast-uri` (host confusion, via Sentry→webpack→ajv), `js-yaml` (quadratic CPU, via ESLint) and `nanoid` (infinite loop, via PostCSS) had become un-allowlisted `high` advisories and were failing `npm run security:audit`. All three had in-range patched releases — pinned via `overrides` (`fast-uri ^3.1.5`, `js-yaml ^4.3.1`, `nanoid ^3.3.17`). Gate back to **PASS** with only the documented `brace-expansion` acceptance.
+
+### Verification
+
+`tsc --noEmit` clean · `eslint` 0 errors · **136/136 unit tests pass** · `npm run security:audit` PASS · `next build` succeeds. **`npm run test:rules` has not been executed** — this machine has no JRE, so the Firestore emulator could not start. Run it once before merging; it gates the rules deploy.
+
+### Not covered — stated plainly
+
+No live DAST against production, no Cloudflare/DNS/Vercel review (the app is on Firebase App Hosting and no such credentials were in scope), no MFA enablement (console action), and no backup restore test. On that last point: **nothing in this repo or the Firebase config schedules a Firestore export**, so there is currently no proven recovery path from destructive compromise — `SECURITY.md` §8 ranks it as the largest unmitigated risk, above the code findings fixed here.

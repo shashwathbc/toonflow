@@ -147,9 +147,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal error'
-    console.error('[/api/webhooks] Processing error:', message)
+    // Log the detail server-side only. Echoing err.message back put internal
+    // failure text (Firestore paths, SDK internals) on the wire to whoever holds
+    // the webhook secret — needless exposure for a body nobody reads.
+    console.error('[/api/webhooks] Processing error:', err)
     // Return 200 so Razorpay doesn't retry indefinitely on a bug on our side.
-    return NextResponse.json({ received: true, error: message })
+    return NextResponse.json({ received: true })
   }
 }

@@ -1,11 +1,13 @@
 import {
   collection,
+  doc,
   query,
   orderBy,
   limit,
   startAfter,
   where,
   getDocs,
+  getDoc,
   documentId,
   type QueryDocumentSnapshot,
   type DocumentData,
@@ -33,16 +35,24 @@ function chunk<T>(arr: T[], size = 30): T[][] {
 }
 
 /** Fetch user docs for a set of uids, returned as a uid→profile map. Missing
- * (e.g. deleted) accounts are simply absent from the map. */
+ * (e.g. deleted) accounts are simply absent from the map.
+ *
+ * These are per-document GETS, not an `in` query over the collection, and that
+ * is deliberate: a user document carries `email`, `balance` and `totalEarnings`
+ * alongside the public profile, so `users` must not be LISTABLE by ordinary
+ * clients — a single unbounded `list` is a whole-userbase dump (audit F-17).
+ * The Firestore rules now split `get` (public, one known uid at a time) from
+ * `list` (admin only), and this was the one non-admin caller that needed the
+ * collection to be listable. Firestore bills per document either way, so the
+ * only change is one round trip per uid instead of one per 30 — parallelised,
+ * and a page of followers is at most PAGE_SIZE uids. */
 async function fetchProfiles(uids: string[]): Promise<Map<string, UserProfile>> {
   const map = new Map<string, UserProfile>()
   if (uids.length === 0) return map
   await Promise.all(
-    chunk(uids).map(async (ids) => {
-      const snap = await getDocs(
-        query(collection(db, 'users'), where(documentId(), 'in', ids))
-      )
-      snap.forEach((d) => map.set(d.id, d.data() as UserProfile))
+    uids.map(async (uid) => {
+      const snap = await getDoc(doc(db, 'users', uid))
+      if (snap.exists()) map.set(snap.id, snap.data() as UserProfile)
     })
   )
   return map

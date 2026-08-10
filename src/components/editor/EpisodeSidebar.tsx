@@ -27,6 +27,7 @@ import {
   ImageIcon,
   Loader2,
   Globe,
+  Eye,
   EyeOff,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -39,6 +40,7 @@ import {
   unpublishEpisode,
 } from '@/lib/firebase/firestore'
 import { nowTimestamp } from '@/lib/utils/time'
+import { formatCount } from '@/lib/utils/formatters'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { Episode } from '@/types'
 
@@ -97,6 +99,7 @@ function SortableEpisodeRow({
   }, [transform, transition])
 
   const panelsCount = episode.panels?.length ?? 0
+  const viewCount = episode.viewCount ?? 0
 
   return (
     <li
@@ -139,8 +142,17 @@ function SortableEpisodeRow({
           <p className={`text-xs leading-tight truncate ${isActive ? 'text-white font-medium' : 'text-white/70'}`}>
             {episode.title || 'Untitled Episode'}
           </p>
-          <p className="text-[10px] text-white/30 mt-0.5">
-            {panelsCount} {panelsCount === 1 ? 'panel' : 'panels'}
+          {/* Views come from the episode doc, incremented server-side by
+              /api/views. Without this the studio showed the webtoon-wide total
+              only, so a creator could not tell which episodes readers finish. */}
+          <p className="text-[10px] text-white/30 mt-0.5 flex items-center gap-1.5">
+            <span>{panelsCount} {panelsCount === 1 ? 'panel' : 'panels'}</span>
+            <span aria-hidden="true">·</span>
+            <span className="flex items-center gap-0.5" title={`${viewCount.toLocaleString()} views`}>
+              <Eye size={9} aria-hidden="true" />
+              <span aria-hidden="true">{formatCount(viewCount)}</span>
+              <span className="sr-only">{`Views: ${formatCount(viewCount)}`}</span>
+            </span>
           </p>
         </button>
 

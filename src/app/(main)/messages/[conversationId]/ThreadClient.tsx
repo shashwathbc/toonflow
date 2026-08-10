@@ -18,6 +18,7 @@ import Avatar from '@/components/ui/Avatar'
 import { Tooltip } from '@/components/ui/Tooltip'
 import EmojiPicker from '@/components/messages/EmojiPicker'
 import { cn } from '@/lib/utils/cn'
+import { safeHttpUrl } from '@/lib/utils/url'
 import type { ConversationMessage, FirestoreTimestamp, UserProfile } from '@/types'
 
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024
@@ -366,9 +367,16 @@ function ImageBubble({ message, mine }: { message: ConversationMessage; mine: bo
   const dispW = Math.min(240, iw)
   const dispH = Math.max(1, Math.round(dispW * (ih / iw)))
   const time = timeLabel(message.createdAt)
+  // `imageURL` comes straight off the message document. Firestore rules bound it
+  // to a string under 2000 chars but cannot check its SCHEME, and the sender is
+  // an untrusted counterparty — so `javascript:...` in this href would be a
+  // click-to-execute XSS on the recipient. Anything that is not an http(s) URL
+  // renders as a non-link.
+  const href = safeHttpUrl(message.imageURL)
+  if (!href) return null
   return (
     <a
-      href={message.imageURL}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Open shared image in a new tab"
@@ -378,7 +386,7 @@ function ImageBubble({ message, mine }: { message: ConversationMessage; mine: bo
       )}
     >
       <Image
-        src={message.imageURL as string}
+        src={href}
         alt="Shared image"
         width={dispW}
         height={dispH}

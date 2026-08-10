@@ -24,6 +24,7 @@ import {
   Copy,
   ChevronLeft,
   ChevronRight,
+  Eye,
   FileText,
   Loader2,
   Globe,
@@ -38,6 +39,7 @@ import {
   unpublishChapter,
 } from '@/lib/firebase/firestore'
 import { nowTimestamp } from '@/lib/utils/time'
+import { formatCount } from '@/lib/utils/formatters'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { Chapter } from '@/types'
 
@@ -89,6 +91,7 @@ function SortableChapterRow({
   }
 
   const wordCount = chapter.wordCount ?? 0
+  const viewCount = chapter.viewCount ?? 0
 
   return (
     <li
@@ -134,8 +137,18 @@ function SortableChapterRow({
           <p className={`text-xs leading-tight truncate ${isActive ? 'text-white font-medium' : 'text-white/70'}`}>
             {chapter.title || 'Untitled Chapter'}
           </p>
-          <p className="text-[10px] text-white/30 mt-0.5">
-            {wordCount.toLocaleString()} words
+          {/* Views live on the chapter doc, incremented server-side by /api/views.
+              Creators had no per-chapter figure anywhere in the studio — only the
+              novel-wide total — so there was no way to tell which chapter readers
+              actually reach. */}
+          <p className="text-[10px] text-white/30 mt-0.5 flex items-center gap-1.5">
+            <span>{wordCount.toLocaleString()} words</span>
+            <span aria-hidden="true">·</span>
+            <span className="flex items-center gap-0.5" title={`${viewCount.toLocaleString()} views`}>
+              <Eye size={9} aria-hidden="true" />
+              <span aria-hidden="true">{formatCount(viewCount)}</span>
+              <span className="sr-only">{`Views: ${formatCount(viewCount)}`}</span>
+            </span>
           </p>
         </button>
 

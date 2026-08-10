@@ -93,19 +93,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </TooltipProvider>
           <Toaster
             position="bottom-right"
+            // react-hot-toast renders into a portal with inline styles, so these
+            // can't be Tailwind classes — but the values must still be the design
+            // tokens from tailwind.config.ts, not one-offs. #00C896 here was the
+            // OLD accent colour, left behind when accent became white; #272727
+            // was never a token at all. Keep this table in sync with the
+            // `colors` block in tailwind.config.ts.
             toastOptions={{
               style: {
-                background: '#1A1A1A',
-                color: '#FFFFFF',
-                border: '1px solid #272727',
+                background: '#1A1A1A', // bg-card
+                color: '#FFFFFF', // text
+                border: '1px solid #3F3F3F', // bg-border
                 borderRadius: '12px',
                 fontSize: '14px',
               },
               success: {
-                iconTheme: { primary: '#00C896', secondary: '#0F0F0F' },
+                iconTheme: { primary: '#2DCA72', secondary: '#0F0F0F' }, // success / bg
               },
               error: {
-                iconTheme: { primary: '#FF4444', secondary: '#FFFFFF' },
+                iconTheme: { primary: '#FF4444', secondary: '#FFFFFF' }, // danger / text
               },
             }}
           />

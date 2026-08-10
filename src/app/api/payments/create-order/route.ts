@@ -58,8 +58,14 @@ export async function POST(request: NextRequest) {
     if (!razorpayResponse.ok) {
       const err = await razorpayResponse.json().catch(() => ({})) as { error?: { description?: string } }
       const msg = err.error?.description ?? `Razorpay error ${razorpayResponse.status}`
+      // Log the gateway's own wording; return a generic message. The upstream
+      // description can name account/config internals, and the caller can act on
+      // it no differently than on a generic failure.
       console.error('[/api/payments/create-order] Razorpay error:', msg)
-      return NextResponse.json({ error: msg }, { status: razorpayResponse.status })
+      return NextResponse.json(
+        { error: 'Could not start checkout. Please try again.' },
+        { status: razorpayResponse.status >= 500 ? 502 : 400 },
+      )
     }
 
     const order = await razorpayResponse.json() as { id: string; amount: number; currency: string }

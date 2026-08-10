@@ -8,6 +8,11 @@
     "rules": "storage.rules",
     "bucket": "toonflow-studio-paint-f76d5.firebasestorage.app"
   },
+  "emulators": {
+    "firestore": { "port": 8080 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  },
   "apphosting": {
     "backendId": "toonflow",
     "rootDir": "/",

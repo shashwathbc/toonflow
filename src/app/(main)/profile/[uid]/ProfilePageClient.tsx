@@ -55,10 +55,18 @@ function ContentCard({ title, coverURL, href, chapterCount, viewCount, status }:
 
 const compactFormat: NumberFormatter = (n) => formatCount(Math.round(n))
 
+/** Sums a counter across works, treating a missing/legacy field as 0. */
+function sumBy<T>(items: T[], pick: (item: T) => number | undefined | null): number {
+  return items.reduce((total, item) => total + (pick(item) ?? 0), 0)
+}
+
 function StatCard({ label, value, icon, onClick }: {
   label: string; value: number; icon: React.ReactNode; onClick?: () => void
 }) {
+  // AnimatedNumber renders the compact form ("1.2K"); the exact figure lives in
+  // the hover title so a creator can read their real total.
   const base = 'bg-bg-card border border-bg-border rounded-xl p-4 text-center'
+  const exact = `${value.toLocaleString()} ${label.toLowerCase()}`
   const inner = (
     <>
       <div className="flex justify-center text-white/40 mb-2" aria-hidden="true">{icon}</div>
@@ -75,13 +83,14 @@ function StatCard({ label, value, icon, onClick }: {
         onClick={onClick}
         aria-label={`View ${label}`}
         aria-haspopup="dialog"
+        title={exact}
         className={cn(base, 'w-full transition-colors hover:border-white/20 hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent')}
       >
         {inner}
       </button>
     )
   }
-  return <div className={base}>{inner}</div>
+  return <div className={base} title={exact}>{inner}</div>
 }
 
 interface EditProfileData {
@@ -405,8 +414,13 @@ export function ProfilePageClient({ uid }: { uid: string }) {
 
   const publishedNovels = novels.filter((n) => n.status !== 'draft')
   const publishedWebtoons = webtoons.filter((w) => w.status !== 'draft')
-  const totalViews = novels.reduce((s, n) => s + n.viewCount, 0) + webtoons.reduce((s, w) => s + w.viewCount, 0)
-  const totalLikes = novels.reduce((s, n) => s + n.likeCount, 0) + webtoons.reduce((s, w) => s + w.likeCount, 0)
+  // `?? 0` per work, not just on the total: one legacy document missing the
+  // field turned the whole sum into NaN, which rendered as an empty stat card.
+  // Each work's viewCount is itself the sum of its chapters'/episodes' views
+  // (both are incremented in the same /api/views transaction), so this figure
+  // matches what every detail page shows, added up.
+  const totalViews = sumBy(novels, (n) => n.viewCount) + sumBy(webtoons, (w) => w.viewCount)
+  const totalLikes = sumBy(novels, (n) => n.likeCount) + sumBy(webtoons, (w) => w.likeCount)
 
   const tabNovels = isOwnProfile ? novels : publishedNovels
   const tabWebtoons = isOwnProfile ? webtoons : publishedWebtoons

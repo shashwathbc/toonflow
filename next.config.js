@@ -62,7 +62,25 @@ const nextConfig = {
   compress: true,
   images: {
     formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 3600,
+    // Covers live at immutable Storage URLs (the download token is part of the
+    // URL, and replacing a cover mints a new one), so a cached variant can
+    // never go stale. At the old 1 hour every visitor after the TTL lapsed paid
+    // for a full re-optimize: refetch a 2–4 MB PNG from Storage and re-encode
+    // it with sharp, on the request path. A year removes that entirely.
+    minimumCacheTTL: 31536000,
+    // Every distinct (width × quality × format) is a separate sharp job whose
+    // FIRST request is slow. Trimming the widths to the ones this layout can
+    // actually request collapses the number of cold variants:
+    //   - 3840 is gone: nothing here is served at 4K, and resizing a multi-MB
+    //     source to 3840 is by far the most expensive job in the set.
+    //   - imageSizes tops out at 384 — the widest a cover thumbnail gets is a
+    //     192px card at 2x.
+    deviceSizes: [640, 828, 1080, 1200, 1920, 2048],
+    imageSizes: [96, 128, 192, 256, 384],
+    // Next 16 rejects any `quality` not listed here with a 400 from
+    // /_next/image (the default is [75] alone — which is why the hero's
+    // quality={80} was failing). 65 is what the cover thumbnails use.
+    qualities: [65, 75],
     remotePatterns: [
       { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },

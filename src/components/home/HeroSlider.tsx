@@ -5,13 +5,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { BookOpen, Tv2, Eye, ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react'
-import { getTrendingNovels, getTrendingWebtoons } from '@/lib/firebase/firestore'
-import { cachedRequest } from '@/lib/utils/requestCache'
+import { fetchHomeFeed } from '@/lib/home/clientHomeFeed'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
-import type { Novel, Webtoon } from '@/types'
-
-type SlideItem = { item: Novel | Webtoon; type: 'novel' | 'webtoon' }
+import type { HomeItem } from '@/types/home'
 
 const SLIDE_INTERVAL = 6000
 
@@ -58,10 +55,15 @@ function HeroSliderSkeleton() {
   )
 }
 
-export function HeroSlider() {
-  const [slides, setSlides] = useState<SlideItem[]>([])
+export function HeroSlider({ initialSlides }: { initialSlides?: HomeItem[] }) {
+  const [slides, setSlides] = useState<HomeItem[]>(initialSlides ?? [])
   const [current, setCurrent] = useState(0)
-  const [loading, setLoading] = useState(true)
+  // The hero background is the page's LCP element. When the server supplied the
+  // slides there is nothing to fetch, so the real <img> is in the initial HTML
+  // and starts downloading before any JS runs — the skeleton (and the second
+  // network round trip it used to hide) is skipped entirely.
+  const serverRendered = (initialSlides?.length ?? 0) > 0
+  const [loading, setLoading] = useState(!serverRendered)
   // Hover/focus suspends rotation transiently; the toggle is a persistent user
   // choice. Kept separate so moving the mouse away doesn't resume a carousel
   // the user explicitly paused (WCAG 2.2.2).
@@ -76,31 +78,31 @@ export function HeroSlider() {
   const isRotating = !loading && slides.length > 1 && !suspended && !userPaused && !reducedMotion
 
   useEffect(() => {
+    if (serverRendered) return
+    // Fallback only — the server render came back empty. Shares its queries
+    // with HomeFeed's fallback via the same request cache, so the page still
+    // fires one set of Firestore reads, not two.
     let cancelled = false
 
-    // Same cache keys as HomeFeed — one pair of Firestore queries serves
-    // both components; the hero just takes the top 5 of the 12 fetched.
-    Promise.all([
-      cachedRequest('trending-novels-12', 60_000, () => getTrendingNovels(12)),
-      cachedRequest('trending-webtoons-12', 60_000, () => getTrendingWebtoons(12)),
-    ])
-      .then(([novels, webtoons]) => {
-        if (cancelled) return
-        const combined: SlideItem[] = [
-          ...novels.map((n) => ({ item: n, type: 'novel' as const })),
-          ...webtoons.map((w) => ({ item: w, type: 'webtoon' as const })),
-        ]
-          .sort((a, b) => b.item.viewCount - a.item.viewCount)
-          .slice(0, 5)
-        setSlides(combined)
-      })
+    fetchHomeFeed()
+      .then((feed) => { if (!cancelled) setSlides(feed.trending.slice(0, 5)) })
       .catch((e) => { if (!cancelled) console.error(e) })
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [])
+  }, [serverRendered])
 
   const count = slides.length
+
+  // Only a sliding window of background images is in the DOM: the one showing,
+  // the one it will fade to, and the one it just faded from (so the crossfade
+  // always has both layers). Purely derived from `current` — no extra state.
+  // `current - 1` deliberately does NOT wrap, so the very first render mounts
+  // just slides 0 and 1 instead of pulling the last slide in too.
+  const isMounted = useCallback(
+    (i: number) => i === current || i === (current + 1) % Math.max(count, 1) || (current > 0 && i === current - 1),
+    [current, count]
+  )
 
   const goTo = useCallback((i: number) => {
     setCurrent((c) => (count > 0 ? ((i % count) + count) % count : c))
@@ -151,7 +153,7 @@ export function HeroSlider() {
   }
 
   const active = slides[current]
-  const activeHref = `/${active.type}/${active.item.id}`
+  const activeHref = `/${active.type}/${active.id}`
 
   return (
     <section
@@ -169,14 +171,20 @@ export function HeroSlider() {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSuspended(false)
       }}
     >
-      {/* Background layers — every slide stays mounted so opacity can actually
-          crossfade. (The previous version swapped `src` on a single <Image>,
-          so the transition class had nothing to animate and each change was a
-          hard cut with a decode flash.) */}
+      {/* Background layers — once mounted a slide STAYS mounted so opacity can
+          actually crossfade. (Swapping `src` on a single <Image> gave the
+          transition class nothing to animate: every change was a hard cut with
+          a decode flash.)
+          Only a window of them is mounted, though — see `isMounted` above. All
+          five at once meant five full-viewport images racing on first load, and
+          the four nobody is looking at were stealing bandwidth from the one
+          they are (`loading="lazy"` does nothing here: every layer sits inside
+          the viewport, so the browser fetches them all immediately regardless —
+          the fetch priority below is what actually holds them back). */}
       <div className="absolute inset-0 -z-10">
-        {slides.map(({ item }, i) => {
-          const bg = ('bannerURL' in item && item.bannerURL) ? item.bannerURL : item.coverURL
-          if (!bg) return null
+        {slides.map((item, i) => {
+          const bg = item.bannerURL || item.coverURL
+          if (!bg || !isMounted(i)) return null
           return (
             <Image
               key={item.id}
@@ -184,12 +192,19 @@ export function HeroSlider() {
               alt=""
               aria-hidden="true"
               fill
-              // Only the first slide is LCP-critical; the rest load right after
-              // and are ready well before their turn comes up.
-              priority={i === 0}
-              loading={i === 0 ? undefined : 'lazy'}
+              // The visible slide is the LCP element and gets a preload; the
+              // neighbours are queued at low priority so they load off the back
+              // of the critical path rather than alongside it. Six seconds of
+              // slide duration is ample for a low-priority fetch to finish.
+              priority={i === current}
+              {...(i === current ? {} : { fetchPriority: 'low' as const })}
               sizes="100vw"
-              quality={80}
+              // Was 80, which is NOT in `images.qualities` (Next 16 defaults it
+              // to [75]) — the optimizer rejected every hero request with
+              // `"q" parameter (quality) of 80 is not allowed`, so the hero
+              // background silently 400'd and never rendered in production.
+              // 75 keeps it inside the allowlist; see next.config.js.
+              quality={75}
               className={cn(
                 'object-cover object-top transition-opacity duration-700 ease-out motion-reduce:transition-none',
                 i === current ? 'opacity-100' : 'opacity-0'
@@ -224,7 +239,7 @@ export function HeroSlider() {
           className="space-y-4 max-w-xl"
           role="group"
           aria-roledescription="slide"
-          aria-label={`${current + 1} of ${count}: ${active.item.title}`}
+          aria-label={`${current + 1} of ${count}: ${active.title}`}
         >
           {/* Type + rank badges */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -244,13 +259,13 @@ export function HeroSlider() {
           {/* pb-2: display-2xl's tight leading-[1.02] + line-clamp's overflow:hidden
               clip descenders (g/y/p) on the last line — the padding gives them room. */}
           <h1 className="display-2xl text-white line-clamp-2 pb-2">
-            {toTitleCase(active.item.title)}
+            {toTitleCase(active.title)}
           </h1>
 
           {/* Genres */}
-          {active.item.genres?.length > 0 && (
+          {active.genres?.length > 0 && (
             <ul className="flex items-center gap-2 flex-wrap" aria-label="Genres">
-              {active.item.genres.slice(0, 3).map((g) => (
+              {active.genres.slice(0, 3).map((g) => (
                 <li
                   key={g}
                   className="text-xs font-medium text-white/90 capitalize bg-white/12 border border-white/10 rounded-full px-2.5 py-1"
@@ -263,17 +278,17 @@ export function HeroSlider() {
 
           {/* Synopsis */}
           <p className="text-body text-white/85 line-clamp-2 max-w-lg">
-            {active.item.synopsis}
+            {active.synopsis}
           </p>
 
           {/* Stats */}
           <div className="flex items-center gap-4 text-[13px] text-white/75">
             <span className="flex items-center gap-1.5 tnum" title="Views">
               <Eye size={13} aria-hidden="true" />
-              {formatCount(active.item.viewCount)} views
+              {formatCount(active.viewCount)} views
             </span>
             <span aria-hidden="true" className="w-px h-3 bg-white/25" />
-            <span className="capitalize" title="Publication status">{active.item.status}</span>
+            <span className="capitalize" title="Publication status">{active.status}</span>
           </div>
 
           {/* CTA — min 44px tall for touch (WCAG 2.5.8) */}
@@ -322,7 +337,7 @@ export function HeroSlider() {
               described a widget that didn't exist. */}
           <div className="absolute bottom-5 left-0 right-0 flex items-center justify-center gap-3 px-4">
             <div className="flex items-center gap-2" role="group" aria-label="Choose slide">
-              {slides.map(({ item }, i) => (
+              {slides.map((item, i) => (
                 <button
                   key={item.id}
                   type="button"

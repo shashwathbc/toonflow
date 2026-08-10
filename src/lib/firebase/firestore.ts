@@ -21,6 +21,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore'
 import { db } from './db'
+import { reconcileViewCount } from '@/lib/views/reconcileClient'
 import type { User as FirebaseUser } from 'firebase/auth'
 import type {
   UserProfile,
@@ -276,6 +277,7 @@ export async function deleteChapter(novelId: string, chapterId: string): Promise
     chapterCount: increment(-1),
     updatedAt: serverTimestamp(),
   })
+  await reconcileViewCount('novel', novelId)
 }
 
 // ── Webtoons ────────────────────────────────────────────────
@@ -922,6 +924,7 @@ export async function deleteEpisode(webtoonId: string, episodeId: string): Promi
     episodeCount: increment(-1),
     updatedAt: serverTimestamp(),
   })
+  await reconcileViewCount('webtoon', webtoonId)
 }
 
 export async function reorderEpisodes(

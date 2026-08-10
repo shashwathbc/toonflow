@@ -8,6 +8,7 @@ import { useNotifications } from '@/hooks/useNotifications'
 import { markNotificationRead, markAllNotificationsRead } from '@/lib/firebase/notifications'
 import { formatRelativeTimestamp } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
+import { safeInternalPath } from '@/lib/utils/url'
 import { Tooltip } from '@/components/ui/Tooltip'
 import Avatar from '@/components/ui/Avatar'
 import type { AppNotification } from '@/types'
@@ -76,7 +77,13 @@ export default function NotificationBell() {
 
   const handleOpen = (n: AppNotification) => {
     if (uid && !n.read) markNotificationRead(uid, n.id).catch(() => {})
-    router.push(n.link)
+    // `link` is attacker-reachable: any signed-in user may write a notification
+    // into any other user's feed, and the rules can only bound its length. An
+    // absolute URL here would make the bell a one-click redirect to a phishing
+    // clone (or, for a javascript: value, a script sink via router.push →
+    // window.location). Navigate only to a verified in-app path.
+    const target = safeInternalPath(n.link)
+    if (target) router.push(target)
   }
 
   const handleMarkAll = () => {

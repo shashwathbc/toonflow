@@ -16,6 +16,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
     }
 
+    // The super-admin identity taken from the VERIFIED auth token, not from any
+    // document a client can write. isAdmin() reads users/{uid}.role, so it can
+    // only ever be as trustworthy as every write path to that field — this helper
+    // is the one identity check with no such dependency, which is why the
+    // role-seeding carve-outs below are keyed to it rather than to isAdmin().
+    function isSuperAdminEmail() {
+      return isSignedIn() && request.auth.token.email == 'shashwathbc@gmail.com';
+    }
+
     // True when the update touches ONLY the given counter fields
     // (lets readers bump likeCount/viewCount without content write access)
     function onlyUpdates(keys) {
@@ -27,11 +36,41 @@ service cloud.firestore {
     // increment(±1) in toggleLike). Without the ±1 bound a client could write an
     // arbitrary count (e.g. 999999) straight to the doc. .get(key,0) tolerates
     // legacy docs created before the counter field existed.
-    function likeCountBumped() {
+    //
+    // The ±1 bound alone was NOT enough (audit F-16): nothing tied the counter to
+    // the caller's own like, so any signed-in user could simply REPLAY the +1
+    // update — a loop of single-field writes drove likeCount arbitrarily high on
+    // any story, and the mirror-image -1 loop drove a rival's to zero. Likes feed
+    // browse ranking and trending, so that is direct ranking manipulation.
+    //
+    // The bump is now bound to the caller's like EDGE: likes are stored at the
+    // deterministic id `{uid}_{contentType}_{contentId}` (engagement.ts
+    // likeDocId), so the rule can name the exact document this caller's like must
+    // live at and require that it actually appears (+1) or disappears (-1) in the
+    // SAME commit. exists()/existsAfter() compare the before and after state, so
+    // a replayed +1 fails: after the first like the edge already exists, and the
+    // "did not exist before" half of the test is false. toggleLike already writes
+    // both documents in one runTransaction, which is what makes the after-state
+    // visible to these rules.
+    function likeEdgeAdded(likeId) {
+      return !exists(/databases/$(database)/documents/likes/$(likeId))
+        && existsAfter(/databases/$(database)/documents/likes/$(likeId));
+    }
+    function likeEdgeRemoved(likeId) {
+      return exists(/databases/$(database)/documents/likes/$(likeId))
+        && !existsAfter(/databases/$(database)/documents/likes/$(likeId));
+    }
+    function likeCountBumped(likeId) {
       return onlyUpdates(['likeCount'])
         && request.resource.data.likeCount is int
-        && (request.resource.data.likeCount == resource.data.get('likeCount', 0) + 1
-            || request.resource.data.likeCount == resource.data.get('likeCount', 0) - 1);
+        && ((request.resource.data.likeCount == resource.data.get('likeCount', 0) + 1
+              && likeEdgeAdded(likeId))
+            || (request.resource.data.likeCount == resource.data.get('likeCount', 0) - 1
+              && likeEdgeRemoved(likeId)));
+    }
+    /** The one like-edge id this caller could legitimately be toggling. */
+    function myLikeId(contentType, contentId) {
+      return request.auth.uid + '_' + contentType + '_' + contentId;
     }
 
     // Rating aggregation moved SERVER-SIDE (Admin SDK via /api/ratings) — audit
@@ -39,6 +78,29 @@ service cloud.firestore {
     // (which bypasses these rules and is keyed to the verified session), so the
     // old shape-bounding client rule (ratingAdjusted) is retired: no client may
     // write the aggregate at all.
+
+    // Fields on a novel/webtoon that ONLY the server may write.
+    //
+    // These were documented as server-managed but never actually enforced on the
+    // UPDATE path: `isOwner(resource.data.authorId)` granted an unrestricted
+    // write, so the author of a story could set `viewCount` to any number they
+    // liked (audit F-15). That is not cosmetic — creator payouts and the
+    // /earnings page are computed straight off this field
+    // (viewsToCreatorInr(lifetimeViews) in /api/creator/analytics), and browse
+    // ranking, trending and the admin "top content" board all sort by it. The
+    // same clause let an author write their own `rating`/`ratingCount`, undoing
+    // the whole point of moving rating aggregation behind /api/ratings, and let
+    // them rewrite `authorId` — the anchor every ownership check in this file
+    // keys off, including the Storage path rules.
+    //
+    // viewCount ← /api/views · rating,ratingCount ← /api/ratings (both Admin SDK,
+    // which bypasses these rules entirely). likeCount moves only through the
+    // delta-bounded likeCountBumped() clause. Writing the SAME value is not a
+    // diff, so legitimate whole-object writes still pass.
+    function contentServerFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['viewCount', 'rating', 'ratingCount', 'authorId', 'likeCount']);
+    }
 
     // Public content — anyone can read published novels/webtoons
     match /novels/{novelId} {
@@ -50,17 +112,19 @@ service cloud.firestore {
         && request.resource.data.viewCount == 0
         && request.resource.data.likeCount == 0;
       // viewCount AND the rating aggregate are server-managed (Admin SDK via
-      // /api/views and /api/ratings) — clients may not touch them. Only the
-      // likeCount bump stays client-side and delta-bounded (see likeCountBumped).
-      allow update: if isOwner(resource.data.authorId) || isAdmin()
-        || likeCountBumped();
+      // /api/views and /api/ratings) — clients may not touch them, which
+      // contentServerFieldsUnchanged() now ENFORCES rather than merely asserting.
+      // Only the likeCount bump stays client-side and delta-bounded.
+      allow update: if ((isOwner(resource.data.authorId) || isAdmin()) && contentServerFieldsUnchanged())
+        || likeCountBumped(myLikeId('novel', novelId));
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /chapters/{chapterId} {
         allow read: if true;
         allow create, delete: if isOwner(get(/databases/$(database)/documents/novels/$(novelId)).data.authorId) || isAdmin();
-        allow update: if isOwner(get(/databases/$(database)/documents/novels/$(novelId)).data.authorId) || isAdmin()
-          || likeCountBumped();
+        allow update: if ((isOwner(get(/databases/$(database)/documents/novels/$(novelId)).data.authorId) || isAdmin())
+            && contentServerFieldsUnchanged())
+          || likeCountBumped(myLikeId('chapter', chapterId));
       }
     }
 
@@ -71,17 +135,19 @@ service cloud.firestore {
         && request.resource.data.viewCount == 0
         && request.resource.data.likeCount == 0;
       // viewCount AND the rating aggregate are server-managed (Admin SDK via
-      // /api/views and /api/ratings) — clients may not touch them. Only the
-      // likeCount bump stays client-side and delta-bounded (see likeCountBumped).
-      allow update: if isOwner(resource.data.authorId) || isAdmin()
-        || likeCountBumped();
+      // /api/views and /api/ratings) — clients may not touch them, which
+      // contentServerFieldsUnchanged() now ENFORCES rather than merely asserting.
+      // Only the likeCount bump stays client-side and delta-bounded.
+      allow update: if ((isOwner(resource.data.authorId) || isAdmin()) && contentServerFieldsUnchanged())
+        || likeCountBumped(myLikeId('webtoon', webtoonId));
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
 
       match /episodes/{episodeId} {
         allow read: if true;
         allow create, delete: if isOwner(get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId) || isAdmin();
-        allow update: if isOwner(get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId) || isAdmin()
-          || likeCountBumped();
+        allow update: if ((isOwner(get(/databases/$(database)/documents/webtoons/$(webtoonId)).data.authorId) || isAdmin())
+            && contentServerFieldsUnchanged())
+          || likeCountBumped(myLikeId('episode', episodeId));
       }
 
       // Character roster — owner-managed reference sheet for the series.
@@ -91,15 +157,63 @@ service cloud.firestore {
       }
     }
 
-    // User profiles — public read, owner write
+    // User profiles — public per-document GET, owner write.
+    //
+    // A user document is not purely public: alongside displayName/photoURL/bio it
+    // carries `email`, `balance` and `totalEarnings`. Firestore rules cannot
+    // filter FIELDS, so the read rule can only control the granularity of access
+    // — and `allow read: if true` covered LIST too, which made the entire
+    // collection dumpable by anyone, signed in or not (audit F-17). That is a
+    // one-request harvest of every registered email address: the raw material for
+    // credential stuffing and targeted phishing, plus every user's wallet balance.
+    //
+    // Splitting the verbs removes the bulk primitive while keeping every real
+    // feature working: profile pages and follower lists read ONE known uid at a
+    // time (`get` — see fetchProfiles in lib/firebase/social.ts, rewritten off its
+    // `in` query for exactly this reason), and only admins enumerate the
+    // collection (`list`). The remaining exposure — someone who already knows a
+    // uid can still read that one user's email — needs the fields moved off the
+    // document; see the staged `users/{uid}/private/account` migration in
+    // SECURITY.md §7.
     match /users/{userId} {
-      allow read: if true;
-      allow create: if isOwner(userId);
+      allow get: if true;
+      allow list: if isAdmin();
+      // CREATE is exactly as security-critical as UPDATE, and used to be wide
+      // open: the document doesn't exist yet, so `isOwner(userId)` on its own let
+      // the caller SEED any field on the very first write. The app's signup path
+      // writes sane values, but nothing forces a caller to use the app — the web
+      // API key is public by design, so an attacker calls the Auth REST signUp
+      // endpoint directly and writes their own users/{uid} with
+      // `role: 'superadmin'` (which isAdmin() then reads, granting write access
+      // across the whole database — including `allow update` on withdrawals, i.e.
+      // approving their own payout) and a five-figure `balance`. Every
+      // server-managed field is therefore pinned to its zero value here, exactly
+      // as the update rule pins them afterwards.
+      //
+      // The sole exception is the super-admin's own first sign-in, which
+      // legitimately seeds role/isCreator — keyed to the verified token email, a
+      // claim no client can forge.
+      allow create: if isOwner(userId)
+        && request.resource.data.balance == 0
+        && request.resource.data.totalEarnings == 0
+        && request.resource.data.totalViews == 0
+        && request.resource.data.followerCount == 0
+        && request.resource.data.followingCount == 0
+        && (request.resource.data.role == 'user' || isSuperAdminEmail())
+        && (request.resource.data.isCreator == false || isSuperAdminEmail());
       // Owner may edit ONLY profile fields. balance/role/isCreator/totalEarnings
       // are server-managed via the Admin SDK (which bypasses these rules) — a
       // client must never write them, or a user could self-grant tokens or
       // escalate to superadmin by writing to their own document.
-      allow update: if isAdmin()
+      //
+      // isAdmin() deliberately does NOT apply to an admin's own document: it
+      // grants unrestricted writes to any users/{id}, so an `admin` (a moderator,
+      // not an owner) could promote itself to `superadmin` or credit itself
+      // `balance` — turning a moderation account into a payout account. Admins
+      // manage OTHER users; on their own doc they fall through to the owner
+      // clause below and can edit profile fields only. The super-admin, whose
+      // identity comes from the token rather than the database, keeps full reach.
+      allow update: if (isAdmin() && (request.auth.uid != userId || isSuperAdminEmail()))
         || (isOwner(userId) && onlyUpdates(['displayName', 'bio', 'photoURL', 'bannerURL', 'socialLinks', 'hasOnboarded', 'referralSource', 'updatedAt']))
         // Following someone bumps THEIR followerCount by exactly ±1 (any signed-in
         // user). Bounding the delta stops arbitrary count injection / griefing.
@@ -156,6 +270,15 @@ service cloud.firestore {
             && request.resource.data.actorName.size() <= 120
             && request.resource.data.link is string
             && request.resource.data.link.size() <= 300
+            // The bell NAVIGATES to this value (router.push). Any signed-in user
+            // may write a notification into any other user's feed, so an
+            // unconstrained link turns the bell into a one-click redirect to a
+            // phishing clone of our own login page — or, for a `javascript:`
+            // value, a script sink. Every link the app writes is a rooted in-app
+            // path, so require exactly that: a single leading '/', and the next
+            // character may not be '/' or '\' (both parse as an authority, i.e.
+            // //evil.test). The client re-validates at the sink (safeInternalPath).
+            && request.resource.data.link.matches('/[^/\\\\].*')
             && request.resource.data.get('targetTitle', '') is string
             && request.resource.data.get('targetTitle', '').size() <= 140
             && request.resource.data.get('preview', '') is string
@@ -200,8 +323,11 @@ service cloud.firestore {
         && request.resource.data.likeCount == 0
         && request.resource.data.content is string
         && request.resource.data.content.size() <= 5000;
-      allow update: if isOwner(resource.data.authorId) || isAdmin()
-        || likeCountBumped();
+      // Editing your own comment must not rewrite its authorship or its like
+      // tally — same reasoning as contentServerFieldsUnchanged() above.
+      allow update: if ((isOwner(resource.data.authorId) || isAdmin())
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authorId', 'likeCount']))
+        || likeCountBumped(myLikeId('comment', commentId));
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
     }
 
@@ -210,7 +336,17 @@ service cloud.firestore {
     // flat edge fails the whole follow transaction.
     match /follows/{followId} {
       allow read: if isSignedIn();
+      // The doc ID must BE `{followerId}_{followingId}`. Without this the body was
+      // validated but the path was free, so a caller could write the edge
+      // `follows/{B}_{A}` while still setting `followerId: A` (their own uid, so
+      // the check below passed) — forging the half of the pair that only B can
+      // legitimately create. The messaging gate's mutualFollow() is nothing more
+      // than `exists(follows/a_b) && exists(follows/b_a)`, so that let anyone DM a
+      // stranger who had never followed them back. Binding the ID to the body
+      // makes the edge unforgeable, since only B's own uid can mint `{B}_*`.
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.followerId
+        && followId == request.resource.data.followerId + '_' + request.resource.data.followingId
+        && request.resource.data.followerId != request.resource.data.followingId
         && !exists(/databases/$(database)/documents/users/$(request.resource.data.followingId)/blocked/$(request.resource.data.followerId))
         && !exists(/databases/$(database)/documents/users/$(request.resource.data.followerId)/blocked/$(request.resource.data.followingId));
       allow delete: if isSignedIn() && request.auth.uid == resource.data.followerId;
@@ -226,10 +362,26 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Reports — auth create, admin manage
+    // Reports — auth create, admin manage. `isSignedIn()` alone accepted a
+    // document of any shape and any size, so the moderation queue doubled as
+    // free unbounded storage and a report could be filed under someone else's
+    // reporterId (getting an innocent user blamed for a bad-faith report, or
+    // hiding the actual reporter). Bind the reporter to the caller, pin the
+    // opening status, whitelist the target type and cap the free-text fields —
+    // the same shape createReport() already sends.
     match /reports/{reportId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.targetType in ['novel', 'webtoon', 'comment', 'user']
+        && request.resource.data.targetId is string
+        && request.resource.data.targetId.size() <= 200
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 500
+        && request.resource.data.get('details', '') is string
+        && request.resource.data.get('details', '').size() <= 5000;
       allow update, delete: if isAdmin();
     }
 
@@ -244,10 +396,15 @@ service cloud.firestore {
     // admin flips status via the Admin SDK). Balance sufficiency is verified admin-side.
     match /withdrawals/{wId} {
       allow read: if isOwner(resource.data.creatorId) || isAdmin();
+      // The upper bound is a sanity rail, not the authorisation: sufficiency
+      // against the creator's real balance is verified admin-side before payout.
+      // It exists so a client can't file a nonsense 10^12 request that has to be
+      // triaged by a human, and so `amount` can't be a non-finite number.
       allow create: if isSignedIn()
         && request.resource.data.creatorId == request.auth.uid
         && request.resource.data.amount is number
         && request.resource.data.amount > 0
+        && request.resource.data.amount <= 1000000
         && request.resource.data.status == 'pending';
       allow update: if isAdmin();
     }
@@ -298,10 +455,21 @@ service cloud.firestore {
     }
 
     // Likes — signed-in users manage their own likes (uid bound to caller so a
-    // like can't be attributed to another user)
+    // like can't be attributed to another user).
+    //
+    // The document ID is also bound to `{uid}_{contentType}_{contentId}`. Without
+    // it the body was checked but the PATH was free, so one user could mint
+    // unlimited like edges (likes/{random}) for the same target — and, because
+    // the counter rule keys off this exact id, an unbound path would also let the
+    // ±1 guard in likeCountBumped() be sidestepped by pointing each write at a
+    // fresh edge. Binding the id makes "one like per user per target" a structural
+    // property rather than a client-side convention.
     match /likes/{likeId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.contentType in ['novel', 'webtoon', 'chapter', 'episode', 'comment']
+        && likeId == request.auth.uid + '_' + request.resource.data.contentType + '_' + request.resource.data.contentId;
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
@@ -378,7 +546,13 @@ service cloud.firestore {
           && (
             (request.resource.data.get('type', 'text') == 'image'
               && request.resource.data.imageURL is string
-              && request.resource.data.imageURL.size() < 2000)
+              && request.resource.data.imageURL.size() < 2000
+              // The recipient's thread renders this in an <a href>, so an
+              // unconstrained scheme (`javascript:...`) is click-to-execute XSS
+              // against the counterparty. Legitimate uploads always come back as
+              // an https Storage download URL; require that scheme here and
+              // re-validate at the sink (safeHttpUrl in ThreadClient).
+              && request.resource.data.imageURL.matches('https://.*'))
             || (request.resource.data.text is string
               && request.resource.data.text.size() > 0
               && request.resource.data.text.size() <= 5000)

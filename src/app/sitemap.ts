@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { APP_URL } from '@/lib/utils/constants'
+import { PUBLIC_STATUSES, isIndexable } from '@/lib/seo/contentMeta'
 
 export const revalidate = 3600 // rebuild the sitemap at most hourly
 
@@ -44,17 +45,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const { adminDb } = await import('@/lib/firebase/serverApp')
     const db = adminDb()
-    const PUBLISHED = ['published', 'ongoing', 'completed']
     const [novelSnap, webtoonSnap] = await Promise.all([
-      db.collection('novels').where('status', 'in', PUBLISHED).select('updatedAt').limit(MAX_URLS_PER_COLLECTION).get(),
-      db.collection('webtoons').where('status', 'in', PUBLISHED).select('updatedAt').limit(MAX_URLS_PER_COLLECTION).get(),
+      db.collection('novels').where('status', 'in', [...PUBLIC_STATUSES]).select('updatedAt', 'status', 'visibility').limit(MAX_URLS_PER_COLLECTION).get(),
+      db.collection('webtoons').where('status', 'in', [...PUBLIC_STATUSES]).select('updatedAt', 'status', 'visibility').limit(MAX_URLS_PER_COLLECTION).get(),
     ])
     for (const [prefix, snap] of [['/novel', novelSnap], ['/webtoon', webtoonSnap]] as const) {
       for (const doc of snap.docs) {
-        const updated = doc.data().updatedAt
+        const data = doc.data()
+        // Status alone isn't enough: a `private` novel or an `unlisted` webtoon
+        // can still be `published`, and submitting those told Google to index
+        // content the creator deliberately kept out of search. isIndexable() is
+        // the same predicate the pages use for their robots meta, so the sitemap
+        // and the page can never disagree. Filtered here rather than in the
+        // query so this needs no new composite index.
+        if (!isIndexable(data.status, data.visibility)) continue
         routes.push({
           url: `${APP_URL}${prefix}/${doc.id}`,
-          lastModified: updated?.toDate?.() ?? now,
+          lastModified: data.updatedAt?.toDate?.() ?? now,
           changeFrequency: 'weekly',
           priority: 0.6,
         })

@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:rules": "firebase emulators:exec --only firestore --project toonflow-rules-test \"vitest run --config vitest.rules.config.ts\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
@@ -65,6 +66,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@playwright/test": "^1.62.0",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
@@ -83,11 +85,13 @@
     "typescript": "^5",
     "vitest": "^3.2.4"
   },
-  "//overrides": "sharp/postcss/js-yaml/fast-xml-parser forced to patched versions to clear high-severity transitive advisories (libvips RCE-class, postcss XSS, YAML/XML DoS) that upstream (next/firebase-admin/eslint) hadn't yet re-resolved. Same-major, non-breaking. Re-audit and drop entries as upstream catches up.",
+  "//overrides": "Transitive deps forced to patched versions to clear high-severity advisories (libvips RCE-class, postcss XSS, YAML/XML DoS, fast-uri host confusion, nanoid infinite loop) that upstream (next/firebase-admin/eslint/sentry) hadn't yet re-resolved. All same-major, non-breaking. Re-audit and drop entries as upstream catches up.",
   "overrides": {
     "sharp": "^0.35.3",
     "postcss": "^8.5.18",
-    "js-yaml": "^4.3.0",
-    "fast-xml-parser": "^5.10.1"
+    "js-yaml": "^4.3.1",
+    "fast-xml-parser": "^5.10.1",
+    "fast-uri": "^3.1.5",
+    "nanoid": "^3.3.17"
   }
 }

@@ -99,6 +99,83 @@ export function faqPageSchema(faqs: readonly FaqItem[]): Record<string, unknown>
   }
 }
 
+/** A catalog title (novel → Book, webtoon → ComicSeries).
+ *
+ *  Server-rendered from `generateMetadata`'s data so the entity is in the raw
+ *  HTML — the client pages used to emit this after hydration, which only works
+ *  for crawlers that execute JS. `aggregateRating` is included ONLY when real
+ *  ratings exist: emitting a zero/empty rating is a structured-data violation
+ *  that Google flags, and inventing one would be fabricating data. */
+export function catalogItemSchema(opts: {
+  type: 'Book' | 'ComicSeries'
+  name: string
+  path: string
+  description?: string
+  image?: string | null
+  authorName?: string
+  genres?: readonly string[]
+  rating?: number
+  ratingCount?: number
+  partCount?: number
+  datePublished?: Date | null
+  dateModified?: Date | null
+}): Record<string, unknown> {
+  const hasRating = (opts.rating ?? 0) > 0 && (opts.ratingCount ?? 0) > 0
+  return {
+    '@context': 'https://schema.org',
+    '@type': opts.type,
+    name: opts.name,
+    url: abs(opts.path),
+    ...(opts.type === 'Book' ? { bookFormat: 'https://schema.org/EBook' } : {}),
+    ...(opts.description ? { description: opts.description } : {}),
+    ...(opts.image ? { image: opts.image } : {}),
+    ...(opts.authorName ? { author: { '@type': 'Person', name: opts.authorName } } : {}),
+    ...(opts.genres?.length ? { genre: [...opts.genres] } : {}),
+    ...(opts.partCount && opts.partCount > 0 ? { numberOfPages: opts.partCount } : {}),
+    ...(opts.datePublished ? { datePublished: opts.datePublished.toISOString() } : {}),
+    ...(opts.dateModified ? { dateModified: opts.dateModified.toISOString() } : {}),
+    ...(hasRating
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: opts.rating,
+            ratingCount: opts.ratingCount,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
+    publisher: { '@type': 'Organization', name: APP_NAME, url: APP_URL },
+  }
+}
+
+/** A single chapter/episode as a Chapter node linked back to its series via
+ *  `isPartOf` — gives Google the parent/child relationship for the reader URLs
+ *  that make up the bulk of the crawlable surface. */
+export function chapterSchema(opts: {
+  name: string
+  path: string
+  position: number
+  seriesName: string
+  seriesPath: string
+  image?: string | null
+}): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Chapter',
+    name: opts.name,
+    url: abs(opts.path),
+    ...(opts.position > 0 ? { position: opts.position } : {}),
+    ...(opts.image ? { image: opts.image } : {}),
+    isPartOf: {
+      '@type': 'CreativeWorkSeries',
+      name: opts.seriesName,
+      url: abs(opts.seriesPath),
+    },
+    publisher: { '@type': 'Organization', name: APP_NAME, url: APP_URL },
+  }
+}
+
 /** BreadcrumbList — helps Google render the URL as a breadcrumb trail. */
 export function breadcrumbSchema(
   items: readonly { name: string; path: string }[]
