@@ -6,19 +6,33 @@ import Link from 'next/link'
 import CoverImage from '@/components/content/CoverImage'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
-  Search, SlidersHorizontal, BookOpen, Layers, Eye, Star, X,
+  Search, SlidersHorizontal, BookOpen, Clapperboard, Film, Layers, Eye, Star, X,
 } from 'lucide-react'
 import { browseContent, searchContent } from '@/lib/firebase/firestore'
+import { listPublishedAnime } from '@/lib/firebase/anime'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { Stat } from '@/components/ui/Stat'
 import { GENRES } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { Novel, Webtoon } from '@/types'
+import type { AnimeProject } from '@/types/anime'
 import toast from 'react-hot-toast'
 
 type SortBy = 'trending' | 'newest' | 'rating'
-type ContentType = 'all' | 'novel' | 'webtoon'
+type ContentType = 'all' | 'novel' | 'webtoon' | 'anime'
+
+/** A catalog row, whatever its underlying content type. */
+type CatalogEntry =
+  | { type: 'novel'; item: Novel }
+  | { type: 'webtoon'; item: Webtoon }
+  | { type: 'anime'; item: AnimeProject }
+
+const TYPE_LABEL: Record<CatalogEntry['type'], string> = {
+  novel: 'Novel',
+  webtoon: 'Webtoon',
+  anime: 'Anime',
+}
 
 const SORT_OPTIONS: { label: string; value: SortBy }[] = [
   { label: 'Popular', value: 'trending' },
@@ -33,17 +47,33 @@ const STATUS_OPTIONS = [
   { label: 'Hiatus', value: 'hiatus' },
 ]
 
-function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }) {
-  const chapterCount = 'chapterCount' in item ? item.chapterCount : (item as Webtoon).episodeCount
-  const href = `/${type}/${item.id}`
-  const unitLabel = type === 'novel' ? 'Chapters' : 'Episodes'
+function ContentCard({ entry }: { entry: CatalogEntry }) {
+  const { type } = entry
+
+  // Each content type counts its parts differently and lives at its own route.
+  // Normalising here keeps ONE card for the whole catalog rather than a
+  // near-duplicate per type.
+  const isAnime = type === 'anime'
+  const item = entry.item
+  const partCount = isAnime
+    ? (entry.item as AnimeProject).sceneCount
+    : 'chapterCount' in item
+      ? (item as Novel).chapterCount
+      : (item as Webtoon).episodeCount
+  const href = isAnime ? `/anime/${item.id}` : `/${type}/${item.id}`
+  const unitLabel = type === 'novel' ? 'Chapters' : type === 'webtoon' ? 'Episodes' : 'Scenes'
+  const coverURL = isAnime ? (entry.item as AnimeProject).thumbnailURL : (item as Novel).coverURL
+  const genres = item.genres ?? []
+  // Anime carries no star rating yet — showing 0.0 would read as "rated badly"
+  // rather than "not rated", so the stat is simply omitted.
+  const rating = isAnime ? 0 : (item as Novel).rating
 
   // Folded into the link label because aria-label overrides inner content.
   const cardLabel = [
-    `${item.title} — ${type}`,
-    `${chapterCount} ${unitLabel.toLowerCase()}`,
+    `${item.title} — ${TYPE_LABEL[type].toLowerCase()}`,
+    `${partCount} ${unitLabel.toLowerCase()}`,
     `${formatCount(item.viewCount)} views`,
-    item.rating > 0 ? `rated ${item.rating.toFixed(1)} out of 5` : null,
+    rating > 0 ? `rated ${rating.toFixed(1)} out of 5` : null,
   ]
     .filter(Boolean)
     .join(', ')
@@ -56,27 +86,28 @@ function ContentCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'w
     >
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
         <CoverImage
-          src={item.coverURL}
+          src={coverURL}
           alt={item.title}
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
         />
         <div className="absolute top-2 left-2 flex gap-1">
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/70 text-white capitalize border border-white/10">
-            {type === 'novel' ? 'Novel' : 'Webtoon'}
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/70 text-white capitalize border border-white/10 inline-flex items-center gap-1">
+            {isAnime && <Clapperboard size={9} aria-hidden="true" />}
+            {TYPE_LABEL[type]}
           </span>
         </div>
       </div>
       <div className="p-3">
         <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">{toTitleCase(item.title)}</h3>
-        {item.genres?.length > 0 && (
-          <p className="text-[11px] text-white/50 mb-1.5 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
+        {genres.length > 0 && (
+          <p className="text-[11px] text-white/50 mb-1.5 truncate">{genres.slice(0, 2).join(' · ')}</p>
         )}
         <div className="flex items-center gap-2.5 text-[11px] text-white/60">
-          <Stat icon={Layers} value={chapterCount} label={unitLabel} />
+          <Stat icon={isAnime ? Film : Layers} value={partCount} label={unitLabel} />
           <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
-          {item.rating > 0 && (
-            <Stat icon={Star} value={item.rating.toFixed(1)} label="Rating" />
+          {rating > 0 && (
+            <Stat icon={Star} value={rating.toFixed(1)} label="Rating" />
           )}
         </div>
       </div>
@@ -214,7 +245,7 @@ export function BrowseClient() {
   const [status, setStatus] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') ?? '')
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
-  const [items, setItems] = useState<Array<{ item: Novel | Webtoon; type: 'novel' | 'webtoon' }>>([])
+  const [items, setItems] = useState<CatalogEntry[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
@@ -239,24 +270,57 @@ export function BrowseClient() {
     const isCurrent = () => id === requestId.current
 
     const request = searchQuery.trim()
-      ? searchContent(searchQuery.trim(), 48).then(({ novels, webtoons }) => {
+      ? Promise.all([
+          searchContent(searchQuery.trim(), 48),
+          // Firestore has no substring search, so anime is filtered in memory
+          // the same way the novel/webtoon search already works.
+          contentType === 'novel' || contentType === 'webtoon'
+            ? Promise.resolve([] as AnimeProject[])
+            : listPublishedAnime({ sortBy, limitCount: 48 }),
+        ]).then(([{ novels, webtoons }, anime]) => {
           if (!isCurrent()) return
+          const needle = searchQuery.trim().toLowerCase()
           setItems([
-            ...(contentType !== 'webtoon' ? novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })) : []),
-            ...(contentType !== 'novel' ? webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })) : []),
+            ...(contentType === 'all' || contentType === 'novel'
+              ? novels.map((n): CatalogEntry => ({ type: 'novel', item: n }))
+              : []),
+            ...(contentType === 'all' || contentType === 'webtoon'
+              ? webtoons.map((w): CatalogEntry => ({ type: 'webtoon', item: w }))
+              : []),
+            ...anime
+              .filter(
+                (a) =>
+                  a.title.toLowerCase().includes(needle) ||
+                  a.description.toLowerCase().includes(needle),
+              )
+              .map((a): CatalogEntry => ({ type: 'anime', item: a })),
           ])
         })
-      : browseContent({
-          contentType,
-          genres: genres.length ? genres : undefined,
-          status: status || undefined,
-          sortBy,
-          limitCount: 48,
-        }).then(({ novels, webtoons }) => {
+      : Promise.all([
+          contentType === 'anime'
+            ? Promise.resolve({ novels: [] as Novel[], webtoons: [] as Webtoon[] })
+            : browseContent({
+                contentType: contentType === 'all' ? 'all' : contentType,
+                genres: genres.length ? genres : undefined,
+                status: status || undefined,
+                sortBy,
+                limitCount: 48,
+              }),
+          // Anime has no ongoing/completed lifecycle, so a status filter simply
+          // excludes it rather than returning titles that don't match.
+          (contentType === 'all' || contentType === 'anime') && !status
+            ? listPublishedAnime({
+                genres: genres.length ? genres : undefined,
+                sortBy,
+                limitCount: 48,
+              })
+            : Promise.resolve([] as AnimeProject[]),
+        ]).then(([{ novels, webtoons }, anime]) => {
           if (!isCurrent()) return
           setItems([
-            ...novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })),
-            ...webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })),
+            ...novels.map((n): CatalogEntry => ({ type: 'novel', item: n })),
+            ...webtoons.map((w): CatalogEntry => ({ type: 'webtoon', item: w })),
+            ...anime.map((a): CatalogEntry => ({ type: 'anime', item: a })),
           ])
         })
 
@@ -336,7 +400,7 @@ export function BrowseClient() {
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" aria-hidden="true" />
         <input
           type="search"
-          placeholder="Search novels and webtoons…"
+          placeholder="Search novels, webtoons and anime…"
           value={searchInput}
           onChange={(e) => handleSearchInput(e.target.value)}
           className="input-base pl-10 pr-10 w-full"
@@ -358,7 +422,7 @@ export function BrowseClient() {
 
       {/* Content type tabs */}
       <div role="tablist" aria-label="Content type" className="flex gap-1 mb-6 border-b border-bg-border">
-        {(['all', 'novel', 'webtoon'] as ContentType[]).map((t) => (
+        {(['all', 'novel', 'webtoon', 'anime'] as ContentType[]).map((t) => (
           <button
             key={t}
             type="button"
@@ -372,7 +436,7 @@ export function BrowseClient() {
                 : 'border-transparent text-white/50 hover:text-white'
             )}
           >
-            {t === 'all' ? 'All' : t === 'novel' ? 'Novels' : 'Webtoons'}
+            {t === 'all' ? 'All' : t === 'novel' ? 'Novels' : t === 'webtoon' ? 'Webtoons' : 'Anime'}
           </button>
         ))}
       </div>
@@ -470,8 +534,8 @@ export function BrowseClient() {
               aria-live="polite"
               aria-label="Content results"
             >
-              {items.map(({ item, type }) => (
-                <ContentCard key={`${type}-${item.id}`} item={item} type={type} />
+              {items.map((entry) => (
+                <ContentCard key={`${entry.type}-${entry.item.id}`} entry={entry} />
               ))}
             </div>
           )}

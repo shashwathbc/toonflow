@@ -89,6 +89,8 @@ function contentLink(
     case 'webtoon': return `/webtoon/${contentId}`
     case 'chapter': return `/novel/${parentId}/chapter/${contentId}`
     case 'episode': return `/webtoon/${parentId}/episode/${contentId}`
+    case 'artwork': return `/artwork/${contentId}`
+    case 'product': return `/product/${contentId}`
   }
 }
 

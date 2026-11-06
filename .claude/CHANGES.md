@@ -3017,3 +3017,384 @@ Deliberately *not* done: deleting the lock and regenerating from scratch. That r
 **Verification.** `npx npm@11.16.0 ci --dry-run` → "added 958 packages", no EUSAGE · `next build` succeeds locally.
 
 **Pre-existing, not fixed:** the builder warns `EBADENGINE` — `package.json` pins `engines.node: "22"` but App Hosting builds on Node v24.18.0. Warning only; it did not fail the build. Worth reconciling separately, since the pin is currently being ignored rather than honoured.
+
+---
+
+## 2026-08-11 — Full-stack audit (no code changes)
+
+Added `docs/AUDIT-2026-08-11-full-stack.md`. Read-only pass over the whole tree at
+`4fc0dc3`, deliberately **additive** to `SECURITY.md` (Audit 2 landed the same day):
+every finding below is either something neither security audit covers, or a
+non-security axis (correctness, cost, operations, quality).
+
+**Health verified, not assumed:** `tsc --noEmit` clean · `eslint` 0 errors / 1 warning
+(`getBubbleDef` unused in `bubbleLayout.ts`) · `vitest` 136/136 across 14 files.
+`test:rules` and `next build` not run here (emulator / CI job respectively).
+
+**Top findings**
+- **A1 (high)** — `allow read: if true` on novels/webtoons/chapters/episodes covers
+  `list` and never reads `status`/`visibility`, so every draft and private work,
+  including unpublished chapter bodies, is world-readable. The visibility filter is
+  client-side only (`firestore.ts:521-529`, `homeData.ts:107`). Also blocks the
+  premium-chapter paywall the schema already carries.
+- **A2** — `getClientIp` takes the leftmost `X-Forwarded-For` entry, which the caller
+  controls on Cloud Run → every per-IP limiter (views begin/complete, support) is
+  bypassable by rotating the header.
+- **A3** — `getCreatorWithdrawals` (live on `/wallet`) needs a `withdrawals`
+  composite index that `firestore.indexes.json` does not declare; 4 more undeclared
+  composites sit in dead code. The index-safe duplicate already exists in `wallet.ts`.
+- **A4** — home/browse/search `limit()` with no `orderBy` ranks the first N documents
+  in **ID order**, so "trending" silently becomes wrong once the catalog passes 60.
+- **A5–A10** — unbounded comment body on update; `/api/support` mails any address
+  unauthenticated; withdrawal bank details unvalidated/plaintext/admin-readable;
+  `/api/img` unmetered with `ACAO: *`; no TTL on `chapterViews`/`viewDedup`;
+  analytics routes unrate-limited with unbounded read cost.
+- **Config** — `apphosting.yaml` still ships `rzp_test_REPLACE_ME` (both Razorpay keys)
+  and the Sentry example DSN, so error reporting is dead in production. Mitigated
+  today only because `FEATURE_FLAGS.wallet`/`buyCoins` are `false`.
+- **Drift** — `CLAUDE.md`/`apphosting.yaml` say Next 15 (actual: 16.2.12); the
+  generate-image route comments describe Pollinations while production runs
+  `IMAGE_PROVIDER: cloudflare`.
+
+Report includes a field-by-field table of every Firestore collection (who can
+read/write each field, and whether the guarantee is enforced or conventional),
+an area-by-area scorecard (overall **7.4/10** — strong write-side authorization,
+weak read-side authorization and cost/scale controls), and a sequenced fix list.
+
+---
+
+## 2026-08-11 — Webtoon card: "Open Editor" button always visible
+
+**File:** `src/app/(novel)/create/webtoon/page.tsx` (`WebtoonCard`)
+
+The `Edit3` "Open Editor" button lived inside the `opacity-0 group-hover:opacity-100`
+overlay, so it was unreachable on touch devices (no hover state) and invisible until
+mouse-over on desktop.
+
+Split the single hover overlay into two layers:
+- **Dim layer** — `bg-black/60`, still hover-only, now also reveals on
+  `group-focus-within` for keyboard users; `pointer-events-none` so it never
+  swallows clicks.
+- **Button layer** — always `opacity-100`, centered, `pointer-events-none` wrapper
+  with `pointer-events-auto` on the button. Added `shadow-lg shadow-black/40` so the
+  accent button keeps contrast against light cover art when the dim layer is hidden,
+  plus `focus-visible:ring-2 focus-visible:ring-accent`.
+
+Also fixed the `aria-label` to fall back to `'Untitled Webtoon'` instead of rendering
+`Open  in editor` for untitled drafts.
+
+`npx tsc --noEmit` passes.
+
+---
+
+## 2026-08-12 — Create section redesign: Anime Studio + Art Studio
+
+Rebuilt the Create section around two creative studios and removed Wallet/Dashboard
+from Create navigation. New public marketplace surface for the resulting work.
+
+### Create hub — `src/app/(main)/create/page.tsx`
+Rewritten. Hero "Create Without Limits", two headline cards (Anime Studio, Art
+Studio) with a four-beat workflow strip each, then Story Studios (Novel/Webtoon)
+and links to the marketplace. **The Wallet and Dashboard quick-link cards are gone**
+— removed from the markup, not hidden.
+
+`StudioSidebar` deliberately KEEPS Dashboard/Wallet: it is the chrome for the
+`(studio)` group (`/dashboard`, `/wallet`, `/admin`) and renders *on* those pages,
+so removing them would strand users. It gains Anime/Art Studio entries. Tour steps
+`ai-tools`/`canvas` (anchored to the deleted `create-novel`/`create-webtoon`
+anchors) became `anime-studio`/`art-studio`.
+
+### Routing
+New `(create)` route group + `CreateStudioShell` — Create gets its own navigation
+instead of inheriting the studio sidebar. Editors render chrome-free.
+
+```
+/create/anime  ·  /create/anime/projects  ·  /create/anime/project/[projectId]
+/create/anime/editor/[projectId]
+/create/art  ·  /create/art/editor/[artworkId]  ·  /create/art/publish
+/marketplace  ·  /marketplace/art  ·  /marketplace/merch
+/product/[productId]  ·  /artwork/[artworkId]
+```
+
+### ═══ INTEGRATION BOUNDARIES (nothing is faked) ═══
+Three vendors are **not** connected, and each says so instead of pretending:
+
+1. **AI video provider** (`src/lib/anime/provider/`) — registry is empty by design.
+   `/api/anime/jobs` answers **503 `provider_not_configured`**; no job row is
+   written and no placeholder clip is ever produced. `GenerationNotice` states this
+   in the UI. Connect by implementing `VideoProvider`, registering it, and setting
+   `VIDEO_PROVIDER` + credentials (server-side env only).
+2. **Print-on-demand fulfilment** (`src/lib/art/fulfillment.ts`) — physical orders
+   are refused with `fulfillment_not_configured`; variants list
+   `availability: 'unknown'`, never "in stock", and product JSON-LD emits
+   `PreOrder` rather than `InStock`.
+3. **Timeline render/export** — the editor's Export explains that composing a
+   timeline needs the render service, and points at per-clip download (which
+   *does* work via signed URLs).
+
+AI Storyboard **is** fully live — it runs on Anthropic, which is already configured.
+
+### Async generation architecture
+`queued → processing → completed | failed | cancelled`. `POST /api/anime/jobs`
+returns a job id immediately (202); progress is pulled from
+`GET /api/anime/jobs/[jobId]`, which also *drives* the pipeline (submit-or-poll) so
+it works serverless without a queue worker. Handles retries, a 15-min timeout
+watchdog, provider failure, duplicate submission, cancellation, and refuses
+corrupted output (a non-`video/*` response from a vendor fails the job rather than
+being stored as a "clip").
+
+Gates on `/api/anime/jobs`, cheapest-first: session cookie → body size + zod →
+hourly rate bucket → **project *and* scene ownership** (IDOR; 404 not 403, so
+another user's ids can't be probed) → tier duration/resolution ceilings → rolling
+24h quota + concurrency cap → duplicate fingerprint → moderation → provider
+configured? → global kill switch/daily budget.
+
+### Storage & privacy
+Generated video lives under `private/{uid}/…`, which storage.rules denies to
+**every** client including the owner. Playback goes through `/api/anime/assets`:
+authenticated request → server-side ownership check → 10-minute signed URL. The key
+must start with `private/{uid}/` or signing is refused, so a bad write can't turn
+the endpoint into a signing oracle for arbitrary objects.
+
+### Money
+`/products` is **write-denied to clients**. Variants and prices are *derived*
+server-side from `src/lib/art/catalog.ts`; the creator's only pricing input is one
+bounded number that must clear the production-cost floor. `orderSchema` has no
+price field at all — checkout sends ids and quantities, and prices are re-read from
+the product document (test asserts a tampered `unitPriceMinor` is stripped).
+
+### Upload validation
+`src/lib/art/validation.ts` sniffs magic bytes rather than trusting `file.type`.
+`/api/art/publish` re-downloads the stored object's header with the Admin SDK and
+re-identifies it before anything goes public — Storage rules can only see the
+*declared* contentType, so an HTML file uploaded as `image/png` passes them. SVG is
+accepted only as a design source and is refused if it carries script, event
+handlers or remote references.
+
+### Files
+- Types: `src/types/anime.ts`, `src/types/art.ts`
+- Anime: `src/lib/anime/{presets,limits,schema,jobs,promptBuilder,client,templates}.ts`,
+  `provider/{index,types}.ts`
+- Art: `src/lib/art/{catalog,fulfillment,schema,validation,raster}.ts`
+- Data: `src/lib/firebase/{anime,art}.ts`, `adminBucket()` in `serverApp.ts`,
+  new upload helpers in `storage.ts`
+- API: `/api/anime/{jobs,jobs/[jobId],assets,storyboard}`,
+  `/api/art/{publish,products,orders,view}`
+- Stores: `src/store/{useVideoEditorStore,useArtEditorStore}.ts`
+- Components: `src/components/create/{anime,art}/**`, `src/components/marketplace/**`,
+  `src/components/social/CreatorShopPanel.tsx`
+- Rules/indexes: `firestore.rules`, `storage.rules`, `firestore.indexes.json` (+19)
+- Tokens: `studio.anime` #A78BFA / `studio.art` #FDBA74 (both clear WCAG AA on all
+  three surfaces — contrast ratios documented in `tailwind.config.ts`)
+
+### Performance
+Both editors are `dynamic(..., { ssr: false })` — the Create landing page never
+loads an editor bundle. One shared poll loop per project rather than one per scene
+card. Debounced autosave (2s). Playhead writes throttled to ~30/s so a 120Hz
+display doesn't re-render the editor per frame.
+
+### Verification
+`tsc --noEmit` clean · `eslint` 0 errors (1 pre-existing warning in
+`bubbleLayout.ts`) · `vitest` **204 passed** (68 new: byte-sniffing/disguised-file
+uploads, SVG script rejection, tier ceilings, schema bounds, job idempotency,
+character-consistency wording, price floors, order-tampering) · `next build`
+compiles · smoke-tested against `next start`: public marketplace 200, `/create/**`
+307 to login.
+
+**Known:** `notFound()` responds 200-with-404-body on this Next build (persists
+under `force-dynamic`; no pre-existing page used `notFound()`, so it was untested).
+Missing listings are protected by `robots: noindex, nofollow` in `generateMetadata`.
+
+**Deploy required:** `firebase deploy --only firestore:rules,firestore:indexes,storage`.
+The new collections are unreachable until the rules ship, and marketplace sorts will
+error until the indexes build. Optionally add a TTL policy on
+`artViewDedup.expiresAt`.
+
+---
+
+## 2026-08-12 (2) — Create UI rework, Anime in the catalog, Marketplace feed
+
+Three follow-ups on the Create redesign, from direct feedback.
+
+### 1. Create page — uniform grid, no purple
+
+**Problem:** Anime/Art got a large two-card treatment while Novel/Webtoon were
+demoted to list rows, so the four studios read as two tiers rather than a grid.
+The Anime accent was also purple.
+
+**Palette** (`tailwind.config.ts`) — swapped to Google's dark-theme accent set.
+Deliberately no purple. Contrast on bg/card/elevated is documented inline:
+
+| Studio | Token | Contrast (bg / card / elevated) |
+|---|---|---|
+| Anime | `#8AB4F8` Blue 300 | 9.10 / 8.26 / 7.64 |
+| Art | `#FDD663` Yellow 300 | 13.67 / 12.41 / 11.48 |
+| Novel | `#81C995` Green 300 | 9.88 / 8.97 / 8.30 |
+| Webtoon | `#F28B82` Red 300 | 8.05 / 7.31 / 6.76 |
+
+All clear AA, and as a button fill against `text-bg` the ratio is the same
+inverted, so filled buttons pass too.
+
+**Layout** — one `StudioCard` for all four (icon + badge, title, subtitle,
+description, four-beat workflow strip, pinned action). `mt-auto` aligns every
+CTA to a common baseline. `sm:grid-cols-2 xl:grid-cols-4`.
+
+**Material dark** — removed the blurred ambient glows from the hub and both
+studio landing heroes; flat tonal surfaces, hairline borders, `rounded-3xl`
+cards, pill buttons, and hover expressed as a surface step (`hover:bg-bg-elevated`)
+rather than a transform — cheaper, and nothing to suppress for reduced motion.
+
+Tour steps `ai-tools`/`canvas` → `anime-studio`/`art-studio` (they pointed at
+`data-tour` anchors the old layout no longer had).
+
+### 2. Anime is now catalog content
+
+Published anime appears in Browse, Home and Originals beside novels and webtoons.
+
+- `AnimeProject` gains `genres`, `viewCount`, `likeCount`, `ownerPhotoURL`.
+- **`/api/anime/publish`** owns the status flip. `status`/`visibility`/
+  `publishedAt` are refused from clients by rules, because publishing is also
+  what makes the clips world-playable. **The route refuses to publish a project
+  with no generated scene** (`no_playable_scene`) — a published title that plays
+  nothing is exactly the "looks finished, isn't" failure this build avoids.
+- **`/api/anime/watch`** — public playback. Where `/api/anime/assets` asks *"are
+  you the owner?"*, this asks *"is the project published?"*. Bytes stay under
+  `private/{uid}/` and each request mints a 15-min signed URL, so **unpublishing
+  revokes access on the very next request** rather than leaving a permanent
+  download token in the wild. Same-origin + per-IP limited (it's unauthenticated).
+- **`/anime/[projectId]`** — public watch page. No composed file exists (no render
+  service), so the player treats scenes as a **playlist**: auto-advance,
+  next-clip pre-resolution, scene navigation. `VideoObject` JSON-LD with the real
+  summed duration. AI disclosure on the page.
+- Browse gains an Anime tab; `ContentCard`/`OriginalCard` became one card over a
+  discriminated `CatalogEntry` union. Anime shows **no star rating** — it has none,
+  and `0.0` reads as "rated badly" rather than "not rated"; it ranks by likes
+  under "Highest rated" instead.
+- Home gains an Anime row (hidden when empty — never an empty shelf).
+- Scenes of a published project are publicly readable so the playlist can render.
+  `storageKey` is exposed there and is safe: it's a private path no client can
+  fetch, and turning it into a URL requires the watch route.
+- Sitemap includes published + public anime; `unlisted` stays link-only.
+
+### 3. Marketplace → scrolling feed
+
+`MarketplaceBrowser` → **`MarketplaceFeed`**: single-column, image-first posts
+(creator header → square media → stats → caption/tags), artwork and products
+**interleaved into one ranked stream** rather than two grids. Infinite scroll via
+`IntersectionObserver` with a 600px root margin, paging the *render* so a large
+feed never mounts hundreds of `<Image>` at once. A Feed/Grid density toggle keeps
+the scannable layout available.
+
+### Concurrent rework — adapted, not reverted
+A parallel change landed across the Art Studio mid-task (margin-based
+`lib/art/pricing`, `orderLifecycle`, creator-earnings ledger, gym product types,
+size tables, idempotent checkout). My consumers were adapted to it: gym types
+added to `ProductType`, order-state types single-sourced from `orderLifecycle`
+via a re-export so the two can't drift.
+
+### Verification
+`tsc` clean · `eslint` 0 errors (1 pre-existing warning) · `vitest` **252 passed
+(19 files)** · `next build` compiles · smoke-tested on `next start`: `/`,
+`/browse`, `/browse?type=anime`, `/originals`, all `/marketplace/*` → 200;
+`/create/**` → 307 to login; no server errors.
+
+**Deploy required:** `firebase deploy --only firestore:rules,firestore:indexes,storage`
+— the anime catalog read (`animeProjects` public list), the published-scene read
+and the publish route's scene query all depend on the new rules/indexes.
+
+---
+
+## Art Studio — marketplace economics, order lifecycle, fit & social (2026-08-12)
+
+### The bug this started from
+`/api/art/orders` paid creators `70%` of the sale price
+(`REVENUE_CONFIG.creatorSharePct`) with **production cost never subtracted**.
+That rate is coherent for the view-revenue pool, where the platform's only cost
+is infrastructure. Merchandise has a per-unit cost of goods: on a ₹799 tee whose
+catalogue `basePriceMinor` (₹799) was *itself* being treated as production cost,
+the creator was paid ₹559 and the platform kept ₹240 against a ₹799 print bill —
+a loss on every physical unit sold. Physical goods split the **margin**, not the
+gross.
+
+### Economics — `src/lib/art/pricing.ts` (new)
+One module, one formula: `retail − production − platformFee = creator`.
+- `priceBreakdown()` — the only place a rupee is split. Fee is **floored**, so
+  the rounding remainder lands on the creator's side, never the platform's.
+  Earnings clamp at zero: a below-cost listing can't mint a negative payout that
+  a later sum reads as a credit.
+- `minimumRetailMinor()` — the listing floor. The algebraic bound
+  `(production + margin) / (1 − fee)` is the *starting point*, not the answer;
+  because the fee is floored the true boundary sits either side of it, so the
+  function searches from the estimate (earnings are monotonic in retail, so it's
+  a single crossing).
+- `suggestPrice()` — a transparent heuristic, not a model call: pricing advice a
+  creator can't audit is advice they can't trust. Comparables are weighted 40%
+  so a thin sample can't drag a listing below viability.
+- Rates are admin-configurable (`settings/marketplace`, `economics.server.ts`,
+  60s cache). `normalizeEconomics()` **clamps** rather than applies — a 300%
+  platform fee is a typo, and applying it would zero every payout.
+
+Catalogue split into two distinct numbers: `productionCostMinor` (a cost) and
+`suggestedRetailMinor` (a recommendation). `basePriceMinor` — which was doing
+both jobs and caused the bug — is gone. Variants snapshot their production cost
+at listing time, so a catalogue change can't retroactively rewrite the economics
+of a live order.
+
+### Order lifecycle — `src/lib/art/orderLifecycle.ts` (new)
+Pure state machine; a payout rule that can't be tested is one nobody should
+trust. `design_verified` sits between payment and production deliberately — the
+last point a print file can be rejected for rights/resolution without a refund
+being the only remedy. Added `production_failed`, `shipping_failed`, `returned`,
+`partially_refunded`. `earningStatusFor()` releases money **only** after real
+delivery + the hold window; anything refunded/returned/cancelled/failed reverses
+and never becomes payable, *including after it had already gone available*.
+
+`POST /api/art/orders/transition` (admin-only today; a provider webhook becomes
+the caller later) validates every transition against the machine inside a
+transaction, then settles the `creatorEarnings` ledger. Lines already swept into
+a completed withdrawal are skipped — auto-reversing those would create a
+negative balance against money already paid out.
+
+### Fit & fabric
+- **Gym apparel** (`gym-tshirt`, `gym-tank`, `gym-shorts`) with performance
+  fabrics, athletic-cut print areas and new SVG mockup silhouettes. The tank
+  declares no sleeve placements; shorts print on the thigh panel.
+- **Materials** (6) priced by production-cost delta, per-product allowlists.
+- **Size guide** (`sizing.ts` + `SizeGuide.tsx`) — real garment measurements in
+  cm, converted to inches from one source so the columns can't drift. States
+  they're *garment* measurements taken flat, since a buyer comparing against
+  their body would size up wrongly. Posters carry `SheetSize` rather than being
+  forced through a body-measurement shape.
+- Size selection now sorts to **catalogue order**: the base price applies to
+  `sizes[0]`, so a creator tapping XXL before S was pricing the whole listing
+  off the largest size.
+
+### Social
+Likes, share and comments wired to `artwork` + `product`, reusing the existing
+components and the transactional like-edge system rather than a parallel one.
+`LikeableType` is now a named union — the string is baked into the like-edge doc
+id that firestore.rules keys its ±1 guard off, so it needed to be one thing.
+`contentLink()`'s exhaustive switch caught the missing routes at compile time.
+
+### Security
+- `creatorEarnings`: creator-scoped read, **write denied to everyone** including
+  that creator — `status` is what makes money withdrawable.
+- `/api/art/earnings` scopes to the verified session uid, never a query param.
+- Checkout idempotency key: a retried submit returns the original order.
+- Every transition writes an audit log.
+
+### Verification
+`tsc --noEmit` clean · `eslint src` 0 errors (1 pre-existing warning:
+`getBubbleDef`) · `vitest run` **252 passed / 19 files**, +40 new covering the
+split, the floor's tightness, rate clamping, every legal/illegal transition, and
+the release rule at the exact hold boundary.
+
+**Deploy required:** `firebase deploy --only firestore:rules,firestore:indexes`
+— the earnings ledger rules and the `creatorEarnings` + orders idempotency
+indexes.
+
+### Not built (explicitly out, not silently skipped)
+Templates, collections, token payments (modelled in types, not wired), the Art
+Earnings **dashboard UI** (API is done), 3D/holographic preview (mockups remain
+inline SVG), the full extended drawing toolset, moderation queue UI, Design
+Assistant, and prompt-to-product-config.

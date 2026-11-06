@@ -6,7 +6,14 @@ import type { FirestoreTimestamp } from './user'
 export type NotificationType = 'follow' | 'like' | 'comment' | 'message'
 
 /** Content a like/comment notification points at. */
-export type NotificationTargetType = 'novel' | 'webtoon' | 'chapter' | 'episode'
+export type NotificationTargetType =
+  | 'novel'
+  | 'webtoon'
+  | 'chapter'
+  | 'episode'
+  // Marketplace listings notify their creator on the same path as stories.
+  | 'artwork'
+  | 'product'
 
 /**
  * A live in-app notification, stored under `users/{recipientId}/notifications`.

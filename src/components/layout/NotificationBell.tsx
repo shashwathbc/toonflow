@@ -18,6 +18,8 @@ const TYPE_LABEL: Record<AppNotification['targetType'] & string, string> = {
   webtoon: 'webtoon',
   chapter: 'chapter',
   episode: 'episode',
+  artwork: 'artwork',
+  product: 'product',
 }
 
 /** Human sentence for a notification, rendered with the actor name in bold. */

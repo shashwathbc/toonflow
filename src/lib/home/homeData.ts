@@ -52,15 +52,20 @@ function toPlainTimestamp(value: unknown): FirestoreTimestamp | null {
 function toHomeItem(
   id: string,
   d: Record<string, unknown>,
-  type: 'novel' | 'webtoon'
+  type: 'novel' | 'webtoon' | 'anime'
 ): HomeItem {
-  const countKey = type === 'novel' ? 'chapterCount' : 'episodeCount'
+  const countKey = type === 'novel' ? 'chapterCount' : type === 'webtoon' ? 'episodeCount' : 'sceneCount'
+  // An anime project stores its blurb as `description` and its cover as
+  // `thumbnailURL`; everything downstream reads synopsis/coverURL, so the
+  // mapping happens once, here.
+  const synopsis = type === 'anime' ? d.description : d.synopsis
+  const cover = type === 'anime' ? d.thumbnailURL : d.coverURL
   return {
     id,
     type,
     title: typeof d.title === 'string' ? d.title : '',
-    synopsis: typeof d.synopsis === 'string' ? d.synopsis : '',
-    coverURL: typeof d.coverURL === 'string' ? d.coverURL : null,
+    synopsis: typeof synopsis === 'string' ? synopsis : '',
+    coverURL: typeof cover === 'string' ? cover : null,
     bannerURL: typeof d.bannerURL === 'string' ? d.bannerURL : null,
     status: (typeof d.status === 'string' ? d.status : 'published') as ContentStatus,
     genres: Array.isArray(d.genres) ? (d.genres as string[]) : [],
@@ -80,7 +85,7 @@ function recencyOf(item: HomeItem): number {
   return ts ? ts.seconds : 0
 }
 
-const EMPTY: HomeFeedData = { trending: [], newReleases: [], novels: [], webtoons: [] }
+const EMPTY: HomeFeedData = { trending: [], newReleases: [], novels: [], webtoons: [], anime: [] }
 
 /**
  * One pass over the public catalog that feeds all four home sections.
@@ -97,9 +102,10 @@ export const getHomeFeed = cache(async (): Promise<HomeFeedData> => {
 
     // `visibility == public` is a single-field filter, so this relies only on
     // the automatic index and can never fail with FAILED_PRECONDITION.
-    const [novelSnap, webtoonSnap] = await Promise.all([
+    const [novelSnap, webtoonSnap, animeSnap] = await Promise.all([
       db.collection('novels').where('visibility', '==', 'public').limit(SCAN_LIMIT).get(),
       db.collection('webtoons').where('visibility', '==', 'public').limit(SCAN_LIMIT).get(),
+      db.collection('animeProjects').where('visibility', '==', 'public').limit(SCAN_LIMIT).get(),
     ])
 
     const novels = novelSnap.docs
@@ -108,18 +114,26 @@ export const getHomeFeed = cache(async (): Promise<HomeFeedData> => {
     const webtoons = webtoonSnap.docs
       .map((doc) => toHomeItem(doc.id, doc.data() as Record<string, unknown>, 'webtoon'))
       .filter((w) => LIVE_STATUSES.includes(w.status))
+    // Anime has a single live status — there is no ongoing/hiatus lifecycle —
+    // and a title with no generated scene can never reach 'published' (the
+    // publish route refuses it), so `published` alone is the right filter.
+    const anime = animeSnap.docs
+      .map((doc) => toHomeItem(doc.id, doc.data() as Record<string, unknown>, 'anime'))
+      .filter((a) => a.status === 'published')
 
     const byViews = (a: HomeItem, b: HomeItem) => b.viewCount - a.viewCount
     const topNovels = [...novels].sort(byViews).slice(0, 12)
     const topWebtoons = [...webtoons].sort(byViews).slice(0, 12)
+    const topAnime = [...anime].sort(byViews).slice(0, 12)
 
     return {
-      trending: [...topNovels, ...topWebtoons].sort(byViews).slice(0, 12),
-      newReleases: [...novels, ...webtoons]
+      trending: [...topNovels, ...topWebtoons, ...topAnime].sort(byViews).slice(0, 12),
+      newReleases: [...novels, ...webtoons, ...anime]
         .sort((a, b) => recencyOf(b) - recencyOf(a))
         .slice(0, 6),
       novels: topNovels,
       webtoons: topWebtoons,
+      anime: topAnime,
     }
   } catch {
     // No credentials / Firestore unavailable — the client components still have

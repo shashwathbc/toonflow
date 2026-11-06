@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { onSnapshot } from 'firebase/firestore'
 import { Heart } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { toggleLike, isLiked, likeTargetRef } from '@/lib/firebase/engagement'
+import { toggleLike, isLiked, likeTargetRef, type LikeableType } from '@/lib/firebase/engagement'
 import { notifyLike } from '@/lib/firebase/notifications'
 import { formatCount } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
@@ -12,7 +12,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import toast from 'react-hot-toast'
 
 interface LikeButtonProps {
-  contentType: 'novel' | 'webtoon' | 'chapter' | 'episode' | 'comment'
+  contentType: LikeableType
   contentId: string
   parentId?: string
   initialCount: number

@@ -205,6 +205,83 @@ export async function uploadMessageImage(
   return promise
 }
 
+// ── Art Studio ──────────────────────────────────────────────
+// Two prefixes with deliberately different exposure:
+//
+//   artworks/{uid}/{artworkId}/…   PUBLIC read — only ever holds assets the
+//                                  creator has chosen to publish or preview.
+//   private/{uid}/…                NO client access at all (Storage rules deny
+//                                  it outright). Drafts and generated video
+//                                  live here and are served through a
+//                                  short-lived signed URL from the API.
+//
+// The split is what makes "don't expose permanent public URLs for private user
+// projects" structural rather than a naming convention: a draft physically
+// cannot be fetched with a plain download URL, because no client — not even its
+// owner — can read the private prefix.
+
+export async function uploadArtworkOriginal(
+  uid: string,
+  artworkId: string,
+  file: File,
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+  const { promise } = uploadFile(`artworks/${uid}/${artworkId}/original.${ext}`, file, onProgress)
+  return promise
+}
+
+/** Flattened export of the canvas — what the marketplace and mockups display. */
+export async function uploadArtworkRender(
+  uid: string,
+  artworkId: string,
+  blob: Blob,
+  variant: 'full' | 'thumb' = 'full',
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
+  const file = new File([blob], `${variant}.png`, { type: blob.type || 'image/png' })
+  const { promise } = uploadFile(`artworks/${uid}/${artworkId}/${variant}.png`, file, onProgress)
+  return promise
+}
+
+/** Composed product mockup used as the marketplace listing image. */
+export async function uploadProductPreview(
+  uid: string,
+  productId: string,
+  blob: Blob,
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
+  const file = new File([blob], 'preview.png', { type: blob.type || 'image/png' })
+  const { promise } = uploadFile(`products/${uid}/${productId}/preview.png`, file, onProgress)
+  return promise
+}
+
+/** Character reference sheet for the Anime Studio (owner-scoped, public read). */
+export async function uploadAnimeCharacterImage(
+  uid: string,
+  characterId: string,
+  file: File,
+  index: number,
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+  const { promise } = uploadFile(`animeCharacters/${uid}/${characterId}/ref_${index}.${ext}`, file, onProgress)
+  return promise
+}
+
+/** Creator-supplied audio for the video editor (music beds, voiceover takes). */
+export async function uploadEditorAudio(
+  uid: string,
+  projectId: string,
+  file: File,
+  assetId: string,
+  onProgress?: (p: UploadProgress) => void
+): Promise<string> {
+  const ext = (file.name.split('.').pop() || 'mp3').toLowerCase()
+  const { promise } = uploadFile(`animeProjects/${uid}/${projectId}/audio/${assetId}.${ext}`, file, onProgress)
+  return promise
+}
+
 export async function deleteStorageFile(url: string): Promise<void> {
   const fileRef = ref(storage, url)
   await deleteObject(fileRef)

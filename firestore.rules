@@ -468,7 +468,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn()
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.contentType in ['novel', 'webtoon', 'chapter', 'episode', 'comment']
+        && request.resource.data.contentType in ['novel', 'webtoon', 'chapter', 'episode', 'comment', 'artwork', 'product', 'anime']
         && likeId == request.auth.uid + '_' + request.resource.data.contentType + '_' + request.resource.data.contentId;
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
@@ -483,6 +483,245 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
+    }
+
+    // ── Anime Studio ───────────────────────────────────────────
+    // Projects are PRIVATE workspaces. Unlike novels/webtoons (public catalog,
+    // `allow read: if true`), an anime project is a draft workbench containing
+    // prompts and unreleased work, so read access is owner-only until the
+    // creator publishes it. `list` is bound to an ownerId == uid query, which is
+    // what stops the collection from being enumerable.
+    match /animeProjects/{projectId} {
+      // Fields the SERVER owns.
+      //
+      // status/visibility/publishedAt are the PUBLICATION state: flipping them
+      // is what puts a title into Browse/Home/Originals AND what makes its clips
+      // world-playable through /api/anime/watch. That decision runs through
+      // /api/anime/publish, which refuses to publish a project with no generated
+      // scene — a client-writable status would walk straight past that check and
+      // list a title that plays nothing.
+      //
+      // viewCount/likeCount are engagement counters that feed catalog ranking,
+      // exactly like the novel/webtoon ones (see contentServerFieldsUnchanged).
+      // ownerId is the anchor every check below keys off.
+      //
+      // sceneCount/durationSec stay client-writable: they're cosmetic totals the
+      // owner's own session maintains alongside its scene writes, and inflating
+      // your own scene count buys nothing.
+      function projectServerFieldsUnchanged() {
+        return !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['ownerId', 'status', 'visibility', 'publishedAt', 'viewCount', 'likeCount']);
+      }
+      function isProjectOwner() {
+        return isOwner(resource.data.ownerId);
+      }
+      function isPubliclyListed() {
+        return resource.data.status == 'published' && resource.data.visibility == 'public';
+      }
+
+      // Public read for a published title — this is what lets Browse, Home and
+      // Originals show anime alongside novels and webtoons. `unlisted` stays
+      // link-only: readable by id, never returned by a listing query.
+      allow get: if isProjectOwner() || isAdmin()
+        || (resource.data.status == 'published' && resource.data.visibility != 'private');
+      // Rules can't inspect a query, but they CAN require every returned
+      // document to satisfy the condition — so an unfiltered listing simply
+      // fails, while the catalog query (published + public) and the owner's own
+      // dashboard query both pass.
+      allow list: if isPubliclyListed()
+        || (isSignedIn() && resource.data.ownerId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.sceneCount == 0
+        && request.resource.data.durationSec == 0
+        && request.resource.data.viewCount == 0
+        && request.resource.data.likeCount == 0
+        && request.resource.data.status == 'draft'
+        && request.resource.data.visibility == 'private'
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.description.size() <= 2000;
+      allow update: if (isProjectOwner() && projectServerFieldsUnchanged()
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.description.size() <= 2000
+          && request.resource.data.genres.size() <= 5)
+        || likeCountBumped(myLikeId('anime', projectId))
+        || isAdmin();
+      allow delete: if isProjectOwner() || isAdmin();
+
+      // Scenes. The GENERATION-MANAGED fields are the security boundary here:
+      // status/storageKey/posterKey/generationJobId/durationSec are written ONLY
+      // by the Admin SDK (lib/anime/jobs) after a provider actually returned
+      // bytes. If a client could write them it could mark its own scene 'ready'
+      // and point storageKey anywhere in the bucket — fabricating a clip and
+      // turning /api/anime/assets into a signing oracle for arbitrary objects.
+      match /scenes/{sceneId} {
+        function generationFieldsUnchanged() {
+          return !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['status', 'storageKey', 'posterKey', 'generationJobId', 'durationSec', 'metadata', 'ownerId']);
+        }
+        // Public read once the parent project is published — the watch page
+        // needs the scene list (titles, order, durations) to build a playlist.
+        // Exposing `storageKey` here is safe: it is a PRIVATE object path that
+        // no client can fetch, and turning it into a playable URL requires
+        // /api/anime/watch, which re-checks publication on every request.
+        function parentPublished() {
+          return get(/databases/$(database)/documents/animeProjects/$(projectId)).data.status == 'published';
+        }
+        allow read: if isOwner(resource.data.ownerId) || isAdmin() || parentPublished();
+        allow list: if parentPublished()
+          || (isSignedIn() && resource.data.ownerId == request.auth.uid);
+        allow create: if isSignedIn()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.projectId == projectId
+          && request.resource.data.status == 'idle'
+          && request.resource.data.storageKey == null
+          && request.resource.data.generationJobId == null
+          && request.resource.data.durationSec == 0
+          && request.resource.data.prompt is string
+          && request.resource.data.prompt.size() <= 2000;
+        allow update: if isOwner(resource.data.ownerId)
+          && generationFieldsUnchanged()
+          && request.resource.data.prompt.size() <= 2000;
+        allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+      }
+
+      // Editor timeline + saved revisions — owner only, both directions.
+      // Ownership is read from the PARENT project (these docs carry no ownerId
+      // of their own), which is also what stops a stray doc id from creating an
+      // ownerless, permanently-writable document.
+      match /editor/{docId} {
+        allow read, write: if isOwner(get(/databases/$(database)/documents/animeProjects/$(projectId)).data.ownerId);
+      }
+      match /revisions/{revisionId} {
+        allow read, write: if isOwner(get(/databases/$(database)/documents/animeProjects/$(projectId)).data.ownerId);
+      }
+    }
+
+    // Reusable characters — strictly private to their creator. They are prompt
+    // INPUT, so read access to someone else's character is read access to their
+    // unreleased designs.
+    match /animeCharacters/{characterId} {
+      allow get: if isOwner(resource.data.ownerId) || isAdmin();
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.appearance.size() <= 1000
+        && request.resource.data.referenceImages.size() <= 8;
+      allow update: if isOwner(resource.data.ownerId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.referenceImages.size() <= 8;
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+
+    // Generation jobs — READ-ONLY for the owner, written exclusively by the
+    // Admin SDK. This is the single most important write denial in the Anime
+    // Studio: a client that could create a job would bypass the entitlement
+    // ceilings, the daily quota and the concurrency cap (all enforced in
+    // /api/anime/jobs), and one that could UPDATE a job could flip it to
+    // 'completed' with a storageKey of its choosing.
+    match /generationJobs/{jobId} {
+      allow get: if isOwner(resource.data.ownerId) || isAdmin();
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // ── Art Studio & marketplace ───────────────────────────────
+    // Artwork is the mirror image of an anime project: private while a draft,
+    // world-readable once published. The status flip itself is server-only
+    // (/api/art/publish), which is what lets that route re-verify the stored
+    // bytes before anything becomes public — a client-settable `status` would
+    // route straight around that check.
+    match /artworks/{artworkId} {
+      function artServerFieldsUnchanged() {
+        return !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['ownerId', 'status', 'visibility', 'publishedAt', 'viewCount', 'likeCount', 'rightsConfirmed']);
+      }
+      allow get: if resource.data.status == 'published'
+        || isOwner(resource.data.ownerId) || isAdmin();
+      allow list: if resource.data.status == 'published'
+        || (isSignedIn() && resource.data.ownerId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == 'draft'
+        && request.resource.data.visibility == 'private'
+        && request.resource.data.rightsConfirmed == false
+        && request.resource.data.viewCount == 0
+        && request.resource.data.likeCount == 0
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.description.size() <= 2000
+        && request.resource.data.tags.size() <= 12;
+      allow update: if (isOwner(resource.data.ownerId)
+          && artServerFieldsUnchanged()
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.description.size() <= 2000
+          && request.resource.data.tags.size() <= 12)
+        || likeCountBumped(myLikeId('artwork', artworkId))
+        || isAdmin();
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+
+      match /editor/{docId} {
+        allow read, write: if isOwner(get(/databases/$(database)/documents/artworks/$(artworkId)).data.ownerId);
+      }
+    }
+
+    // Products — public read when published, NO client writes at all. Every
+    // field that determines what a buyer pays (variants, prices) is derived
+    // server-side in /api/art/products from the catalogue; a client-writable
+    // price document is a client-writable invoice.
+    match /products/{productId} {
+      allow get: if resource.data.status == 'published'
+        || isOwner(resource.data.ownerId) || isAdmin();
+      allow list: if resource.data.status == 'published'
+        || (isSignedIn() && resource.data.ownerId == request.auth.uid);
+      allow create, update: if false;
+      // Deleting a draft listing is safe (it removes only the creator's own
+      // document and moves no money); published listings come down via the API
+      // so dependent orders stay resolvable.
+      allow delete: if (isOwner(resource.data.ownerId) && resource.data.status != 'published') || isAdmin();
+    }
+
+    // Marketplace view dedup — SERVER ONLY (Admin SDK), same posture as
+    // /viewDedup. It holds hashed visitor identifiers, and any client access
+    // would let someone probe whether a given visitor saw a listing.
+    match /artViewDedup/{dedupId} {
+      allow read, write: if false;
+    }
+
+    // Orders — buyer/seller read, SERVER-ONLY write. Same posture as
+    // /transactions: an order carries payment and fulfilment state, so a client
+    // create would be a forged receipt and a client update would be
+    // self-marking an order paid or shipped.
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && (resource.data.buyerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && resource.data.buyerId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Creator earnings ledger — the document a withdrawal is paid against.
+    //
+    // READ is scoped to the creator the row belongs to. WRITE is denied to
+    // everyone, including that creator: `status` is what makes money
+    // withdrawable, so a client-writable row would let a creator flip their own
+    // pending earnings to `available` (or raise `netMinor`) and withdraw against
+    // an order that has not been delivered — or has already been refunded.
+    // Every mutation goes through /api/art/orders/transition under the Admin
+    // SDK, which re-derives the status from the order itself.
+    //
+    // `list` is bound to a creatorId == uid query, which is what stops the
+    // collection from being enumerable across creators.
+    match /creatorEarnings/{earningId} {
+      allow get: if isSignedIn()
+        && (resource.data.creatorId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+      allow write: if false;
     }
 
     // ── Messaging ──────────────────────────────────────────────

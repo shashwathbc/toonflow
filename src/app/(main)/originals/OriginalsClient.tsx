@@ -3,14 +3,28 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import CoverImage from '@/components/content/CoverImage'
-import { BookOpen, Eye, Heart, Layers, Star, Tv2, TrendingUp, Clock, StarIcon } from 'lucide-react'
+import { BookOpen, Clapperboard, Eye, Film, Heart, Layers, Star, Tv2, TrendingUp, Clock, StarIcon } from 'lucide-react'
 import { browseContent } from '@/lib/firebase/firestore'
+import { listPublishedAnime } from '@/lib/firebase/anime'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { Stat } from '@/components/ui/Stat'
 import { cn } from '@/lib/utils/cn'
 import type { Novel, Webtoon } from '@/types'
+import type { AnimeProject } from '@/types/anime'
 
 type SortBy = 'trending' | 'newest' | 'rating'
+
+/** A catalog row, whatever its underlying content type. */
+type OriginalEntry =
+  | { type: 'novel'; item: Novel }
+  | { type: 'webtoon'; item: Webtoon }
+  | { type: 'anime'; item: AnimeProject }
+
+const TYPE_LABEL: Record<OriginalEntry['type'], string> = {
+  novel: 'novel',
+  webtoon: 'webtoon',
+  anime: 'anime',
+}
 
 const SORT_OPTIONS: { label: string; value: SortBy; icon: React.ReactNode }[] = [
   { label: 'Trending', value: 'trending', icon: <TrendingUp size={13} aria-hidden="true" /> },
@@ -30,30 +44,43 @@ function SkeletonCard() {
   )
 }
 
-function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | 'webtoon' }) {
-  const chapterCount = 'chapterCount' in item ? item.chapterCount : (item as Webtoon).episodeCount
-  const unitLabel = type === 'novel' ? 'Chapters' : 'Episodes'
+function OriginalCard({ entry }: { entry: OriginalEntry }) {
+  const { type, item } = entry
+  const isAnime = type === 'anime'
+  const chapterCount = isAnime
+    ? (entry.item as AnimeProject).sceneCount
+    : 'chapterCount' in item
+      ? (item as Novel).chapterCount
+      : (item as Webtoon).episodeCount
+  const unitLabel = type === 'novel' ? 'Chapters' : type === 'webtoon' ? 'Episodes' : 'Scenes'
+  const coverURL = isAnime ? (entry.item as AnimeProject).thumbnailURL : (item as Novel).coverURL
+  // Anime carries no star rating yet; 0.0 would read as "rated badly" rather
+  // than "not rated", so the stat is omitted for it.
+  const rating = isAnime ? 0 : (item as Novel).rating
+  // Anime stores its creator as `ownerName`; novels and webtoons as
+  // `authorName`. Normalised once so the card body stays type-agnostic.
+  const creatorName = isAnime ? (entry.item as AnimeProject).ownerName : (item as Novel).authorName
 
   // Folded into the link label because aria-label overrides inner content.
   const cardLabel = [
-    `${item.title} — Toonflow Original ${type}`,
+    `${item.title} — Toonflow Original ${TYPE_LABEL[type]}`,
     `${chapterCount} ${unitLabel.toLowerCase()}`,
     `${formatCount(item.viewCount)} views`,
     `${formatCount(item.likeCount)} likes`,
-    item.rating > 0 ? `rated ${item.rating.toFixed(1)} out of 5` : null,
+    rating > 0 ? `rated ${rating.toFixed(1)} out of 5` : null,
   ]
     .filter(Boolean)
     .join(', ')
 
   return (
     <Link
-      href={`/${type}/${item.id}`}
+      href={isAnime ? `/anime/${item.id}` : `/${type}/${item.id}`}
       className="group block rounded-xl overflow-hidden bg-bg-card border border-bg-border hover:border-accent/30 transition-all duration-200"
       aria-label={cardLabel}
     >
       <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
         <CoverImage
-          src={item.coverURL}
+          src={coverURL}
           alt={item.title}
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
           className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -68,21 +95,22 @@ function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | '
             {type === 'novel'
               ? <BookOpen size={9} aria-hidden="true" />
               : <Tv2 size={9} aria-hidden="true" />}
-            {type === 'novel' ? 'Novel' : 'Webtoon'}
+            {isAnime && <Clapperboard size={9} aria-hidden="true" />}
+            {type === 'novel' ? 'Novel' : type === 'webtoon' ? 'Webtoon' : 'Anime'}
           </span>
         </div>
       </div>
       <div className="p-3">
         <h3 className="text-sm font-semibold text-white line-clamp-2 leading-tight mb-1">{toTitleCase(item.title)}</h3>
-        <p className="text-xs text-white/50 mb-2">{item.authorName}</p>
+        <p className="text-xs text-white/50 mb-2">{creatorName}</p>
         {item.genres?.length > 0 && (
           <p className="text-[11px] text-white/40 mb-2 truncate">{item.genres.slice(0, 2).join(' · ')}</p>
         )}
         <div className="flex items-center gap-2.5 text-[11px] text-white/60">
-          <Stat icon={Layers} value={chapterCount} label={unitLabel} />
+          <Stat icon={isAnime ? Film : Layers} value={chapterCount} label={unitLabel} />
           <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
           <Stat icon={Heart} value={formatCount(item.likeCount)} label="Likes" />
-          {item.rating > 0 && <Stat icon={Star} value={item.rating.toFixed(1)} label="Rating" />}
+          {rating > 0 && <Stat icon={Star} value={rating.toFixed(1)} label="Rating" />}
         </div>
       </div>
     </Link>
@@ -90,7 +118,7 @@ function OriginalCard({ item, type }: { item: Novel | Webtoon; type: 'novel' | '
 }
 
 export function OriginalsClient() {
-  const [items, setItems] = useState<{ item: Novel | Webtoon; type: 'novel' | 'webtoon' }[]>([])
+  const [items, setItems] = useState<OriginalEntry[]>([])
   const [sortBy, setSortBy] = useState<SortBy>('trending')
   // loading derives from "has the current sort been loaded" so the effect
   // never calls setState synchronously (react-hooks/set-state-in-effect)
@@ -98,16 +126,24 @@ export function OriginalsClient() {
   const loading = loadedSort !== sortBy
 
   useEffect(() => {
-    browseContent({ sortBy, limitCount: 48 })
-      .then(({ novels, webtoons }) => {
-        const combined = [
-          ...novels.map((n) => ({ item: n as Novel | Webtoon, type: 'novel' as const })),
-          ...webtoons.map((w) => ({ item: w as Novel | Webtoon, type: 'webtoon' as const })),
+    Promise.all([
+      browseContent({ sortBy, limitCount: 48 }),
+      listPublishedAnime({ sortBy, limitCount: 48 }),
+    ])
+      .then(([{ novels, webtoons }, anime]) => {
+        const combined: OriginalEntry[] = [
+          ...novels.map((n): OriginalEntry => ({ type: 'novel', item: n })),
+          ...webtoons.map((w): OriginalEntry => ({ type: 'webtoon', item: w })),
+          ...anime.map((a): OriginalEntry => ({ type: 'anime', item: a })),
         ]
         if (sortBy === 'trending') {
           combined.sort((a, b) => b.item.viewCount - a.item.viewCount)
         } else if (sortBy === 'rating') {
-          combined.sort((a, b) => b.item.rating - a.item.rating)
+          // Anime has no star rating, so it ranks by likes within the same
+          // ordering rather than sinking to the bottom on a permanent 0.
+          const score = (entry: OriginalEntry) =>
+            entry.type === 'anime' ? entry.item.likeCount : entry.item.rating
+          combined.sort((a, b) => score(b) - score(a))
         }
         setItems(combined)
       })
@@ -159,8 +195,8 @@ export function OriginalsClient() {
         <section aria-labelledby="originals-grid-heading">
           <h2 id="originals-grid-heading" className="sr-only">Originals content grid</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {items.map(({ item, type }) => (
-              <OriginalCard key={`${type}-${item.id}`} item={item} type={type} />
+            {items.map((entry) => (
+              <OriginalCard key={`${entry.type}-${entry.item.id}`} entry={entry} />
             ))}
           </div>
         </section>

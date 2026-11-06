@@ -35,6 +35,35 @@ const config: Config = {
         danger: '#FF4444',
         warning: '#FFB800',
         success: '#2DCA72',
+        // The four Create studios. The brand accent is white, so each studio
+        // carries one identity tint — enough to tell them apart in a grid
+        // without inventing a second brand.
+        //
+        // Values are Google's dark-theme accent set (Blue/Yellow/Green/Red 300),
+        // the same family Google uses for its own dark surfaces. Deliberately NO
+        // purple. Used for icons, hairlines, small labels and filled buttons.
+        //
+        // All four clear WCAG AA as text on every surface we paint them on
+        // (bg #0F0F0F / card #1A1A1A / elevated #212121):
+        //   anime   #8AB4F8 → 9.10:1 / 8.26:1 / 7.64:1
+        //   art     #FDD663 → 13.67:1 / 12.41:1 / 11.48:1
+        //   novel   #81C995 → 9.88:1 / 8.97:1 / 8.30:1
+        //   webtoon #F28B82 → 8.05:1 / 7.31:1 / 6.76:1
+        // As a BUTTON FILL each pairs with `text-bg` (#0F0F0F), which is the same
+        // ratio inverted — so filled buttons pass too.
+        //
+        // The `-deep` variants (Google 500s) are DECORATIVE ONLY and must never
+        // carry text.
+        studio: {
+          anime: '#8AB4F8',
+          'anime-deep': '#4285F4',
+          art: '#FDD663',
+          'art-deep': '#F9AB00',
+          novel: '#81C995',
+          'novel-deep': '#34A853',
+          webtoon: '#F28B82',
+          'webtoon-deep': '#EA4335',
+        },
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
@@ -52,6 +81,7 @@ const config: Config = {
         'slide-in-left': 'slide-in-left 0.25s ease-out',
         shimmer: 'shimmer 2s infinite linear',
         'scale-in': 'scale-in 0.15s ease-out',
+        shake: 'shake 0.25s ease-in-out infinite',
       },
       keyframes: {
         'fade-in': {
@@ -73,6 +103,14 @@ const config: Config = {
         'scale-in': {
           from: { opacity: '0', transform: 'scale(0.96)' },
           to: { opacity: '1', transform: 'scale(1)' },
+        },
+        // Camera-impact tremor for the video editor's "shake" effect preset.
+        shake: {
+          '0%, 100%': { transform: 'translate(0, 0)' },
+          '20%': { transform: 'translate(-1.5%, 1%)' },
+          '40%': { transform: 'translate(1.5%, -1%)' },
+          '60%': { transform: 'translate(-1%, -1.5%)' },
+          '80%': { transform: 'translate(1%, 1.5%)' },
         },
       },
       maxWidth: {

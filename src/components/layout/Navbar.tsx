@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/originals', label: 'Originals' },
   { href: '/browse', label: 'Browse' },
+  { href: '/marketplace', label: 'Marketplace' },
 ]
 
 function Navbar() {

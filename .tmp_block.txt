@@ -1,0 +1,84 @@
+          {layers.map((layer) => {
+            if (!layer.visible) return null
+            const isSelected = layer.id === selectedLayerId
+            return (
+              <div
+                key={layer.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${layer.name} layer${isSelected ? ', selected' : ''}`}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    select(layer.id)
+                  }
+                }}
+                onPointerDown={(event) => {
+                  event.stopPropagation()
+                  select(layer.id)
+                  if (layer.locked) return
+                  pushHistory()
+                  drag.current = {
+                    id: layer.id,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    originX: layer.x,
+                    originY: layer.y,
+                  }
+                }}
+                className={cn(
+                  'absolute',
+                  isSelected && 'outline outline-2 outline-offset-2 outline-studio-art',
+                  layer.locked ? 'cursor-not-allowed' : 'cursor-move',
+                )}
+                style={{
+                  left: layer.x,
+                  top: layer.y,
+                  width: layer.width,
+                  height: layer.height,
+                  opacity: layer.opacity,
+                  transform: `rotate(${layer.rotation}deg)`,
+                  filter: filterCss(layer.filter),
+                }}
+              >
+                {layer.kind === 'image' && layer.src && (
+                  // Deliberately a plain <img>: the source is often an
+                  // in-memory data URL, and next/image can't optimise those.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={layer.src}
+                    alt=""
+                    draggable={false}
+                    className="h-full w-full select-none object-contain"
+                  />
+                )}
+                {layer.kind === 'text' && (
+                  <span
+                    className="block h-full w-full break-words"
+                    style={{
+                      fontFamily: layer.fontFamily,
+                      fontSize: layer.fontSize,
+                      color: layer.fill,
+                      textAlign: layer.align,
+                      fontWeight: 800,
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    {layer.text}
+                  </span>
+                )}
+                {layer.kind === 'shape' && (
+                  <span
+                    className="block h-full w-full"
+                    style={{
+                      backgroundColor: layer.shape === 'triangle' ? undefined : layer.fill,
+                      borderRadius: layer.shape === 'ellipse' ? '50%' : 0,
+                      clipPath: layer.shape === 'triangle' ? 'polygon(50% 0, 100% 100%, 0 100%)' : undefined,
+                      background: layer.shape === 'triangle' ? layer.fill : undefined,
+                      border: layer.strokeWidth ? `${layer.strokeWidth}px solid ${layer.stroke}` : undefined,
+                    }}
+                  />
+                )}
+              </div>
+            )
+          })}

@@ -1,0 +1,268 @@
+          </div>
+        </div>
+
+        {/* Layers + properties */}
+        <aside
+          className="flex max-h-64 shrink-0 flex-col overflow-y-auto border-t border-bg-border bg-bg-card lg:max-h-none lg:w-72 lg:border-l lg:border-t-0"
+          aria-label="Layers and properties"
+        >
+          <section className="border-b border-bg-border p-3">
+            <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Layers</h2>
+            {layers.length === 0 ? (
+              <p className="text-xs text-text-muted">Nothing here yet. Add an image, text or a shape.</p>
+            ) : (
+              <ul className="space-y-1" role="list">
+                {[...layers].reverse().map((layer) => (
+                  <li key={layer.id}>
+                    <div
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-lg border px-2 py-1.5',
+                        layer.id === selectedLayerId
+                          ? 'border-studio-art/40 bg-studio-art/10'
+                          : 'border-bg-border',
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => select(layer.id)}
+                        className="min-w-0 flex-1 truncate text-left text-[11px] font-medium text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        {layer.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateLayer(layer.id, { visible: !layer.visible })}
+                        className="rounded p-0.5 text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        aria-label={`${layer.visible ? 'Hide' : 'Show'} ${layer.name}`}
+                        aria-pressed={!layer.visible}
+                      >
+                        {layer.visible ? <Eye size={12} aria-hidden="true" /> : <EyeOff size={12} aria-hidden="true" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateLayer(layer.id, { locked: !layer.locked })}
+                        className="rounded p-0.5 text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        aria-label={`${layer.locked ? 'Unlock' : 'Lock'} ${layer.name}`}
+                        aria-pressed={layer.locked}
+                      >
+                        {layer.locked ? <Lock size={12} aria-hidden="true" /> : <LockOpen size={12} aria-hidden="true" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => reorderLayer(layer.id, 1)}
+                        className="rounded p-0.5 text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        aria-label={`Move ${layer.name} up`}
+                      >
+                        <ArrowUp size={12} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => reorderLayer(layer.id, -1)}
+                        className="rounded p-0.5 text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        aria-label={`Move ${layer.name} down`}
+                      >
+                        <ArrowDown size={12} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => duplicateLayer(layer.id)}
+                        className="rounded p-0.5 text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        aria-label={`Duplicate ${layer.name}`}
+                      >
+                        <Copy size={12} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeLayer(layer.id)}
+                        className="rounded p-0.5 text-text-muted transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                        aria-label={`Delete ${layer.name}`}
+                      >
+                        <Trash2 size={12} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {selected && (
+            <section className="border-b border-bg-border p-3">
+              <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                Properties
+              </h2>
+              <div className="space-y-2.5">
+                {selected.kind === 'text' && (
+                  <>
+                    <label htmlFor="layer-text" className="block text-[11px] text-text-secondary">
+                      Text
+                    </label>
+                    <textarea
+                      id="layer-text"
+                      value={selected.text ?? ''}
+                      onChange={(event) => updateLayer(selected.id, { text: event.target.value.slice(0, 500) })}
+                      rows={2}
+                      className="input-base w-full resize-none text-xs"
+                    />
+                    <LayerNumber
+                      id="layer-fontsize"
+                      label="Size"
+                      value={selected.fontSize ?? 96}
+                      min={8}
+                      max={400}
+                      onChange={(fontSize) => updateLayer(selected.id, { fontSize })}
+                    />
+                  </>
+                )}
+
+                {(selected.kind === 'text' || selected.kind === 'shape') && (
+                  <div className="grid grid-cols-[76px_1fr] items-center gap-2">
+                    <span className="text-[11px] text-text-secondary">Colour</span>
+                    <input
+                      type="color"
+                      value={selected.fill ?? '#FFFFFF'}
+                      onChange={(event) => updateLayer(selected.id, { fill: event.target.value })}
+                      className="h-7 w-full cursor-pointer rounded border border-bg-border bg-bg-elevated"
+                      aria-label="Layer colour"
+                    />
+                  </div>
+                )}
+
+                <LayerNumber
+                  id="layer-width"
+                  label="Width"
+                  value={Math.round(selected.width)}
+                  min={8}
+                  max={width * 2}
+                  onChange={(value) => updateLayer(selected.id, { width: value })}
+                />
+                <LayerNumber
+                  id="layer-height"
+                  label="Height"
+                  value={Math.round(selected.height)}
+                  min={8}
+                  max={height * 2}
+                  onChange={(value) => updateLayer(selected.id, { height: value })}
+                />
+                <LayerNumber
+                  id="layer-rotation"
+                  label="Rotate"
+                  value={selected.rotation}
+                  min={-180}
+                  max={180}
+                  onChange={(rotation) => updateLayer(selected.id, { rotation })}
+                />
+                <LayerNumber
+                  id="layer-opacity"
+                  label="Opacity"
+                  value={selected.opacity}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(opacity) => updateLayer(selected.id, { opacity })}
+                />
+
+                {selected.kind === 'image' && (
+                  <div>
+                    <span className="mb-1.5 block text-[11px] text-text-secondary">Filter</span>
+                    <div className="grid grid-cols-4 gap-1">
+                      {FILTERS.map((filter) => (
+                        <button
+                          key={filter.id}
+                          type="button"
+                          onClick={() => updateLayer(selected.id, { filter: filter.id })}
+                          aria-pressed={(selected.filter ?? 'none') === filter.id}
+                          className={cn(
+                            'rounded border px-1 py-1 text-[9px] font-medium transition-colors',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                            (selected.filter ?? 'none') === filter.id
+                              ? 'border-studio-art/40 bg-studio-art/15 text-studio-art'
+                              : 'border-bg-border text-text-secondary hover:text-text',
+                          )}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          <section className="p-3">
+            <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Canvas</h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBackground(null)}
+                className={cn(
+                  'flex-1 rounded border px-2 py-1.5 text-[10px] font-medium transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  background === null
+                    ? 'border-studio-art/40 bg-studio-art/15 text-studio-art'
+                    : 'border-bg-border text-text-secondary hover:text-text',
+                )}
+              >
+                Transparent
+              </button>
+              <input
+                type="color"
+                value={background ?? '#000000'}
+                onChange={(event) => setBackground(event.target.value)}
+                className="h-7 w-14 cursor-pointer rounded border border-bg-border bg-bg-elevated"
+                aria-label="Canvas background colour"
+              />
+            </div>
+            <p className="mt-2 text-[10px] tabular-nums text-text-muted">
+              {width} × {height} px
+            </p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function LayerNumber({
+  id,
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: number
+  min: number
+  max: number
+  step?: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="grid grid-cols-[76px_1fr] items-center gap-2">
+      <label htmlFor={id} className="text-[11px] text-text-secondary">
+        {label}
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          id={id}
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+          className="w-full accent-studio-art"
+        />
+        <span className="w-10 shrink-0 text-right text-[10px] tabular-nums text-text-muted">
+          {step < 1 ? value.toFixed(2) : Math.round(value)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+export type { ArtLayer }

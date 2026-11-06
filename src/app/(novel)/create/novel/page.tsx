@@ -18,22 +18,24 @@ const CreateNovelModal = dynamic(
   { ssr: false }
 )
 import {
+  AlertTriangle,
+  ArrowRight,
+  BookOpen,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Filter,
+  FolderOpen,
+  Globe,
+  Layers,
+  Library,
+  MoreVertical,
+  PenLine,
   Plus,
   Search,
-  BookOpen,
-  Eye,
-  Layers,
-  MoreVertical,
-  Edit3,
-  Trash2,
-  Globe,
-  EyeOff,
-  ArrowLeft,
   SortAsc,
-  Filter,
-  ChevronDown,
-  AlertTriangle,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { Novel } from '@/types'
@@ -61,24 +63,79 @@ const SORT_OPTIONS: { label: string; value: SortOrder }[] = [
 
 function statusBadge(status: Novel['status']) {
   const map: Record<string, string> = {
-    draft: 'bg-white/10 text-white/60 border border-white/10',
-    published: 'bg-white text-bg font-semibold',
-    ongoing: 'bg-white/15 text-white border border-white/20',
-    completed: 'bg-white/15 text-white border border-white/20',
-    hiatus: 'bg-warning/15 text-warning border border-warning/20',
+    draft: 'border-bg-border bg-bg-elevated text-text-secondary',
+    published: 'border-studio-novel/25 bg-studio-novel/10 text-studio-novel',
+    ongoing: 'border-studio-novel/25 bg-studio-novel/10 text-studio-novel',
+    completed: 'border-success/25 bg-success/10 text-success',
+    hiatus: 'border-warning/25 bg-warning/10 text-warning',
   }
-  return map[status] ?? 'bg-white/10 text-white/60'
+  return map[status] ?? 'border-bg-border bg-bg-elevated text-text-secondary'
 }
 
+/**
+ * One entry point on the landing card — same shape and behaviour as the tiles in
+ * Anime and Art Studio, tinted `studio-novel`.
+ */
+function ActionTile({
+  href,
+  onClick,
+  icon,
+  title,
+  subtitle,
+  primary,
+}: {
+  href?: string
+  onClick?: () => void
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  primary?: boolean
+}) {
+  const className = primary
+    ? 'group flex items-center gap-3 rounded-2xl bg-studio-novel p-4 text-left text-bg transition-colors hover:bg-studio-novel/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-novel focus-visible:ring-offset-2 focus-visible:ring-offset-bg'
+    : 'group flex items-center gap-3 rounded-2xl border border-bg-border bg-bg-card p-4 text-left transition-colors hover:border-studio-novel/40 hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-novel'
+
+  const content = (
+    <>
+      <span className={primary ? 'shrink-0' : 'shrink-0 text-studio-novel'} aria-hidden="true">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className={`block text-sm font-bold ${primary ? '' : 'text-text'}`}>{title}</span>
+        <span className={`block truncate text-xs ${primary ? 'opacity-80' : 'text-text-secondary'}`}>
+          {subtitle}
+        </span>
+      </span>
+      <ArrowRight
+        size={15}
+        className="ml-auto shrink-0 opacity-60 transition-transform group-hover:translate-x-0.5 motion-reduce:transform-none"
+        aria-hidden="true"
+      />
+    </>
+  )
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    )
+  }
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
+  )
+}
 
 function NovelCardSkeleton() {
   return (
-    <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden animate-pulse">
+    <div className="animate-pulse overflow-hidden rounded-xl border border-bg-border bg-bg-card">
       <div className="aspect-[2/3] bg-bg-elevated" />
-      <div className="p-3 space-y-2">
-        <div className="h-4 bg-bg-elevated rounded w-3/4" />
-        <div className="h-3 bg-bg-elevated rounded w-1/2" />
-        <div className="h-3 bg-bg-elevated rounded w-2/3" />
+      <div className="space-y-2 p-3">
+        <div className="h-4 w-3/4 rounded bg-bg-elevated" />
+        <div className="h-3 w-1/2 rounded bg-bg-elevated" />
+        <div className="h-3 w-2/3 rounded bg-bg-elevated" />
       </div>
     </div>
   )
@@ -86,77 +143,64 @@ function NovelCardSkeleton() {
 
 interface NovelCardProps {
   novel: Novel
-  onOpen: (id: string) => void
   onEdit: (novel: Novel) => void
   onDelete: (id: string, title: string) => void
   onPublish: (id: string) => void
   onUnpublish: (id: string) => void
 }
 
-function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: NovelCardProps) {
+function NovelCard({ novel, onEdit, onDelete, onPublish, onUnpublish }: NovelCardProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const isPublished = novel.status !== 'draft'
+  const title = novel.title || 'Untitled Novel'
 
   return (
-    <article
-      className="group bg-bg-card border border-bg-border rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200 cursor-pointer relative"
-      onClick={() => onOpen(novel.id)}
-      onKeyDown={(e) => e.key === 'Enter' && onOpen(novel.id)}
-      tabIndex={0}
-      role="article"
-      aria-label={`Novel: ${novel.title || 'Untitled'}`}
-    >
-      {/* Cover */}
-      <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
-        {novel.coverURL ? (
-        <Image
-            src={novel.coverURL}
-          alt={novel.title || 'Novel cover'}
-          fill
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-        />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <BookOpen size={32} className="text-white/20" aria-hidden="true" />
-            <span className="text-xs text-white/30 font-medium">No Cover</span>
-          </div>
-        )}
+    <li className="group relative overflow-hidden rounded-xl border border-bg-border bg-bg-card transition-colors hover:border-studio-novel/40">
+      {/* Cover — the whole cover is the link into the editor, so the card needs
+          no click handler of its own (a clickable <article> is not focusable
+          for keyboards or announced as actionable by screen readers). */}
+      <Link
+        href={`/create/novel/${novel.id}`}
+        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-novel"
+        aria-label={`Open ${title} in the editor`}
+      >
+        <div className="relative aspect-[2/3] overflow-hidden bg-bg-elevated">
+          {novel.coverURL ? (
+            <Image
+              src={novel.coverURL}
+              alt={`Cover of ${title}`}
+              fill
+              className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transform-none"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            />
+          ) : (
+            <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-text-muted">
+              <BookOpen size={30} aria-hidden="true" />
+              <span className="text-xs font-medium">No cover</span>
+            </span>
+          )}
 
-        {/* Status badge overlay */}
-        <div className="absolute top-2 left-2">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full capitalize ${statusBadge(novel.status)}`}>
+          <span
+            className={`absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${statusBadge(novel.status)}`}
+          >
             {novel.status}
           </span>
         </div>
-
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onOpen(novel.id) }}
-            className="btn-accent text-xs px-3 py-1.5"
-            aria-label={`Open ${novel.title}`}
-          >
-            <Edit3 size={12} aria-hidden="true" />
-            Open Editor
-          </button>
-        </div>
-      </div>
+      </Link>
 
       {/* Info */}
       <div className="p-3">
-        <h3 className="font-semibold text-sm text-white line-clamp-2 leading-tight mb-1">
-          {novel.title || <span className="text-white/40 italic">Untitled Novel</span>}
+        <h3 className="mb-1 line-clamp-2 text-sm font-semibold leading-tight text-text">
+          {novel.title || <span className="italic text-text-muted">Untitled Novel</span>}
         </h3>
 
         {novel.genres?.length > 0 && (
-          <p className="text-[11px] text-white/50 mb-2 truncate">
+          <p className="mb-2 truncate text-[11px] text-text-secondary">
             {novel.genres.slice(0, 2).join(' · ')}
           </p>
         )}
 
-        <div className="flex items-center gap-3 text-[11px] text-white/50 mb-2">
+        <div className="mb-2 flex items-center gap-3 text-[11px] text-text-secondary">
           <span className="flex items-center gap-1">
             <Layers size={10} aria-hidden="true" />
             {novel.chapterCount}
@@ -167,24 +211,31 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
           </span>
         </div>
 
-        <p className="text-[10px] text-white/35">
-          {formatRelativeTimestamp(novel.updatedAt)}
-        </p>
+        <p className="text-[10px] text-text-muted">{formatRelativeTimestamp(novel.updatedAt)}</p>
+
+        <div className="mt-2.5 flex gap-1.5">
+          <Link
+            href={`/create/novel/${novel.id}`}
+            className="flex-1 rounded-md border border-bg-border py-1 text-center text-[10px] font-semibold text-text-secondary transition-colors hover:border-studio-novel/40 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-novel"
+          >
+            Open editor
+          </Link>
+        </div>
       </div>
 
       {/* Action menu */}
-      <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute right-2 top-2">
         <div className="relative">
           <Tooltip label="More options">
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="w-7 h-7 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center transition-colors hover:bg-black/70 focus-visible:ring-2 focus-visible:ring-white"
-              aria-label="Novel actions"
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-bg/70 backdrop-blur-sm transition-colors hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-novel"
+              aria-label={`Actions for ${title}`}
               aria-haspopup="menu"
               {...(menuOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
             >
-              <MoreVertical size={14} className="text-white" aria-hidden="true" />
+              <MoreVertical size={14} className="text-text" aria-hidden="true" />
             </button>
           </Tooltip>
 
@@ -197,30 +248,22 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
               />
               <div
                 role="menu"
-                className="absolute right-0 top-8 w-44 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 overflow-hidden animate-scale-in"
+                className="absolute right-0 top-8 z-20 w-44 animate-scale-in overflow-hidden rounded-xl border border-bg-border bg-bg-elevated shadow-2xl"
               >
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => { setMenuOpen(false); onOpen(novel.id) }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
-                >
-                  <Edit3 size={13} aria-hidden="true" /> Open Editor
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
                   onClick={() => { setMenuOpen(false); onEdit(novel) }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text transition-colors hover:bg-bg-card"
                 >
-                  <Filter size={13} aria-hidden="true" /> Edit Details
+                  <Filter size={13} aria-hidden="true" /> Edit details
                 </button>
                 {isPublished ? (
                   <button
                     type="button"
                     role="menuitem"
                     onClick={() => { setMenuOpen(false); onUnpublish(novel.id) }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text transition-colors hover:bg-bg-card"
                   >
                     <EyeOff size={13} aria-hidden="true" /> Unpublish
                   </button>
@@ -229,17 +272,17 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
                     type="button"
                     role="menuitem"
                     onClick={() => { setMenuOpen(false); onPublish(novel.id) }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text transition-colors hover:bg-bg-card"
                   >
                     <Globe size={13} aria-hidden="true" /> Publish
                   </button>
                 )}
-                <div className="h-px bg-bg-border mx-2" aria-hidden="true" />
+                <div className="mx-2 h-px bg-bg-border" aria-hidden="true" />
                 <button
                   type="button"
                   role="menuitem"
                   onClick={() => { setMenuOpen(false); onDelete(novel.id, novel.title) }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-danger hover:bg-danger/10 transition-colors"
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10"
                 >
                   <Trash2 size={13} aria-hidden="true" /> Delete
                 </button>
@@ -248,7 +291,7 @@ function NovelCard({ novel, onOpen, onEdit, onDelete, onPublish, onUnpublish }: 
           )}
         </div>
       </div>
-    </article>
+    </li>
   )
 }
 
@@ -278,32 +321,32 @@ function DeleteConfirmDialog({ title, onConfirm, onCancel, loading }: DeleteConf
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-dialog-title"
       aria-describedby="delete-dialog-desc"
     >
-      <div className="bg-bg-elevated border border-bg-border rounded-2xl p-6 max-w-sm w-full animate-scale-in">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center flex-shrink-0">
+      <div className="w-full max-w-sm animate-scale-in rounded-2xl border border-bg-border bg-bg-elevated p-6">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-danger/10">
             <AlertTriangle size={18} className="text-danger" aria-hidden="true" />
           </div>
           <div>
-            <h2 id="delete-dialog-title" className="font-semibold text-white text-base">
+            <h2 id="delete-dialog-title" className="text-base font-semibold text-text">
               Delete Novel
             </h2>
-            <p id="delete-dialog-desc" className="text-sm text-white/60 mt-1">
+            <p id="delete-dialog-desc" className="mt-1 text-sm text-text-secondary">
               &ldquo;{title || 'Untitled'}&rdquo; and all its chapters will be permanently deleted. This cannot be undone.
             </p>
           </div>
         </div>
-        <div className="flex gap-2 justify-end">
+        <div className="flex justify-end gap-2">
           <button
             type="button"
             ref={cancelRef}
             onClick={onCancel}
-            className="btn-ghost text-sm px-3 py-2"
+            className="btn-ghost px-3 py-2 text-sm"
             disabled={loading}
           >
             Cancel
@@ -311,7 +354,7 @@ function DeleteConfirmDialog({ title, onConfirm, onCancel, loading }: DeleteConf
           <button
             type="button"
             onClick={onConfirm}
-            className="btn-danger text-sm px-3 py-2"
+            className="btn-danger px-3 py-2 text-sm"
             disabled={loading}
             aria-label="Confirm delete"
           >
@@ -372,6 +415,13 @@ export default function NovelDashboardPage() {
     }
   }, [novels, filter, sort, search])
 
+  // "Continue writing" is the most recently touched novel that has something in
+  // it — sending someone back to an empty shell isn't continuing anything.
+  const continueNovel = useMemo(
+    () => novels.find((n) => n.chapterCount > 0) ?? novels[0],
+    [novels]
+  )
+
   async function handleDelete() {
     if (!deleteTarget) return
     setDeleting(true)
@@ -421,75 +471,112 @@ export default function NovelDashboardPage() {
   }
 
   const isLoading = authLoading || novelsLoading
-
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sort)?.label ?? 'Sort'
+  const publishedCount = novels.filter((n) => n.status !== 'draft').length
 
   return (
-    <div className="min-h-screen bg-bg">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-bg-border">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Tooltip label="Back to Creator Hub" side="bottom">
-              <Link
-                href="/create"
-                className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white rounded"
-                aria-label="Back to Creator Hub"
-              >
-                <ArrowLeft size={16} aria-hidden="true" />
-                <span className="hidden sm:inline">Creator Hub</span>
-              </Link>
-            </Tooltip>
-            <span className="text-bg-border" aria-hidden="true">/</span>
-            <h1 className="text-sm font-semibold text-white">Novel Studio</h1>
+    <div className="mx-auto max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      {/* ── Landing card ─────────────────────────────────── */}
+      {/* Flat tonal surface, Material-style — the same shape Anime and Art
+          Studio use, so the four studios read as one product. */}
+      <section
+        className="rounded-3xl border border-bg-border bg-bg-card p-6 sm:p-9 lg:p-12"
+        aria-labelledby="novel-studio-heading"
+      >
+        <div className="grid gap-8 lg:grid-cols-[1.15fr_1fr] lg:items-center">
+          <div>
+            <p className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-studio-novel/25 px-3 py-1 text-xs font-semibold text-studio-novel">
+              <Sparkles size={12} aria-hidden="true" />
+              Writing &amp; Serialization
+            </p>
+            <h1
+              id="novel-studio-heading"
+              className="text-3xl font-black tracking-tight text-text sm:text-4xl lg:text-5xl"
+            >
+              Novel Studio
+            </h1>
+            <p className="mt-2 text-base font-semibold text-studio-novel lg:text-lg">
+              Write. Serialize. Publish. Earn.
+            </p>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-text-secondary lg:text-base">
+              Write chapters in a distraction-free editor with AI writing assistance, schedule
+              releases, and publish serialized novels your readers can follow.
+            </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="btn-accent text-xs px-3 py-1.5"
-            aria-label="Create new novel"
-          >
-            <Plus size={14} aria-hidden="true" />
-            New Novel
-          </button>
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
+            <ActionTile
+              primary
+              onClick={() => setShowCreate(true)}
+              icon={<Plus size={20} />}
+              title="New novel"
+              subtitle="Start a new story from scratch"
+            />
+            {continueNovel ? (
+              <ActionTile
+                href={`/create/novel/${continueNovel.id}`}
+                icon={<PenLine size={20} />}
+                title="Continue writing"
+                subtitle={continueNovel.title || 'Untitled Novel'}
+              />
+            ) : (
+              <ActionTile
+                href="#novel-library"
+                icon={<PenLine size={20} />}
+                title="Continue writing"
+                subtitle="Nothing in progress yet"
+              />
+            )}
+            <ActionTile
+              href="#novel-library"
+              icon={<FolderOpen size={20} />}
+              title="Your novels"
+              subtitle={`${novels.length} in your library · ${publishedCount} published`}
+            />
+            <ActionTile
+              href="/browse"
+              icon={<Library size={20} />}
+              title="Browse Toonflow"
+              subtitle="See what other writers are publishing"
+            />
+          </div>
         </div>
-      </header>
+      </section>
 
-      <main id="main-content" className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6" tabIndex={-1}>
-        {/* Stats bar */}
-        {!isLoading && novels.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            {[
-              { label: 'Total Novels', value: novels.length },
-              {
-                label: 'Published',
-                value: novels.filter((n) => n.status !== 'draft').length,
-              },
-              {
-                label: 'Total Chapters',
-                value: novels.reduce((s, n) => s + n.chapterCount, 0),
-              },
-              {
-                label: 'Total Views',
-                value: formatCount(novels.reduce((s, n) => s + n.viewCount, 0)),
-              },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-bg-card border border-bg-border rounded-xl p-4">
-                <p className="text-2xl font-bold text-white">{value}</p>
-                <p className="text-xs text-white/50 mt-0.5">{label}</p>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* ── Stats ────────────────────────────────────────── */}
+      {!isLoading && novels.length > 0 && (
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: 'Total novels', value: novels.length },
+            { label: 'Published', value: publishedCount },
+            { label: 'Total chapters', value: novels.reduce((s, n) => s + n.chapterCount, 0) },
+            { label: 'Total views', value: formatCount(novels.reduce((s, n) => s + n.viewCount, 0)) },
+          ].map(({ label, value }) => (
+            <div key={label} className="rounded-xl border border-bg-border bg-bg-card p-4">
+              <p className="text-2xl font-bold tabular-nums text-text">{value}</p>
+              <p className="mt-0.5 text-xs text-text-secondary">{label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Library ──────────────────────────────────────── */}
+      <section id="novel-library" className="mt-10 scroll-mt-20" aria-labelledby="novels-heading">
+        <div className="mb-4 flex items-baseline justify-between gap-4">
+          <h2 id="novels-heading" className="text-lg font-bold text-text lg:text-xl">
+            Your novels
+          </h2>
+          <p className="text-xs text-text-muted lg:text-sm">
+            {novels.length} {novels.length === 1 ? 'novel' : 'novels'}
+          </p>
+        </div>
 
         {/* Controls */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+          <div className="relative max-w-sm flex-1">
             <Search
               size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
               aria-hidden="true"
             />
             <input
@@ -507,7 +594,7 @@ export default function NovelDashboardPage() {
             <button
               type="button"
               onClick={() => setSortOpen((v) => !v)}
-              className="btn-ghost gap-2 text-sm border border-bg-border"
+              className="btn-ghost gap-2 border border-bg-border text-sm"
               aria-haspopup="listbox"
               {...(sortOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
               aria-label={`Sort by: ${sortLabel}`}
@@ -519,7 +606,11 @@ export default function NovelDashboardPage() {
             {sortOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} aria-hidden="true" />
-                <div role="listbox" aria-label="Sort order options" className="absolute right-0 top-10 w-44 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 overflow-hidden animate-scale-in">
+                <div
+                  role="listbox"
+                  aria-label="Sort order options"
+                  className="absolute right-0 top-10 z-20 w-44 animate-scale-in overflow-hidden rounded-xl border border-bg-border bg-bg-elevated shadow-2xl"
+                >
                   {SORT_OPTIONS.map((opt) => {
                     const isSelected = sort === opt.value
                     return isSelected ? (
@@ -529,7 +620,7 @@ export default function NovelDashboardPage() {
                         role="option"
                         aria-selected="true"
                         onClick={() => { setSort(opt.value); setSortOpen(false) }}
-                        className="w-full text-left px-3 py-2.5 text-sm transition-colors text-white bg-white/10 font-medium"
+                        className="w-full bg-studio-novel/10 px-3 py-2.5 text-left text-sm font-medium text-studio-novel transition-colors"
                       >
                         {opt.label}
                       </button>
@@ -540,7 +631,7 @@ export default function NovelDashboardPage() {
                         role="option"
                         aria-selected="false"
                         onClick={() => { setSort(opt.value); setSortOpen(false) }}
-                        className="w-full text-left px-3 py-2.5 text-sm transition-colors text-white/70 hover:bg-white/10 hover:text-white"
+                        className="w-full px-3 py-2.5 text-left text-sm text-text-secondary transition-colors hover:bg-bg-card hover:text-text"
                       >
                         {opt.label}
                       </button>
@@ -556,13 +647,13 @@ export default function NovelDashboardPage() {
         <div
           role="tablist"
           aria-label="Filter by status"
-          className="flex items-center gap-0.5 mb-6 border-b border-bg-border overflow-x-auto scrollbar-none pb-px"
+          className="mb-6 flex items-center gap-0.5 overflow-x-auto border-b border-bg-border pb-px scrollbar-none"
         >
           {STATUS_FILTERS.map((f) => {
             const count = f.value === 'all'
               ? novels.length
               : f.value === 'live'
-              ? novels.filter((n) => n.status !== 'draft').length
+              ? publishedCount
               : novels.filter((n) => n.status === f.value).length
             const isSelected = filter === f.value
             return isSelected ? (
@@ -572,11 +663,11 @@ export default function NovelDashboardPage() {
                 role="tab"
                 aria-selected="true"
                 onClick={() => setFilter(f.value)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap focus-visible:ring-2 focus-visible:ring-white rounded-t border-white text-white"
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-t border-b-2 border-studio-novel px-3 py-2 text-sm font-medium text-studio-novel transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-novel"
               >
                 {f.label}
                 {count > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white text-bg">
+                  <span className="rounded-full bg-studio-novel px-1.5 py-0.5 text-[10px] tabular-nums text-bg">
                     {count}
                   </span>
                 )}
@@ -588,11 +679,11 @@ export default function NovelDashboardPage() {
                 role="tab"
                 aria-selected="false"
                 onClick={() => setFilter(f.value)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap focus-visible:ring-2 focus-visible:ring-white rounded-t border-transparent text-white/50 hover:text-white/80"
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-t border-b-2 border-transparent px-3 py-2 text-sm font-medium text-text-secondary transition-all hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {f.label}
                 {count > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">
+                  <span className="rounded-full bg-bg-elevated px-1.5 py-0.5 text-[10px] tabular-nums text-text-secondary">
                     {count}
                   </span>
                 )}
@@ -603,65 +694,67 @@ export default function NovelDashboardPage() {
 
         {/* Content */}
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {Array.from({ length: 8 }).map((_, i) => (
               <NovelCardSkeleton key={i} />
             ))}
           </div>
         ) : novels.length === 0 ? (
-          /* Empty state */
           <div
-            className="flex flex-col items-center justify-center py-24 text-center"
+            className="flex flex-col items-center rounded-2xl border border-dashed border-bg-border bg-bg-card px-6 py-14 text-center"
             role="status"
           >
-            <div className="w-20 h-20 rounded-2xl bg-bg-elevated border border-bg-border flex items-center justify-center mb-5">
-              <BookOpen size={32} className="text-white/20" aria-hidden="true" />
-            </div>
-            <h2 className="text-lg font-semibold text-white mb-2">No novels yet</h2>
-            <p className="text-sm text-white/50 max-w-xs mb-6">
+            <BookOpen size={32} className="text-text-muted" aria-hidden="true" />
+            <h3 className="mt-4 text-base font-bold text-text">No novels yet</h3>
+            <p className="mt-1.5 max-w-sm text-sm text-text-secondary">
               Start your writing journey. Create your first novel and build your audience on Toonflow.
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <button type="button" onClick={() => setShowCreate(true)} className="btn-accent">
-                <Plus size={15} aria-hidden="true" />
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-studio-novel px-4 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-studio-novel/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-novel focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              >
+                <Plus size={16} aria-hidden="true" />
                 Create your first novel
               </button>
-              <Link href="/create/seed" className="btn-ghost border border-bg-border text-sm flex items-center justify-center gap-2">
+              <Link
+                href="/create/seed"
+                className="btn-ghost flex items-center justify-center gap-2 border border-bg-border text-sm"
+              >
                 <Sparkles size={14} aria-hidden="true" />
                 Seed Ravana Demo
               </Link>
             </div>
           </div>
         ) : filtered.length === 0 ? (
-          /* No results */
-          <div className="flex flex-col items-center justify-center py-24 text-center" role="status">
-            <Search size={32} className="text-white/20 mb-4" aria-hidden="true" />
-            <h2 className="text-lg font-semibold text-white mb-2">No results found</h2>
-            <p className="text-sm text-white/50">
-              Try adjusting your search or filter.
-            </p>
+          <div
+            className="flex flex-col items-center rounded-2xl border border-dashed border-bg-border bg-bg-card px-6 py-14 text-center"
+            role="status"
+          >
+            <Search size={32} className="text-text-muted" aria-hidden="true" />
+            <h3 className="mt-4 text-base font-bold text-text">No results found</h3>
+            <p className="mt-1.5 text-sm text-text-secondary">Try adjusting your search or filter.</p>
           </div>
         ) : (
-          /* Grid */
-          <div
-            role="tabpanel"
+          <ul
+            role="list"
             aria-label={`${filter === 'all' ? 'All' : filter} novels`}
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4"
+            className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
           >
             {filtered.map((novel) => (
               <NovelCard
                 key={novel.id}
                 novel={novel}
-                onOpen={(id) => router.push(`/create/novel/${id}`)}
                 onEdit={setEditNovel}
                 onDelete={(id, title) => setDeleteTarget({ id, title })}
                 onPublish={handlePublish}
                 onUnpublish={handleUnpublish}
               />
             ))}
-          </div>
+          </ul>
         )}
-      </main>
+      </section>
 
       {/* Modals */}
       {showCreate && (

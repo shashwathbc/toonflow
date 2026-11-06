@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -18,22 +18,24 @@ const CreateWebtoonModal = dynamic(
   { ssr: false }
 )
 import {
+  AlertTriangle,
+  ArrowRight,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Filter,
+  FolderOpen,
+  Globe,
+  ImageIcon,
+  Layers,
+  Library,
+  MoreVertical,
+  PenLine,
   Plus,
   Search,
-  ImageIcon,
-  Eye,
-  Layers,
-  MoreVertical,
-  Edit3,
-  Trash2,
-  Globe,
-  EyeOff,
-  ArrowLeft,
   SortAsc,
-  Filter,
-  ChevronDown,
-  AlertTriangle,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { Webtoon } from '@/types'
@@ -61,24 +63,79 @@ const SORT_OPTIONS: { label: string; value: SortOrder }[] = [
 
 function statusBadge(status: Webtoon['status']) {
   const map: Record<string, string> = {
-    draft: 'bg-white/10 text-white/60 border border-white/10',
-    published: 'bg-white text-bg font-semibold',
-    ongoing: 'bg-white/15 text-white border border-white/20',
-    completed: 'bg-white/15 text-white border border-white/20',
-    hiatus: 'bg-warning/15 text-warning border border-warning/20',
+    draft: 'border-bg-border bg-bg-elevated text-text-secondary',
+    published: 'border-studio-webtoon/25 bg-studio-webtoon/10 text-studio-webtoon',
+    ongoing: 'border-studio-webtoon/25 bg-studio-webtoon/10 text-studio-webtoon',
+    completed: 'border-success/25 bg-success/10 text-success',
+    hiatus: 'border-warning/25 bg-warning/10 text-warning',
   }
-  return map[status] ?? 'bg-white/10 text-white/60'
+  return map[status] ?? 'border-bg-border bg-bg-elevated text-text-secondary'
 }
 
+/**
+ * One entry point on the landing card — same shape and behaviour as the tiles in
+ * Anime, Art and Novel Studio, tinted `studio-webtoon`.
+ */
+function ActionTile({
+  href,
+  onClick,
+  icon,
+  title,
+  subtitle,
+  primary,
+}: {
+  href?: string
+  onClick?: () => void
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  primary?: boolean
+}) {
+  const className = primary
+    ? 'group flex items-center gap-3 rounded-2xl bg-studio-webtoon p-4 text-left text-bg transition-colors hover:bg-studio-webtoon/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-webtoon focus-visible:ring-offset-2 focus-visible:ring-offset-bg'
+    : 'group flex items-center gap-3 rounded-2xl border border-bg-border bg-bg-card p-4 text-left transition-colors hover:border-studio-webtoon/40 hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-webtoon'
+
+  const content = (
+    <>
+      <span className={primary ? 'shrink-0' : 'shrink-0 text-studio-webtoon'} aria-hidden="true">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className={`block text-sm font-bold ${primary ? '' : 'text-text'}`}>{title}</span>
+        <span className={`block truncate text-xs ${primary ? 'opacity-80' : 'text-text-secondary'}`}>
+          {subtitle}
+        </span>
+      </span>
+      <ArrowRight
+        size={15}
+        className="ml-auto shrink-0 opacity-60 transition-transform group-hover:translate-x-0.5 motion-reduce:transform-none"
+        aria-hidden="true"
+      />
+    </>
+  )
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    )
+  }
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
+  )
+}
 
 function WebtoonCardSkeleton() {
   return (
-    <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden animate-pulse">
+    <div className="animate-pulse overflow-hidden rounded-xl border border-bg-border bg-bg-card">
       <div className="aspect-[2/3] bg-bg-elevated" />
-      <div className="p-3 space-y-2">
-        <div className="h-4 bg-bg-elevated rounded w-3/4" />
-        <div className="h-3 bg-bg-elevated rounded w-1/2" />
-        <div className="h-3 bg-bg-elevated rounded w-2/3" />
+      <div className="space-y-2 p-3">
+        <div className="h-4 w-3/4 rounded bg-bg-elevated" />
+        <div className="h-3 w-1/2 rounded bg-bg-elevated" />
+        <div className="h-3 w-2/3 rounded bg-bg-elevated" />
       </div>
     </div>
   )
@@ -86,69 +143,64 @@ function WebtoonCardSkeleton() {
 
 interface WebtoonCardProps {
   webtoon: Webtoon
-  onOpen: (id: string) => void
   onEdit: (webtoon: Webtoon) => void
   onDelete: (id: string, title: string) => void
   onPublish: (id: string) => void
   onUnpublish: (id: string) => void
 }
 
-function WebtoonCard({ webtoon, onOpen, onEdit, onDelete, onPublish, onUnpublish }: WebtoonCardProps) {
+function WebtoonCard({ webtoon, onEdit, onDelete, onPublish, onUnpublish }: WebtoonCardProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const isPublished = webtoon.status !== 'draft'
+  const title = webtoon.title || 'Untitled Webtoon'
 
   return (
-    <article
-      className="group bg-bg-card border border-bg-border rounded-xl overflow-hidden hover:border-white/20 transition-all duration-200 cursor-pointer relative"
-      onClick={() => onOpen(webtoon.id)}
-      onKeyDown={(e) => e.key === 'Enter' && onOpen(webtoon.id)}
-      tabIndex={0}
-      role="article"
-      aria-label={`Webtoon: ${webtoon.title || 'Untitled'}`}
-    >
-      {/* Cover */}
-      <div className="relative aspect-[2/3] bg-bg-elevated overflow-hidden">
-        <Image
-          src={webtoon.coverURL || '/images/ravana-cover.png'}
-          alt={webtoon.title || 'Webtoon cover'}
-          fill
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-        />
+    <li className="group relative overflow-hidden rounded-xl border border-bg-border bg-bg-card transition-colors hover:border-studio-webtoon/40">
+      {/* Cover — the whole cover is the link into the canvas editor, so the card
+          needs no click handler of its own (a clickable <article> is not
+          focusable for keyboards or announced as actionable). */}
+      <Link
+        href={`/create/webtoon/${webtoon.id}`}
+        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-webtoon"
+        aria-label={`Open ${title} in the editor`}
+      >
+        <div className="relative aspect-[2/3] overflow-hidden bg-bg-elevated">
+          {webtoon.coverURL ? (
+            <Image
+              src={webtoon.coverURL}
+              alt={`Cover of ${title}`}
+              fill
+              className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transform-none"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            />
+          ) : (
+            <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-text-muted">
+              <ImageIcon size={30} aria-hidden="true" />
+              <span className="text-xs font-medium">No cover</span>
+            </span>
+          )}
 
-        {/* Status badge overlay */}
-        <div className="absolute top-2 left-2">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full capitalize ${statusBadge(webtoon.status)}`}>
+          <span
+            className={`absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${statusBadge(webtoon.status)}`}
+          >
             {webtoon.status}
           </span>
         </div>
-
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-          <button
-            onClick={(e) => { e.stopPropagation(); onOpen(webtoon.id) }}
-            className="btn-accent text-xs px-3 py-1.5"
-            aria-label={`Open ${webtoon.title}`}
-          >
-            <Edit3 size={12} aria-hidden="true" />
-            Open Editor
-          </button>
-        </div>
-      </div>
+      </Link>
 
       {/* Info */}
       <div className="p-3">
-        <h3 className="font-semibold text-sm text-white line-clamp-2 leading-tight mb-1">
-          {webtoon.title || <span className="text-white/40 italic">Untitled Webtoon</span>}
+        <h3 className="mb-1 line-clamp-2 text-sm font-semibold leading-tight text-text">
+          {webtoon.title || <span className="italic text-text-muted">Untitled Webtoon</span>}
         </h3>
 
         {webtoon.genres?.length > 0 && (
-          <p className="text-[11px] text-white/50 mb-2 truncate">
+          <p className="mb-2 truncate text-[11px] text-text-secondary">
             {webtoon.genres.slice(0, 2).join(' · ')}
           </p>
         )}
 
-        <div className="flex items-center gap-3 text-[11px] text-white/50 mb-2">
+        <div className="mb-2 flex items-center gap-3 text-[11px] text-text-secondary">
           <span className="flex items-center gap-1">
             <Layers size={10} aria-hidden="true" />
             {webtoon.episodeCount} Ep
@@ -159,24 +211,31 @@ function WebtoonCard({ webtoon, onOpen, onEdit, onDelete, onPublish, onUnpublish
           </span>
         </div>
 
-        <p className="text-[10px] text-white/35">
-          {formatRelativeTimestamp(webtoon.updatedAt)}
-        </p>
+        <p className="text-[10px] text-text-muted">{formatRelativeTimestamp(webtoon.updatedAt)}</p>
+
+        <div className="mt-2.5 flex gap-1.5">
+          <Link
+            href={`/create/webtoon/${webtoon.id}`}
+            className="flex-1 rounded-md border border-bg-border py-1 text-center text-[10px] font-semibold text-text-secondary transition-colors hover:border-studio-webtoon/40 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-webtoon"
+          >
+            Open editor
+          </Link>
+        </div>
       </div>
 
       {/* Action menu */}
-      <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute right-2 top-2">
         <div className="relative">
           <Tooltip label="More options">
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="w-7 h-7 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white"
-              aria-label="Webtoon actions"
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-bg/70 backdrop-blur-sm transition-colors hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-webtoon"
+              aria-label={`Actions for ${title}`}
               aria-haspopup="menu"
               {...(menuOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
             >
-              <MoreVertical size={14} className="text-white" aria-hidden="true" />
+              <MoreVertical size={14} className="text-text" aria-hidden="true" />
             </button>
           </Tooltip>
 
@@ -189,44 +248,41 @@ function WebtoonCard({ webtoon, onOpen, onEdit, onDelete, onPublish, onUnpublish
               />
               <div
                 role="menu"
-                className="absolute right-0 top-8 w-44 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 overflow-hidden animate-scale-in"
+                className="absolute right-0 top-8 z-20 w-44 animate-scale-in overflow-hidden rounded-xl border border-bg-border bg-bg-elevated shadow-2xl"
               >
                 <button
-                  role="menuitem"
-                  onClick={() => { setMenuOpen(false); onOpen(webtoon.id) }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
-                >
-                  <Edit3 size={13} aria-hidden="true" /> Open Editor
-                </button>
-                <button
+                  type="button"
                   role="menuitem"
                   onClick={() => { setMenuOpen(false); onEdit(webtoon) }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text transition-colors hover:bg-bg-card"
                 >
-                  <Filter size={13} aria-hidden="true" /> Edit Details
+                  <Filter size={13} aria-hidden="true" /> Edit details
                 </button>
                 {isPublished ? (
                   <button
+                    type="button"
                     role="menuitem"
                     onClick={() => { setMenuOpen(false); onUnpublish(webtoon.id) }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text transition-colors hover:bg-bg-card"
                   >
                     <EyeOff size={13} aria-hidden="true" /> Unpublish
                   </button>
                 ) : (
                   <button
+                    type="button"
                     role="menuitem"
                     onClick={() => { setMenuOpen(false); onPublish(webtoon.id) }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text transition-colors hover:bg-bg-card"
                   >
                     <Globe size={13} aria-hidden="true" /> Publish
                   </button>
                 )}
-                <div className="h-px bg-bg-border mx-2" aria-hidden="true" />
+                <div className="mx-2 h-px bg-bg-border" aria-hidden="true" />
                 <button
+                  type="button"
                   role="menuitem"
                   onClick={() => { setMenuOpen(false); onDelete(webtoon.id, webtoon.title) }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-danger hover:bg-danger/10 transition-colors"
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10"
                 >
                   <Trash2 size={13} aria-hidden="true" /> Delete
                 </button>
@@ -235,7 +291,7 @@ function WebtoonCard({ webtoon, onOpen, onEdit, onDelete, onPublish, onUnpublish
           )}
         </div>
       </div>
-    </article>
+    </li>
   )
 }
 
@@ -247,38 +303,50 @@ interface DeleteConfirmProps {
 }
 
 function DeleteConfirmDialog({ title, onConfirm, onCancel, loading }: DeleteConfirmProps) {
+  // Close on Escape — destructive dialogs must always have a keyboard way out.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !loading) onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [loading, onCancel])
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-dialog-title"
+      aria-describedby="delete-dialog-desc"
     >
-      <div className="bg-bg-elevated border border-bg-border rounded-2xl p-6 max-w-sm w-full animate-scale-in">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center flex-shrink-0">
+      <div className="w-full max-w-sm animate-scale-in rounded-2xl border border-bg-border bg-bg-elevated p-6">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-danger/10">
             <AlertTriangle size={18} className="text-danger" aria-hidden="true" />
           </div>
           <div>
-            <h2 id="delete-dialog-title" className="font-semibold text-white text-base">
+            <h2 id="delete-dialog-title" className="text-base font-semibold text-text">
               Delete Webtoon
             </h2>
-            <p className="text-sm text-white/60 mt-1">
+            <p id="delete-dialog-desc" className="mt-1 text-sm text-text-secondary">
               &ldquo;{title || 'Untitled'}&rdquo; and all its episodes will be permanently deleted. This cannot be undone.
             </p>
           </div>
         </div>
-        <div className="flex gap-2 justify-end">
+        <div className="flex justify-end gap-2">
           <button
+            type="button"
             onClick={onCancel}
-            className="btn-ghost text-sm px-3 py-2"
+            className="btn-ghost px-3 py-2 text-sm"
             disabled={loading}
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={onConfirm}
-            className="btn-danger text-sm px-3 py-2"
+            className="btn-danger px-3 py-2 text-sm"
             disabled={loading}
             aria-label="Confirm delete"
           >
@@ -304,6 +372,16 @@ export default function WebtoonDashboardPage() {
   const [deleting, setDeleting] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
 
+  // Close sort dropdown on Escape
+  useEffect(() => {
+    if (!sortOpen) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSortOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [sortOpen])
+
   const filtered = useMemo(() => {
     let result = [...webtoons]
     if (filter === 'live') result = result.filter((w) => w.status !== 'draft')
@@ -328,6 +406,13 @@ export default function WebtoonDashboardPage() {
         return result
     }
   }, [webtoons, filter, sort, search])
+
+  // "Continue drawing" is the most recently touched webtoon that has something
+  // in it — sending someone back to an empty canvas isn't continuing anything.
+  const continueWebtoon = useMemo(
+    () => webtoons.find((w) => w.episodeCount > 0) ?? webtoons[0],
+    [webtoons]
+  )
 
   async function handleDelete() {
     if (!deleteTarget) return
@@ -378,74 +463,112 @@ export default function WebtoonDashboardPage() {
   }
 
   const isLoading = authLoading || webtoonsLoading
-
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sort)?.label ?? 'Sort'
+  const publishedCount = webtoons.filter((w) => w.status !== 'draft').length
 
   return (
-    <div className="min-h-screen bg-bg">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-bg-border">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Tooltip label="Back to Creator Hub" side="bottom">
-              <Link
-                href="/create"
-                className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white rounded"
-                aria-label="Back to Creator Hub"
-              >
-                <ArrowLeft size={16} aria-hidden="true" />
-                <span className="hidden sm:inline">Creator Hub</span>
-              </Link>
-            </Tooltip>
-            <span className="text-bg-border" aria-hidden="true">/</span>
-            <h1 className="text-sm font-semibold text-white">Webtoon Studio</h1>
+    <div className="mx-auto max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      {/* ── Landing card ─────────────────────────────────── */}
+      {/* Flat tonal surface, Material-style — the same shape Anime, Art and
+          Novel Studio use, so the four studios read as one product. */}
+      <section
+        className="rounded-3xl border border-bg-border bg-bg-card p-6 sm:p-9 lg:p-12"
+        aria-labelledby="webtoon-studio-heading"
+      >
+        <div className="grid gap-8 lg:grid-cols-[1.15fr_1fr] lg:items-center">
+          <div>
+            <p className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-studio-webtoon/25 px-3 py-1 text-xs font-semibold text-studio-webtoon">
+              <Sparkles size={12} aria-hidden="true" />
+              Comics &amp; Episodes
+            </p>
+            <h1
+              id="webtoon-studio-heading"
+              className="text-3xl font-black tracking-tight text-text sm:text-4xl lg:text-5xl"
+            >
+              Webtoon Studio
+            </h1>
+            <p className="mt-2 text-base font-semibold text-studio-webtoon lg:text-lg">
+              Draw. Letter. Publish. Earn.
+            </p>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-text-secondary lg:text-base">
+              Lay out panels on an infinite vertical canvas with lettering, speech bubbles and AI
+              art, then publish finished episodes in one tap.
+            </p>
           </div>
 
-          <button
-            onClick={() => setShowCreate(true)}
-            className="btn-accent text-xs px-3 py-1.5"
-            aria-label="Create new webtoon"
-          >
-            <Plus size={14} aria-hidden="true" />
-            New Webtoon
-          </button>
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
+            <ActionTile
+              primary
+              onClick={() => setShowCreate(true)}
+              icon={<Plus size={20} />}
+              title="New webtoon"
+              subtitle="Start a series on a blank canvas"
+            />
+            {continueWebtoon ? (
+              <ActionTile
+                href={`/create/webtoon/${continueWebtoon.id}`}
+                icon={<PenLine size={20} />}
+                title="Continue drawing"
+                subtitle={continueWebtoon.title || 'Untitled Webtoon'}
+              />
+            ) : (
+              <ActionTile
+                href="#webtoon-library"
+                icon={<PenLine size={20} />}
+                title="Continue drawing"
+                subtitle="Nothing in progress yet"
+              />
+            )}
+            <ActionTile
+              href="#webtoon-library"
+              icon={<FolderOpen size={20} />}
+              title="Your webtoons"
+              subtitle={`${webtoons.length} in your library · ${publishedCount} published`}
+            />
+            <ActionTile
+              href="/browse"
+              icon={<Library size={20} />}
+              title="Browse Toonflow"
+              subtitle="See what other creators are publishing"
+            />
+          </div>
         </div>
-      </header>
+      </section>
 
-      <main id="main-content" className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6" tabIndex={-1}>
-        {/* Stats bar */}
-        {!isLoading && webtoons.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            {[
-              { label: 'Total Webtoons', value: webtoons.length },
-              {
-                label: 'Published',
-                value: webtoons.filter((w) => w.status !== 'draft').length,
-              },
-              {
-                label: 'Total Episodes',
-                value: webtoons.reduce((s, w) => s + w.episodeCount, 0),
-              },
-              {
-                label: 'Total Views',
-                value: formatCount(webtoons.reduce((s, w) => s + w.viewCount, 0)),
-              },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-bg-card border border-bg-border rounded-xl p-4">
-                <p className="text-2xl font-bold text-white">{value}</p>
-                <p className="text-xs text-white/50 mt-0.5">{label}</p>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* ── Stats ────────────────────────────────────────── */}
+      {!isLoading && webtoons.length > 0 && (
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: 'Total webtoons', value: webtoons.length },
+            { label: 'Published', value: publishedCount },
+            { label: 'Total episodes', value: webtoons.reduce((s, w) => s + w.episodeCount, 0) },
+            { label: 'Total views', value: formatCount(webtoons.reduce((s, w) => s + w.viewCount, 0)) },
+          ].map(({ label, value }) => (
+            <div key={label} className="rounded-xl border border-bg-border bg-bg-card p-4">
+              <p className="text-2xl font-bold tabular-nums text-text">{value}</p>
+              <p className="mt-0.5 text-xs text-text-secondary">{label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Library ──────────────────────────────────────── */}
+      <section id="webtoon-library" className="mt-10 scroll-mt-20" aria-labelledby="webtoons-heading">
+        <div className="mb-4 flex items-baseline justify-between gap-4">
+          <h2 id="webtoons-heading" className="text-lg font-bold text-text lg:text-xl">
+            Your webtoons
+          </h2>
+          <p className="text-xs text-text-muted lg:text-sm">
+            {webtoons.length} {webtoons.length === 1 ? 'series' : 'titles'}
+          </p>
+        </div>
 
         {/* Controls */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+          <div className="relative max-w-sm flex-1">
             <Search
               size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
               aria-hidden="true"
             />
             <input
@@ -461,8 +584,9 @@ export default function WebtoonDashboardPage() {
           {/* Sort dropdown */}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setSortOpen((v) => !v)}
-              className="btn-ghost gap-2 text-sm border border-bg-border"
+              className="btn-ghost gap-2 border border-bg-border text-sm"
               aria-haspopup="listbox"
               {...(sortOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
               aria-label={`Sort by: ${sortLabel}`}
@@ -474,26 +598,32 @@ export default function WebtoonDashboardPage() {
             {sortOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} aria-hidden="true" />
-                <div role="listbox" aria-label="Sort order options" className="absolute right-0 top-10 w-44 bg-bg-elevated border border-bg-border rounded-xl shadow-2xl z-20 overflow-hidden animate-scale-in">
+                <div
+                  role="listbox"
+                  aria-label="Sort order options"
+                  className="absolute right-0 top-10 z-20 w-44 animate-scale-in overflow-hidden rounded-xl border border-bg-border bg-bg-elevated shadow-2xl"
+                >
                   {SORT_OPTIONS.map((opt) => {
                     const isSelected = sort === opt.value
                     return isSelected ? (
                       <button
                         key={opt.value}
+                        type="button"
                         role="option"
                         aria-selected="true"
                         onClick={() => { setSort(opt.value); setSortOpen(false) }}
-                        className="w-full text-left px-3 py-2.5 text-sm transition-colors text-white bg-white/10 font-medium"
+                        className="w-full bg-studio-webtoon/10 px-3 py-2.5 text-left text-sm font-medium text-studio-webtoon transition-colors"
                       >
                         {opt.label}
                       </button>
                     ) : (
                       <button
                         key={opt.value}
+                        type="button"
                         role="option"
                         aria-selected="false"
                         onClick={() => { setSort(opt.value); setSortOpen(false) }}
-                        className="w-full text-left px-3 py-2.5 text-sm transition-colors text-white/60 hover:bg-white/5"
+                        className="w-full px-3 py-2.5 text-left text-sm text-text-secondary transition-colors hover:bg-bg-card hover:text-text"
                       >
                         {opt.label}
                       </button>
@@ -505,83 +635,118 @@ export default function WebtoonDashboardPage() {
           </div>
         </div>
 
-        {/* Tab filters */}
-        <div role="tablist" aria-label="Filter by release status" className="flex flex-wrap gap-1.5 border-b border-bg-border pb-3 mb-6">
+        {/* Filter tabs */}
+        <div
+          role="tablist"
+          aria-label="Filter by release status"
+          className="mb-6 flex items-center gap-0.5 overflow-x-auto border-b border-bg-border pb-px scrollbar-none"
+        >
           {STATUS_FILTERS.map((f) => {
+            const count = f.value === 'all'
+              ? webtoons.length
+              : f.value === 'live'
+              ? publishedCount
+              : webtoons.filter((w) => w.status === f.value).length
             const isSelected = filter === f.value
             return isSelected ? (
               <button
                 key={f.value}
+                type="button"
                 role="tab"
                 aria-selected="true"
                 onClick={() => setFilter(f.value)}
-                className="text-xs px-3 py-1.5 rounded-lg border transition-colors bg-white text-bg border-white font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-t border-b-2 border-studio-webtoon px-3 py-2 text-sm font-medium text-studio-webtoon transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-webtoon"
               >
                 {f.label}
+                {count > 0 && (
+                  <span className="rounded-full bg-studio-webtoon px-1.5 py-0.5 text-[10px] tabular-nums text-bg">
+                    {count}
+                  </span>
+                )}
               </button>
             ) : (
               <button
                 key={f.value}
+                type="button"
                 role="tab"
                 aria-selected="false"
                 onClick={() => setFilter(f.value)}
-                className="text-xs px-3 py-1.5 rounded-lg border border-transparent text-white/50 hover:text-white hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-t border-b-2 border-transparent px-3 py-2 text-sm font-medium text-text-secondary transition-all hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {f.label}
+                {count > 0 && (
+                  <span className="rounded-full bg-bg-elevated px-1.5 py-0.5 text-[10px] tabular-nums text-text-secondary">
+                    {count}
+                  </span>
+                )}
               </button>
             )
           })}
         </div>
 
-        {/* Grid List */}
+        {/* Content */}
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {Array.from({ length: 5 }).map((_, i) => (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            {Array.from({ length: 8 }).map((_, i) => (
               <WebtoonCardSkeleton key={i} />
             ))}
           </div>
+        ) : webtoons.length === 0 ? (
+          <div
+            className="flex flex-col items-center rounded-2xl border border-dashed border-bg-border bg-bg-card px-6 py-14 text-center"
+            role="status"
+          >
+            <ImageIcon size={32} className="text-text-muted" aria-hidden="true" />
+            <h3 className="mt-4 text-base font-bold text-text">No webtoons yet</h3>
+            <p className="mt-1.5 max-w-sm text-sm text-text-secondary">
+              Start laying out your panels on the infinite canvas and share your story with the world.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-studio-webtoon px-4 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-studio-webtoon/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-webtoon focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              >
+                <Plus size={16} aria-hidden="true" />
+                Create your first webtoon
+              </button>
+              <Link
+                href="/create/seed"
+                className="btn-ghost flex items-center justify-center gap-2 border border-bg-border text-sm"
+              >
+                <Sparkles size={14} aria-hidden="true" />
+                Seed Ravana Demo
+              </Link>
+            </div>
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="card p-16 flex flex-col items-center gap-4 text-center max-w-lg mx-auto mt-8">
-            <div className="w-16 h-16 rounded-2xl bg-bg-elevated flex items-center justify-center">
-              <ImageIcon size={28} className="text-white/20" aria-hidden="true" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-white text-base">No webtoons found</h2>
-              <p className="text-sm text-white/40 mt-1 max-w-xs mx-auto">
-                {search.trim() || filter !== 'all'
-                  ? 'Try modifying your search query or status filter.'
-                  : 'Start uploading your panels and share your story with the world.'}
-              </p>
-            </div>
-            {(!search.trim() && filter === 'all') && (
-              <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
-                <button onClick={() => setShowCreate(true)} className="btn-accent text-xs px-4 py-2">
-                  <Plus size={14} aria-hidden="true" />
-                  Create your first webtoon
-                </button>
-                <Link href="/create/seed" className="btn-ghost border border-bg-border text-xs flex items-center justify-center gap-2 px-4 py-2">
-                  <Sparkles size={14} className="text-accent" aria-hidden="true" />
-                  Seed Ravana Demo
-                </Link>
-              </div>
-            )}
+          <div
+            className="flex flex-col items-center rounded-2xl border border-dashed border-bg-border bg-bg-card px-6 py-14 text-center"
+            role="status"
+          >
+            <Search size={32} className="text-text-muted" aria-hidden="true" />
+            <h3 className="mt-4 text-base font-bold text-text">No results found</h3>
+            <p className="mt-1.5 text-sm text-text-secondary">Try adjusting your search or filter.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" role="region" aria-label="Webtoon list">
+          <ul
+            role="list"
+            aria-label={`${filter === 'all' ? 'All' : filter} webtoons`}
+            className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+          >
             {filtered.map((w) => (
               <WebtoonCard
                 key={w.id}
                 webtoon={w}
-                onOpen={(id) => router.push(`/create/webtoon/${id}`)}
-                onEdit={(w) => setEditWebtoon(w)}
+                onEdit={setEditWebtoon}
                 onDelete={(id, title) => setDeleteTarget({ id, title })}
                 onPublish={handlePublish}
                 onUnpublish={handleUnpublish}
               />
             ))}
-          </div>
+          </ul>
         )}
-      </main>
+      </section>
 
       {/* Creation Modal */}
       {(showCreate || editWebtoon) && (

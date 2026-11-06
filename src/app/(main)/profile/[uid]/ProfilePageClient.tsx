@@ -28,9 +28,10 @@ import { uploadUserAvatar, uploadUserBanner } from '@/lib/firebase/storage'
 import { formatCount, formatDate } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
+import CreatorShopPanel from '@/components/social/CreatorShopPanel'
 import type { UserProfile, Novel, Webtoon, BookmarkItem, SocialLinks } from '@/types'
 
-type Tab = 'novels' | 'webtoons' | 'bookmarks' | 'about'
+type Tab = 'novels' | 'webtoons' | 'shop' | 'bookmarks' | 'about'
 
 function ContentCard({ title, coverURL, href, chapterCount, viewCount, status }: {
   title: string; coverURL: string | null; href: string
@@ -471,6 +472,9 @@ export function ProfilePageClient({ uid }: { uid: string }) {
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'novels', label: 'Novels', count: tabNovels.length },
     { id: 'webtoons', label: 'Webtoons', count: tabWebtoons.length },
+    // No count: the shop panel loads its own data lazily, and showing "0" while
+    // that request is still in flight would be wrong more often than it's right.
+    { id: 'shop', label: 'Shop' },
     ...(isOwnProfile ? [{ id: 'bookmarks' as Tab, label: 'Bookmarks', count: bookmarks.length }] : []),
     { id: 'about', label: 'About' },
   ]
@@ -659,6 +663,12 @@ export function ProfilePageClient({ uid }: { uid: string }) {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Published artwork + merch. Mounted only when selected so a profile
+            visit doesn't fire two extra marketplace queries nobody asked for. */}
+        <div id="panel-shop" role="tabpanel" aria-label="Shop" hidden={activeTab !== 'shop'}>
+          {activeTab === 'shop' && <CreatorShopPanel uid={uid} isOwnProfile={isOwnProfile} />}
         </div>
 
         {isOwnProfile && (

@@ -7,7 +7,18 @@ export const revalidate = 3600 // rebuild the sitemap at most hourly
 // Public, crawlable routes. /earnings is a public marketing page linked from the
 // footer — it was missing here, so it was never submitted for indexing.
 // (/login and /signup are excluded deliberately: robots.ts disallows them.)
-const STATIC_ROUTES = ['', '/browse', '/originals', '/earnings', '/ai-policy', '/privacy', '/terms']
+const STATIC_ROUTES = [
+  '',
+  '/browse',
+  '/originals',
+  '/earnings',
+  '/marketplace',
+  '/marketplace/art',
+  '/marketplace/merch',
+  '/ai-policy',
+  '/privacy',
+  '/terms',
+]
 
 // Keyword-targeted "create with AI" landing pages. Higher priority than the rest
 // of the static set — these are the primary acquisition surfaces for creation
@@ -66,6 +77,67 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           priority: 0.6,
         })
       }
+    }
+
+    // Published anime titles. `visibility == public` is the single indexed
+    // filter and `status == published` is applied in memory, mirroring the
+    // catalog query — an `unlisted` title stays reachable by link but out of
+    // search, exactly as its robots meta states.
+    const animeSnap = await db
+      .collection('animeProjects')
+      .where('visibility', '==', 'public')
+      .select('updatedAt', 'status')
+      .limit(10_000)
+      .get()
+    for (const doc of animeSnap.docs) {
+      const data = doc.data()
+      if (data.status !== 'published') continue
+      routes.push({
+        url: `${APP_URL}/anime/${doc.id}`,
+        lastModified: data.updatedAt?.toDate?.() ?? now,
+        changeFrequency: 'weekly',
+        priority: 0.6,
+      })
+    }
+
+    // Marketplace listings. ONLY `published` documents are queried, and artwork
+    // is additionally filtered to `public` visibility — an `unlisted` piece is
+    // reachable by link but deliberately kept out of search, the same contract
+    // the artwork page's robots meta states.
+    const MAX_MARKETPLACE_URLS = 10_000
+    const [artSnap, productSnap] = await Promise.all([
+      db
+        .collection('artworks')
+        .where('status', '==', 'published')
+        .select('updatedAt', 'visibility')
+        .limit(MAX_MARKETPLACE_URLS)
+        .get(),
+      db
+        .collection('products')
+        .where('status', '==', 'published')
+        .select('updatedAt')
+        .limit(MAX_MARKETPLACE_URLS)
+        .get(),
+    ])
+
+    for (const doc of artSnap.docs) {
+      const data = doc.data()
+      if (data.visibility !== 'public') continue
+      routes.push({
+        url: `${APP_URL}/artwork/${doc.id}`,
+        lastModified: data.updatedAt?.toDate?.() ?? now,
+        changeFrequency: 'weekly',
+        priority: 0.5,
+      })
+    }
+    for (const doc of productSnap.docs) {
+      const data = doc.data()
+      routes.push({
+        url: `${APP_URL}/product/${doc.id}`,
+        lastModified: data.updatedAt?.toDate?.() ?? now,
+        changeFrequency: 'weekly',
+        priority: 0.6,
+      })
     }
   } catch {
     // static routes only

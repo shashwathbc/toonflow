@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { BookOpen, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'lucide-react'
+import { BookOpen, Clapperboard, Film, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'lucide-react'
 import CoverImage from '@/components/content/CoverImage'
 import { fetchHomeFeed } from '@/lib/home/clientHomeFeed'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
@@ -10,9 +10,17 @@ import { Stat } from '@/components/ui/Stat'
 import { HorizontalScroller } from '@/components/ui/HorizontalScroller'
 import type { HomeFeedData, HomeItem } from '@/types/home'
 
+/** Per-type presentation for a catalog card. One card, three content types. */
+const TYPE_META = {
+  novel: { label: 'Novel', icon: BookOpen, unit: 'Chapters', partIcon: Layers },
+  webtoon: { label: 'Webtoon', icon: Tv2, unit: 'Episodes', partIcon: Layers },
+  anime: { label: 'Anime', icon: Clapperboard, unit: 'Scenes', partIcon: Film },
+} as const
+
 function ContentCard({ item, eager }: { item: HomeItem; eager?: boolean }) {
+  const meta = TYPE_META[item.type]
   const href = `/${item.type}/${item.id}`
-  const unitLabel = item.type === 'novel' ? 'Chapters' : 'Episodes'
+  const unitLabel = meta.unit
 
   // The link's aria-label overrides its inner content for the accessible name,
   // so the stats have to be folded in here or they're never announced at all.
@@ -50,10 +58,8 @@ function ContentCard({ item, eager }: { item: HomeItem; eager?: boolean }) {
         </div>
         <div className="absolute top-2 right-2">
           <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-black/60 text-white border border-white/10">
-            {item.type === 'novel'
-              ? <BookOpen size={9} aria-hidden="true" />
-              : <Tv2 size={9} aria-hidden="true" />}
-            {item.type === 'novel' ? 'Novel' : 'Webtoon'}
+            <meta.icon size={9} aria-hidden="true" />
+            {meta.label}
           </span>
         </div>
       </div>
@@ -68,7 +74,7 @@ function ContentCard({ item, eager }: { item: HomeItem; eager?: boolean }) {
             three stats at gap-3 overran the card's overflow-hidden edge, cutting
             the rating. gap-y lets the third stat drop to a second line if needed. */}
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-white/60">
-          <Stat icon={Layers} value={item.partCount} label={unitLabel} />
+          <Stat icon={meta.partIcon} value={item.partCount} label={unitLabel} />
           <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
           {item.rating > 0 && (
             <Stat icon={Star} value={item.rating.toFixed(1)} label="Rating" />
@@ -123,7 +129,7 @@ function CardRow({ items, label, eagerCount = 0 }: { items: HomeItem[]; label: s
   )
 }
 
-const EMPTY_FEED: HomeFeedData = { trending: [], newReleases: [], novels: [], webtoons: [] }
+const EMPTY_FEED: HomeFeedData = { trending: [], newReleases: [], novels: [], webtoons: [], anime: [] }
 
 export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
   const [feed, setFeed] = useState<HomeFeedData>(initialFeed ?? EMPTY_FEED)
@@ -205,6 +211,21 @@ export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
             linkLabel="View all new releases"
           />
           <CardRow items={feed.newReleases} label="New releases" />
+        </section>
+      )}
+
+      {/* Anime — AI-generated titles from the Anime Studio. Hidden entirely
+          when nobody has published one, so the home page never shows an empty
+          shelf. */}
+      {feed.anime.length > 0 && (
+        <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="anime-heading">
+          <SectionHeader
+            id="anime-heading"
+            title="Anime"
+            href="/browse?type=anime"
+            linkLabel="View all anime"
+          />
+          <CardRow items={feed.anime} label="Anime" />
         </section>
       )}
 

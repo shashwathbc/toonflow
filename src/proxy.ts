@@ -56,5 +56,10 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
+  // /marketplace, /product/** and /artwork/** are deliberately ABSENT: they are
+  // public storefront pages that must stay crawlable and shoppable while signed
+  // out. Everything under /create is authenticated, including the new
+  // /create/anime and /create/art studios, which the existing /create/:path*
+  // entry already covers.
   matcher: ['/create/:path*', '/dashboard/:path*', '/admin/:path*', '/wallet/:path*', '/messages/:path*'],
 }

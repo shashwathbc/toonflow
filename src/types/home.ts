@@ -16,7 +16,7 @@ import type { ContentStatus } from './novel'
  */
 export interface HomeItem {
   id: string
-  type: 'novel' | 'webtoon'
+  type: 'novel' | 'webtoon' | 'anime'
   title: string
   synopsis: string
   coverURL: string | null
@@ -25,7 +25,7 @@ export interface HomeItem {
   genres: string[]
   viewCount: number
   rating: number
-  /** chapterCount for novels, episodeCount for webtoons */
+  /** chapterCount for novels, episodeCount for webtoons, sceneCount for anime */
   partCount: number
   publishedAt: FirestoreTimestamp | null
   createdAt: FirestoreTimestamp | null
@@ -37,4 +37,5 @@ export interface HomeFeedData {
   newReleases: HomeItem[]
   novels: HomeItem[]
   webtoons: HomeItem[]
+  anime: HomeItem[]
 }

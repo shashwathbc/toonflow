@@ -19,19 +19,32 @@ function likeDocId(uid: string, contentType: string, contentId: string) {
   return `${uid}_${contentType}_${contentId}`
 }
 
-function contentRef(contentType: 'novel' | 'webtoon' | 'chapter' | 'episode', contentId: string, parentId?: string) {
+/**
+ * Everything that can be liked. The string is also baked into the like-edge
+ * document id, and firestore.rules keys its ±1 counter guard off that exact id —
+ * so adding a member here without adding it to the rules' contentType allowlist
+ * produces a like that silently fails to count.
+ */
+export type LikeableType =
+  | 'novel'
+  | 'webtoon'
+  | 'chapter'
+  | 'episode'
+  | 'comment'
+  | 'artwork'
+  | 'product'
+
+function contentRef(contentType: LikeableType, contentId: string, parentId?: string) {
   if (contentType === 'chapter' && parentId) return doc(db, 'novels', parentId, 'chapters', contentId)
   if (contentType === 'episode' && parentId) return doc(db, 'webtoons', parentId, 'episodes', contentId)
   if (contentType === 'novel') return doc(db, 'novels', contentId)
+  if (contentType === 'artwork') return doc(db, 'artworks', contentId)
+  if (contentType === 'product') return doc(db, 'products', contentId)
   return doc(db, 'webtoons', contentId)
 }
 
 /** The document that carries the public `likeCount` for a likeable target. */
-export function likeTargetRef(
-  contentType: 'novel' | 'webtoon' | 'chapter' | 'episode' | 'comment',
-  contentId: string,
-  parentId?: string,
-) {
+export function likeTargetRef(contentType: LikeableType, contentId: string, parentId?: string) {
   if (contentType === 'comment') return doc(db, 'comments', contentId)
   return contentRef(contentType, contentId, parentId)
 }
@@ -48,7 +61,7 @@ export function likeTargetRef(
  */
 export async function toggleLike(
   uid: string,
-  contentType: 'novel' | 'webtoon' | 'chapter' | 'episode' | 'comment',
+  contentType: LikeableType,
   contentId: string,
   parentId?: string,
 ): Promise<boolean> {

@@ -65,6 +65,12 @@ export async function fetchHomeFeed(): Promise<HomeFeedData> {
   const byViews = (a: HomeItem, b: HomeItem) => b.viewCount - a.viewCount
 
   return {
+    // NOTE: no anime here. This is the FALLBACK path used only when the server
+    // render came back empty (missing Admin credentials / Firestore blip), and
+    // it exists to preserve the page's pre-existing behaviour rather than to
+    // mirror the server feed. Anime appears via the server path and on
+    // /browse?type=anime.
+    anime: [],
     trending: [...novels, ...webtoons].sort(byViews).slice(0, 12),
     // Sort the MERGED list newest-first so the single latest release leads,
     // instead of listing every novel before every webtoon.

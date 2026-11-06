@@ -67,6 +67,53 @@ service firebase.storage {
       allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
     }
 
+    // ── Art Studio ────────────────────────────────────────────
+    // Public prefix: only ever holds renders/originals the creator intends to
+    // show. Publishing re-verifies these bytes server-side (/api/art/publish)
+    // before anything is linked from a public page — these rules can only see
+    // the DECLARED contentType, which the uploader controls.
+    match /artworks/{uid}/{artworkId}/{file} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isSafeImage() && isUnder25MB();
+    }
+
+    // Composed product mockups shown on marketplace listings.
+    match /products/{uid}/{productId}/{file} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
+    }
+
+    // Anime character reference sheets — owner write, public read (they appear
+    // on the creator's own character cards only).
+    match /animeCharacters/{uid}/{characterId}/{file} {
+      allow read: if true;
+      allow write: if isOwner(uid) && isSafeImage() && isUnder10MB();
+    }
+
+    // Creator-supplied audio for the video editor. Audio is NOT isSafeImage(),
+    // so it gets its own explicit allowlist — and deliberately no SVG/HTML
+    // adjacency: the browser only ever loads these into an <audio> element.
+    match /animeProjects/{uid}/{projectId}/audio/{file} {
+      allow read: if true;
+      allow write: if isOwner(uid)
+        && request.resource.contentType.matches('audio/(mpeg|mp3|wav|ogg|webm|aac|m4a|x-m4a)')
+        && isUnder25MB();
+    }
+
+    // ── Private workspace ─────────────────────────────────────
+    // Generated video and private drafts. NO client access in either direction,
+    // not even for the owner: reads go through /api/anime/assets, which checks
+    // ownership server-side and mints a SHORT-LIVED signed URL. Writes are
+    // Admin-SDK only (the generation pipeline), so a client can never place
+    // bytes at a path a scene's storageKey could later point at.
+    //
+    // This denial is what makes "no permanent public URL for private work"
+    // structural: there is no download token to leak, because no client can
+    // ever obtain one for this prefix.
+    match /private/{allPrivate=**} {
+      allow read, write: if false;
+    }
+
     // Deny everything else by default.
     match /{allPaths=**} {
       allow read, write: if false;
