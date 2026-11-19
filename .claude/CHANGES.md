@@ -1,5 +1,18 @@
 # Toonflow Studio Paint — Change Log
 
+## Restore Originals tab (novels + webtoons only) (2026-11-19)
+- Request: keep an Originals tab in the navbar; show only novels/webtoons created from the Create tab, never images of other content.
+- `src/app/(main)/originals/page.tsx` + `OriginalsClient.tsx` (new): the page and client had been deleted from the working tree. Restored them backed by `browseContent()` (the `novels` and `webtoons` collections — i.e. studio-created content only). Anime and MangaDex manga are deliberately excluded: they have no create-studio flow and live elsewhere. Trending/Newest/Top Rated tabs, merged sorting, skeleton and empty state included.
+- `src/components/layout/Navbar.tsx`: re-added the Originals link between Home and Browse. `src/components/layout/MobileNav.tsx`: re-added the Originals star tab.
+- `src/app/sitemap.ts`: added `/originals` to the static routes.
+- Verified: `tsc --noEmit` and `eslint` on the changed files are clean.
+
+### Firebase images not showing — root cause is operational, not code
+- Symptom matches the report: every novel/webtoon cover renders as "No Cover".
+- Diagnosis (live requests on 2026-11-19): document URLs in `novels`/`webtoons` are well-formed Firebase Storage download URLs, but fetching any of them (including avatars) returns **HTTP 402 `The billing account for the owning project is disabled in state closed`**, on both `firebasestorage.googleapis.com` and the `storage.googleapis.com` JSON API. Firestore reads still work (Spark free tier), so the catalog renders while Storage is refused.
+- `CoverImage` is behaving correctly: the optimizer request fails, the `unoptimized` retry fails, and it falls back to the placeholder. No `coverURL` is missing and no client code needs changing.
+- **Operator action required:** re-enable billing on the Firebase project `toonflow-studio-paint-f76d5` (or migrate the bucket to a project with active billing and re-upload covers/avatars). Until then the bytes are unreachable by anyone, including the Admin SDK.
+
 ## Wire Cloudflare image provider into production (App Hosting) (2026-08-05)
 - Symptom: local image generation worked, but the hosted site still showed "service credits exhausted" — because `.env.local` is git-ignored, so prod had no `IMAGE_PROVIDER`/Cloudflare config and defaulted to Pollinations (0 balance → 402). The provider CODE was already live (committed in `c410f25`); only the prod env was missing.
 - **`apphosting.yaml`**: added `IMAGE_PROVIDER=cloudflare` and `CLOUDFLARE_ACCOUNT_ID=2f2c85bb…` as RUNTIME env (account id isn't sensitive), plus a `CLOUDFLARE_API_TOKEN` Secret Manager reference. Refreshed the stale STABILITY/Pollinations comment.
@@ -3398,3 +3411,27 @@ Templates, collections, token payments (modelled in types, not wired), the Art
 Earnings **dashboard UI** (API is done), 3D/holographic preview (mockups remain
 inline SVG), the full extended drawing toolset, moderation queue UI, Design
 Assistant, and prompt-to-product-config.
+
+## MangaDex — Top 30 webtoons + chapter reader
+
+### What
+- New server-only MangaDex client (`src/lib/mangadex/client.ts`) + types. Ranks the
+  most-followed "Web Comic" titles, keeps only series with readable English
+  chapters (licensed titles with zero hosted chapters would otherwise 404 on every
+  chapter link), and proxies through `MANGADEX_PROXY_URL` when set.
+- Chapter feed is de-duplicated across scanlation groups and sorted ascending by
+  volume then chapter number; pagination covers feeds over 500 chapters.
+- Routes: `/manga` (top 30 grid), `/manga/[id]` (series + full chapter list),
+  `/manga/[id]/chapter/[chapterId]` (long-strip reader with prev/next).
+- Home feed and /browse both render the Top 30 row/grid, server-fetched with 1h ISR.
+- CSP `img-src` now allows MangaDex cover/CDN hosts (plus the configured proxy
+  origin); `MANGADEX_PROXY_URL` documented in `.env.example`.
+
+### Verification
+`tsc --noEmit` clean · eslint clean · dev server: `/manga` renders 30 cards,
+series page shows 214 chapters in order, chapter page renders its 4 page images,
+home and browse each render 30 manga cards.
+
+### Note
+MangaDex is a third-party source; series data/pages belong to their creators and
+publishers. No API key or proxy is required — the worker is optional.

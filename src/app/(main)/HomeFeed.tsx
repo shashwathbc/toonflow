@@ -2,19 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { BookOpen, Clapperboard, Film, Layers, Eye, Star, ArrowRight, Globe, Tv2, Sparkles } from 'lucide-react'
+import { BookOpen, Layers, Eye, Star, ArrowRight, Globe, Tv2 } from 'lucide-react'
 import CoverImage from '@/components/content/CoverImage'
 import { fetchHomeFeed } from '@/lib/home/clientHomeFeed'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { Stat } from '@/components/ui/Stat'
 import { HorizontalScroller } from '@/components/ui/HorizontalScroller'
+import MangaRow from '@/components/manga/MangaRow'
 import type { HomeFeedData, HomeItem } from '@/types/home'
+import type { MangaSummary } from '@/lib/mangadex/types'
 
-/** Per-type presentation for a catalog card. One card, three content types. */
+/** Per-type presentation for a catalog card. One card, two content types. */
 const TYPE_META = {
   novel: { label: 'Novel', icon: BookOpen, unit: 'Chapters', partIcon: Layers },
   webtoon: { label: 'Webtoon', icon: Tv2, unit: 'Episodes', partIcon: Layers },
-  anime: { label: 'Anime', icon: Clapperboard, unit: 'Scenes', partIcon: Film },
 } as const
 
 function ContentCard({ item, eager }: { item: HomeItem; eager?: boolean }) {
@@ -129,18 +130,28 @@ function CardRow({ items, label, eagerCount = 0 }: { items: HomeItem[]; label: s
   )
 }
 
-const EMPTY_FEED: HomeFeedData = { trending: [], newReleases: [], novels: [], webtoons: [], anime: [] }
+const EMPTY_FEED: HomeFeedData = { trending: [], newReleases: [], novels: [], webtoons: [] }
 
-export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
+export function HomeFeed({
+  initialFeed,
+  initialManga = [],
+}: {
+  initialFeed?: HomeFeedData
+  /** Top MangaDex webtoons, server-fetched by the home page. */
+  initialManga?: MangaSummary[]
+}) {
   const [feed, setFeed] = useState<HomeFeedData>(initialFeed ?? EMPTY_FEED)
   // Server data means there is nothing to wait for — render the cards (and
   // therefore the cover <img> tags) on the very first paint. The skeleton only
   // appears on the fallback path.
-  const serverRendered = (initialFeed?.trending.length ?? 0) > 0
+  const hasServerFeed = (initialFeed?.trending.length ?? 0) > 0
+  // MangaDex already gives us something to paint even on a brand-new install
+  // with an empty Firestore, so don't hold the page behind a skeleton for it.
+  const serverRendered = hasServerFeed || initialManga.length > 0
   const [loading, setLoading] = useState(!serverRendered)
 
   useEffect(() => {
-    if (serverRendered) return
+    if (hasServerFeed) return
     // Fallback only: the server render came back empty (no Admin credentials,
     // or Firestore was unavailable). Firestore calls aren't abortable, so the
     // guard gates the setState rather than the request.
@@ -152,7 +163,7 @@ export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [serverRendered])
+  }, [hasServerFeed])
 
   if (loading) {
     return (
@@ -169,7 +180,7 @@ export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
     )
   }
 
-  if (feed.trending.length === 0 && feed.newReleases.length === 0) {
+  if (feed.trending.length === 0 && feed.newReleases.length === 0 && initialManga.length === 0) {
     return (
       <section className="max-w-screen-xl mx-auto px-4 py-16 text-center" aria-labelledby="empty-heading">
         <Globe size={40} className="text-white/20 mx-auto mb-4" aria-hidden="true" />
@@ -214,21 +225,6 @@ export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
         </section>
       )}
 
-      {/* Anime — AI-generated titles from the Anime Studio. Hidden entirely
-          when nobody has published one, so the home page never shows an empty
-          shelf. */}
-      {feed.anime.length > 0 && (
-        <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="anime-heading">
-          <SectionHeader
-            id="anime-heading"
-            title="Anime"
-            href="/browse?type=anime"
-            linkLabel="View all anime"
-          />
-          <CardRow items={feed.anime} label="Anime" />
-        </section>
-      )}
-
       {/* Popular Novels */}
       {feed.novels.length > 0 && (
         <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="novels-heading">
@@ -239,6 +235,19 @@ export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
             linkLabel="View all novels"
           />
           <CardRow items={feed.novels} label="Popular novels" />
+        </section>
+      )}
+
+      {/* Top Webtoons (MangaDex) */}
+      {initialManga.length > 0 && (
+        <section className="max-w-screen-xl mx-auto px-4 pb-8" aria-labelledby="top-manga-heading">
+          <SectionHeader
+            id="top-manga-heading"
+            title="Top Webtoons"
+            href="/manga"
+            linkLabel="View all top webtoons"
+          />
+          <MangaRow manga={initialManga} />
         </section>
       )}
 
@@ -255,27 +264,6 @@ export function HomeFeed({ initialFeed }: { initialFeed?: HomeFeedData }) {
         </section>
       )}
 
-      {/* Originals promo */}
-      <section
-        className="max-w-screen-xl mx-auto px-4 pb-16"
-        aria-labelledby="originals-promo-heading"
-      >
-        <div className="bg-bg-elevated border border-bg-border p-6 sm:p-8 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Sparkles size={18} className="text-accent" aria-hidden="true" />
-              <Tv2 size={18} className="text-accent" aria-hidden="true" />
-              <h2 id="originals-promo-heading" className="text-lg font-bold text-white">Toonflow Originals</h2>
-            </div>
-            <p className="text-white/60 max-w-sm">
-              Exclusive webtoons and novels created by top creators — only on Toonflow.
-            </p>
-          </div>
-          <Link href="/originals" className="btn-accent shrink-0">
-            Explore Originals
-          </Link>
-        </div>
-      </section>
     </div>
   )
 }

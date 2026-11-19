@@ -4,14 +4,9 @@ import {
   ArrowRight,
   BookOpen,
   ChevronRight,
-  Clapperboard,
   ImageIcon,
   Lock,
-  Palette,
-  Shirt,
   Sparkles,
-  Store,
-  Wand2,
 } from 'lucide-react'
 import { cookies } from 'next/headers'
 import { EMAIL_COOKIE_NAME, canUseWebtoonStudio } from '@/lib/utils/constants'
@@ -19,13 +14,13 @@ import { EMAIL_COOKIE_NAME, canUseWebtoonStudio } from '@/lib/utils/constants'
 export const metadata: Metadata = {
   title: 'Create Without Limits — Studio Hub',
   description:
-    'Turn your imagination into anime videos, artwork, and products. Four studios: Anime, Art, Novel and Webtoon.',
+    'Turn your imagination into serialized novels and webtoon episodes. Two studios: Novel and Webtoon.',
   // The hub is behind auth and disallowed in robots.ts; say so in the page's own
   // meta too so a crawler that reaches it from an external link still backs off.
   robots: { index: false, follow: false },
 }
 
-type Tint = 'anime' | 'art' | 'novel' | 'webtoon'
+type Tint = 'novel' | 'webtoon'
 
 /**
  * Per-studio tint classes.
@@ -34,22 +29,6 @@ type Tint = 'anime' | 'art' | 'novel' | 'webtoon'
  * source text, so `bg-studio-${tint}` would never make it into the stylesheet.
  */
 const TINT: Record<Tint, { icon: string; badge: string; label: string; button: string; border: string; ring: string }> = {
-  anime: {
-    icon: 'bg-studio-anime/12 text-studio-anime',
-    badge: 'border-studio-anime/25 text-studio-anime',
-    label: 'text-studio-anime',
-    button: 'bg-studio-anime text-bg hover:bg-studio-anime/90',
-    border: 'hover:border-studio-anime/45',
-    ring: 'focus-visible:ring-studio-anime',
-  },
-  art: {
-    icon: 'bg-studio-art/12 text-studio-art',
-    badge: 'border-studio-art/25 text-studio-art',
-    label: 'text-studio-art',
-    button: 'bg-studio-art text-bg hover:bg-studio-art/90',
-    border: 'hover:border-studio-art/45',
-    ring: 'focus-visible:ring-studio-art',
-  },
   novel: {
     icon: 'bg-studio-novel/12 text-studio-novel',
     badge: 'border-studio-novel/25 text-studio-novel',
@@ -82,42 +61,14 @@ interface Studio {
 }
 
 /**
- * All four studios share ONE card shape: icon + badge, title, subtitle,
+ * Both studios share ONE card shape: icon + badge, title, subtitle,
  * description, a four-beat workflow strip, and a pinned action. Identical
- * structure is what makes the grid read as a grid — the previous layout gave
- * Anime/Art a large treatment and demoted Novel/Webtoon to list rows, which is
- * exactly the mismatch this replaces.
+ * structure is what makes the grid read as a grid.
  *
  * Styling follows Material's dark surfaces: flat tonal fills, no glows or blur,
  * elevation expressed by a surface change on hover rather than a transform.
  */
 const STUDIOS: Studio[] = [
-  {
-    id: 'anime',
-    href: '/create/anime',
-    badge: 'AI Video',
-    title: 'Anime Studio',
-    subtitle: 'Generate anime videos with AI',
-    description:
-      'Turn ideas into anime scenes, trailers and cinematic sequences with AI, then cut them together on a real timeline.',
-    flow: ['Prompt', 'Generate', 'Edit', 'Publish'],
-    cta: 'Open Anime Studio',
-    icon: <Clapperboard size={22} aria-hidden="true" />,
-    tourId: 'create-anime',
-  },
-  {
-    id: 'art',
-    href: '/create/art',
-    badge: 'Art & Merch',
-    title: 'Art Studio',
-    subtitle: 'Create art & merchandise',
-    description:
-      'Design artwork and put it on tees, hoodies, caps and posters — then publish and sell it in the marketplace.',
-    flow: ['Design', 'Publish', 'Sell', 'Deliver'],
-    cta: 'Open Art Studio',
-    icon: <Palette size={22} aria-hidden="true" />,
-    tourId: 'create-art',
-  },
   {
     id: 'novel',
     href: '/create/novel',
@@ -243,33 +194,6 @@ function StudioCard({ studio, locked }: { studio: Studio; locked?: boolean }) {
   )
 }
 
-function QuickLink({
-  href,
-  icon,
-  label,
-}: {
-  href: string
-  icon: React.ReactNode
-  label: string
-}) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-center gap-3 rounded-2xl border border-bg-border bg-bg-card px-4 py-3.5 transition-colors duration-150 hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <span className="shrink-0 text-text-secondary" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="text-sm font-medium text-text">{label}</span>
-      <ChevronRight
-        size={16}
-        className="ml-auto shrink-0 text-text-muted transition-colors group-hover:text-text"
-        aria-hidden="true"
-      />
-    </Link>
-  )
-}
-
 export default async function CreateHubPage() {
   // Server-set email cookie (from the verified session) — same source the
   // middleware gate uses, so the card and the /create/webtoon gate always agree.
@@ -289,7 +213,7 @@ export default async function CreateHubPage() {
             Create Without Limits
           </h1>
           <p className="mt-3 text-base text-text-secondary sm:text-lg">
-            Turn your imagination into anime videos, artwork, and products.
+            Turn your imagination into serialized novels and webtoon episodes.
           </p>
         </header>
 
@@ -312,29 +236,6 @@ export default async function CreateHubPage() {
           </div>
         </section>
 
-        {/* Where the work ends up */}
-        <section className="mt-10 lg:mt-14" aria-labelledby="next-steps-heading">
-          <h2 id="next-steps-heading" className="sr-only">
-            Where your work goes next
-          </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <QuickLink
-              href="/marketplace"
-              icon={<Store size={17} aria-hidden="true" />}
-              label="Browse the Marketplace"
-            />
-            <QuickLink
-              href="/marketplace/merch"
-              icon={<Shirt size={17} aria-hidden="true" />}
-              label="See merch designs"
-            />
-            <QuickLink
-              href="/create/anime/projects"
-              icon={<Wand2 size={17} aria-hidden="true" />}
-              label="Continue a project"
-            />
-          </div>
-        </section>
       </div>
     </div>
   )

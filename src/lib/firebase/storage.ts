@@ -256,32 +256,6 @@ export async function uploadProductPreview(
   return promise
 }
 
-/** Character reference sheet for the Anime Studio (owner-scoped, public read). */
-export async function uploadAnimeCharacterImage(
-  uid: string,
-  characterId: string,
-  file: File,
-  index: number,
-  onProgress?: (p: UploadProgress) => void
-): Promise<string> {
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase()
-  const { promise } = uploadFile(`animeCharacters/${uid}/${characterId}/ref_${index}.${ext}`, file, onProgress)
-  return promise
-}
-
-/** Creator-supplied audio for the video editor (music beds, voiceover takes). */
-export async function uploadEditorAudio(
-  uid: string,
-  projectId: string,
-  file: File,
-  assetId: string,
-  onProgress?: (p: UploadProgress) => void
-): Promise<string> {
-  const ext = (file.name.split('.').pop() || 'mp3').toLowerCase()
-  const { promise } = uploadFile(`animeProjects/${uid}/${projectId}/audio/${assetId}.${ext}`, file, onProgress)
-  return promise
-}
-
 export async function deleteStorageFile(url: string): Promise<void> {
   const fileRef = ref(storage, url)
   await deleteObject(fileRef)

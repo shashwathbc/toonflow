@@ -7,7 +7,6 @@ import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import { Tooltip } from '@/components/ui/Tooltip'
 import FollowButton from './FollowButton'
-import MessageButton from './MessageButton'
 import { formatCount } from '@/lib/utils/formatters'
 import type { SocialUser } from '@/types'
 
@@ -21,8 +20,8 @@ interface SocialUserRowProps {
 /**
  * One row in a followers/following list: avatar, name + handle, truncated bio,
  * follower/following counts, a Friends badge for mutual follows, and Follow /
- * Message / View-profile actions. Follow state is tracked locally so the badge
- * and Message enablement react immediately to a follow/unfollow.
+ * View-profile actions. Follow state is tracked locally so the badge reacts
+ * immediately to a follow/unfollow.
  */
 export default function SocialUserRow({ user, viewerId, onNavigate }: SocialUserRowProps) {
   const isSelf = viewerId === user.uid
@@ -81,7 +80,6 @@ export default function SocialUserRow({ user, viewerId, onNavigate }: SocialUser
               initialFollowing={user.viewerFollows}
               onToggled={handleToggled}
             />
-            <MessageButton targetUid={user.uid} isMutual={isMutual} onNavigate={onNavigate} />
           </>
         )}
         <Tooltip label="View profile">

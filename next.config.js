@@ -16,11 +16,34 @@
 // reconstruction, source maps) needs eval(); React never uses eval() in prod.
 const isDev = process.env.NODE_ENV === 'development'
 
+// MangaDex covers and chapter pages come from its CDNs (or the Toonflow proxy
+// worker in front of them), so those origins must be allowed as image sources.
+// The proxy origin is read from the environment at build/config time instead of
+// being hard-coded, since each deployment can point at its own worker.
+function originOf(value) {
+  if (!value) return null
+  try {
+    return new URL(value).origin
+  } catch {
+    return null
+  }
+}
+
+const mangaImageHosts = [
+  'https://uploads.mangadex.org',
+  'https://*.mangadex.org',
+  'https://*.mangadex.network',
+  'https://*.workers.dev',
+  originOf(process.env.MANGADEX_PROXY_URL),
+]
+  .filter(Boolean)
+  .join(' ')
+
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://checkout.razorpay.com https://apis.google.com https://www.gstatic.com`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://picsum.photos https://*.gstatic.com https://*.googleusercontent.com",
+  `img-src 'self' data: blob: https://firebasestorage.googleapis.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://picsum.photos https://*.gstatic.com https://*.googleusercontent.com ${mangaImageHosts}`,
   "font-src 'self' data:",
   "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://api.razorpay.com https://lumberjack.razorpay.com",
   "frame-src 'self' https://checkout.razorpay.com https://api.razorpay.com https://accounts.google.com https://*.firebaseapp.com",

@@ -6,32 +6,37 @@ import Link from 'next/link'
 import CoverImage from '@/components/content/CoverImage'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
-  Search, SlidersHorizontal, BookOpen, Clapperboard, Film, Layers, Eye, Star, X,
+  Search, SlidersHorizontal, BookOpen, Layers, Eye, Star, X,
 } from 'lucide-react'
 import { browseContent, searchContent } from '@/lib/firebase/firestore'
-import { listPublishedAnime } from '@/lib/firebase/anime'
 import { formatCount, toTitleCase } from '@/lib/utils/formatters'
 import { Stat } from '@/components/ui/Stat'
 import { GENRES } from '@/lib/utils/constants'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
+import MangaCard from '@/components/manga/MangaCard'
+import type { MangaSummary } from '@/lib/mangadex/types'
 import type { Novel, Webtoon } from '@/types'
-import type { AnimeProject } from '@/types/anime'
 import toast from 'react-hot-toast'
 
 type SortBy = 'trending' | 'newest' | 'rating'
-type ContentType = 'all' | 'novel' | 'webtoon' | 'anime'
+type ContentType = 'all' | 'novel' | 'webtoon' | 'manga'
+
+const CONTENT_TABS: { value: ContentType; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'novel', label: 'Novels' },
+  { value: 'webtoon', label: 'Webtoons' },
+  { value: 'manga', label: 'MangaDex' },
+]
 
 /** A catalog row, whatever its underlying content type. */
 type CatalogEntry =
   | { type: 'novel'; item: Novel }
   | { type: 'webtoon'; item: Webtoon }
-  | { type: 'anime'; item: AnimeProject }
 
 const TYPE_LABEL: Record<CatalogEntry['type'], string> = {
   novel: 'Novel',
   webtoon: 'Webtoon',
-  anime: 'Anime',
 }
 
 const SORT_OPTIONS: { label: string; value: SortBy }[] = [
@@ -53,20 +58,15 @@ function ContentCard({ entry }: { entry: CatalogEntry }) {
   // Each content type counts its parts differently and lives at its own route.
   // Normalising here keeps ONE card for the whole catalog rather than a
   // near-duplicate per type.
-  const isAnime = type === 'anime'
   const item = entry.item
-  const partCount = isAnime
-    ? (entry.item as AnimeProject).sceneCount
-    : 'chapterCount' in item
-      ? (item as Novel).chapterCount
-      : (item as Webtoon).episodeCount
-  const href = isAnime ? `/anime/${item.id}` : `/${type}/${item.id}`
-  const unitLabel = type === 'novel' ? 'Chapters' : type === 'webtoon' ? 'Episodes' : 'Scenes'
-  const coverURL = isAnime ? (entry.item as AnimeProject).thumbnailURL : (item as Novel).coverURL
+  const partCount = 'chapterCount' in item
+    ? (item as Novel).chapterCount
+    : (item as Webtoon).episodeCount
+  const href = `/${type}/${item.id}`
+  const unitLabel = type === 'novel' ? 'Chapters' : 'Episodes'
+  const coverURL = item.coverURL
   const genres = item.genres ?? []
-  // Anime carries no star rating yet — showing 0.0 would read as "rated badly"
-  // rather than "not rated", so the stat is simply omitted.
-  const rating = isAnime ? 0 : (item as Novel).rating
+  const rating = item.rating
 
   // Folded into the link label because aria-label overrides inner content.
   const cardLabel = [
@@ -93,7 +93,6 @@ function ContentCard({ entry }: { entry: CatalogEntry }) {
         />
         <div className="absolute top-2 left-2 flex gap-1">
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/70 text-white capitalize border border-white/10 inline-flex items-center gap-1">
-            {isAnime && <Clapperboard size={9} aria-hidden="true" />}
             {TYPE_LABEL[type]}
           </span>
         </div>
@@ -104,7 +103,7 @@ function ContentCard({ entry }: { entry: CatalogEntry }) {
           <p className="text-[11px] text-white/50 mb-1.5 truncate">{genres.slice(0, 2).join(' · ')}</p>
         )}
         <div className="flex items-center gap-2.5 text-[11px] text-white/60">
-          <Stat icon={isAnime ? Film : Layers} value={partCount} label={unitLabel} />
+          <Stat icon={Layers} value={partCount} label={unitLabel} />
           <Stat icon={Eye} value={formatCount(item.viewCount)} label="Views" />
           {rating > 0 && (
             <Stat icon={Star} value={rating.toFixed(1)} label="Rating" />
@@ -231,12 +230,13 @@ function FilterControls({
   )
 }
 
-export function BrowseClient() {
+export function BrowseClient({ manga }: { manga: MangaSummary[] }) {
   const searchParams = useSearchParams()
 
-  const [contentType, setContentType] = useState<ContentType>(
-    (searchParams.get('type') as ContentType) ?? 'all'
-  )
+  const [contentType, setContentType] = useState<ContentType>(() => {
+    const type = searchParams.get('type')
+    return type === 'novel' || type === 'webtoon' || type === 'manga' ? type : 'all'
+  })
   const [sortBy, setSortBy] = useState<SortBy>('trending')
   const [genres, setGenres] = useState<string[]>(() => {
     const g = searchParams.get('genre')
@@ -269,17 +269,15 @@ export function BrowseClient() {
     const id = ++requestId.current
     const isCurrent = () => id === requestId.current
 
-    const request = searchQuery.trim()
-      ? Promise.all([
-          searchContent(searchQuery.trim(), 48),
-          // Firestore has no substring search, so anime is filtered in memory
-          // the same way the novel/webtoon search already works.
-          contentType === 'novel' || contentType === 'webtoon'
-            ? Promise.resolve([] as AnimeProject[])
-            : listPublishedAnime({ sortBy, limitCount: 48 }),
-        ]).then(([{ novels, webtoons }, anime]) => {
+    const request: Promise<void> = contentType === 'manga'
+      // The MangaDex tab is server-rendered and filtered client-side below, so
+      // there is nothing to fetch here.
+      ? Promise.resolve().then(() => {
+          if (isCurrent()) setItems([])
+        })
+      : searchQuery.trim()
+      ? searchContent(searchQuery.trim(), 48).then(({ novels, webtoons }) => {
           if (!isCurrent()) return
-          const needle = searchQuery.trim().toLowerCase()
           setItems([
             ...(contentType === 'all' || contentType === 'novel'
               ? novels.map((n): CatalogEntry => ({ type: 'novel', item: n }))
@@ -287,40 +285,19 @@ export function BrowseClient() {
             ...(contentType === 'all' || contentType === 'webtoon'
               ? webtoons.map((w): CatalogEntry => ({ type: 'webtoon', item: w }))
               : []),
-            ...anime
-              .filter(
-                (a) =>
-                  a.title.toLowerCase().includes(needle) ||
-                  a.description.toLowerCase().includes(needle),
-              )
-              .map((a): CatalogEntry => ({ type: 'anime', item: a })),
           ])
         })
-      : Promise.all([
-          contentType === 'anime'
-            ? Promise.resolve({ novels: [] as Novel[], webtoons: [] as Webtoon[] })
-            : browseContent({
-                contentType: contentType === 'all' ? 'all' : contentType,
-                genres: genres.length ? genres : undefined,
-                status: status || undefined,
-                sortBy,
-                limitCount: 48,
-              }),
-          // Anime has no ongoing/completed lifecycle, so a status filter simply
-          // excludes it rather than returning titles that don't match.
-          (contentType === 'all' || contentType === 'anime') && !status
-            ? listPublishedAnime({
-                genres: genres.length ? genres : undefined,
-                sortBy,
-                limitCount: 48,
-              })
-            : Promise.resolve([] as AnimeProject[]),
-        ]).then(([{ novels, webtoons }, anime]) => {
+      : browseContent({
+          contentType,
+          genres: genres.length ? genres : undefined,
+          status: status || undefined,
+          sortBy,
+          limitCount: 48,
+        }).then(({ novels, webtoons }) => {
           if (!isCurrent()) return
           setItems([
             ...novels.map((n): CatalogEntry => ({ type: 'novel', item: n })),
             ...webtoons.map((w): CatalogEntry => ({ type: 'webtoon', item: w })),
-            ...anime.map((a): CatalogEntry => ({ type: 'anime', item: a })),
           ])
         })
 
@@ -363,6 +340,28 @@ export function BrowseClient() {
     setContentType('all')
   }
 
+  const isMangaTab = contentType === 'manga'
+  const isAllTab = contentType === 'all'
+
+  // MangaDex copies arrive pre-ranked and cannot be filtered server-side, so the
+  // search box does a simple title/genre match over the loaded list.
+  const mangaItems = searchQuery.trim()
+    ? manga.filter((m) => {
+        const q = searchQuery.trim().toLowerCase()
+        return (
+          m.title.toLowerCase().includes(q) ||
+          m.genres.some((g) => g.toLowerCase().includes(q))
+        )
+      })
+    : manga
+
+  // "All" spreads the MangaDex list in with the Firestore catalog.
+  const shownManga = isMangaTab || isAllTab ? mangaItems : []
+
+  const resultCount = isMangaTab
+    ? shownManga.length
+    : items.length + (isAllTab ? shownManga.length : 0)
+
   const hasActiveFilters = Boolean(genres.length > 0 || status || sortBy !== 'trending' || contentType !== 'all' || searchQuery)
   // Count of filters controlled inside the sidebar/modal (search + content-type
   // live outside it), used for the mobile Filters button badge.
@@ -375,24 +374,28 @@ export function BrowseClient() {
         <div>
           <h1 className="text-2xl font-bold text-white">Browse</h1>
           <p className="text-white/50 text-sm mt-1">
-            {loading ? 'Loading…' : `${items.length} result${items.length !== 1 ? 's' : ''}`}
+            {loading && !isMangaTab
+              ? 'Loading…'
+              : `${resultCount} result${resultCount !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(true)}
-          className="btn-ghost text-sm md:hidden relative"
-          aria-label="Open filters"
-          {...(sidebarOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
-        >
-          <SlidersHorizontal size={16} aria-hidden="true" />
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-accent text-accent-foreground text-[11px] font-semibold">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+        {!isMangaTab && (
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="btn-ghost text-sm md:hidden relative"
+            aria-label="Open filters"
+            {...(sidebarOpen ? { 'aria-expanded': 'true' } : { 'aria-expanded': 'false' })}
+          >
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-accent text-accent-foreground text-[11px] font-semibold">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -400,7 +403,7 @@ export function BrowseClient() {
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" aria-hidden="true" />
         <input
           type="search"
-          placeholder="Search novels, webtoons and anime…"
+          placeholder={isMangaTab ? 'Search MangaDex…' : 'Search novels and webtoons…'}
           value={searchInput}
           onChange={(e) => handleSearchInput(e.target.value)}
           className="input-base pl-10 pr-10 w-full"
@@ -422,21 +425,21 @@ export function BrowseClient() {
 
       {/* Content type tabs */}
       <div role="tablist" aria-label="Content type" className="flex gap-1 mb-6 border-b border-bg-border">
-        {(['all', 'novel', 'webtoon', 'anime'] as ContentType[]).map((t) => (
+        {CONTENT_TABS.map((tab) => (
           <button
-            key={t}
+            key={tab.value}
             type="button"
             role="tab"
-            {...(contentType === t ? { 'aria-selected': 'true' } : { 'aria-selected': 'false' })}
-            onClick={() => setContentType(t)}
+            {...(contentType === tab.value ? { 'aria-selected': 'true' } : { 'aria-selected': 'false' })}
+            onClick={() => setContentType(tab.value)}
             className={cn(
-              'px-4 py-2 text-sm font-medium border-b-2 transition-all capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-t',
-              contentType === t
+              'px-4 py-2 text-sm font-medium border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-t',
+              contentType === tab.value
                 ? 'border-accent text-accent'
                 : 'border-transparent text-white/50 hover:text-white'
             )}
           >
-            {t === 'all' ? 'All' : t === 'novel' ? 'Novels' : t === 'webtoon' ? 'Webtoons' : 'Anime'}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -487,7 +490,7 @@ export function BrowseClient() {
                 onClick={() => setSidebarOpen(false)}
                 className="btn-accent w-full justify-center"
               >
-                {loading ? 'Show results' : `Show ${items.length} result${items.length !== 1 ? 's' : ''}`}
+                {loading ? 'Show results' : `Show ${resultCount} result${resultCount !== 1 ? 's' : ''}`}
               </button>
             </div>
           </Dialog.Content>
@@ -496,26 +499,48 @@ export function BrowseClient() {
 
       <div className="flex gap-6">
         {/* Filter sidebar — desktop only; mobile uses the modal above */}
-        <aside className="hidden md:block w-52 shrink-0" aria-label="Content filters">
-          <FilterControls
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-            status={status}
-            onStatusChange={setStatus}
-            genres={genres}
-            onToggleGenre={toggleGenre}
-            hasActiveFilters={hasActiveFilters}
-            onClearFilters={clearFilters}
-          />
-        </aside>
+        {!isMangaTab && (
+          <aside className="hidden md:block w-52 shrink-0" aria-label="Content filters">
+            <FilterControls
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              status={status}
+              onStatusChange={setStatus}
+              genres={genres}
+              onToggleGenre={toggleGenre}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={clearFilters}
+            />
+          </aside>
+        )}
 
         {/* Results grid */}
         <main id="main-content" className="flex-1 min-w-0" tabIndex={-1}>
-          {loading ? (
+          {isMangaTab ? (
+            shownManga.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <BookOpen size={40} className="text-white/20 mb-4" aria-hidden="true" />
+                <h2 className="text-lg font-semibold text-white mb-2">No results found</h2>
+                <p className="text-white/50 text-sm">
+                  {searchQuery ? `No manga matching "${searchQuery}"` : 'No manga available right now.'}
+                </p>
+              </div>
+            ) : (
+              <div
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+                aria-live="polite"
+                aria-label="MangaDex results"
+              >
+                {shownManga.map((item) => (
+                  <MangaCard key={item.id} manga={item} />
+                ))}
+              </div>
+            )
+          ) : loading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {Array.from({ length: 20 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
-          ) : items.length === 0 ? (
+          ) : items.length === 0 && shownManga.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <BookOpen size={40} className="text-white/20 mb-4" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-white mb-2">No results found</h2>
@@ -534,9 +559,14 @@ export function BrowseClient() {
               aria-live="polite"
               aria-label="Content results"
             >
-              {items.map((entry) => (
-                <ContentCard key={`${entry.type}-${entry.item.id}`} entry={entry} />
-              ))}
+              {[
+                ...items.map((entry) => (
+                  <ContentCard key={`${entry.type}-${entry.item.id}`} entry={entry} />
+                )),
+                ...shownManga.map((item) => (
+                  <MangaCard key={`manga-${item.id}`} manga={item} />
+                )),
+              ]}
             </div>
           )}
         </main>

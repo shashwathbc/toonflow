@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { HeroSlider } from '@/components/home/HeroSlider'
 import { HomeFeed } from './HomeFeed'
 import { getHomeFeed } from '@/lib/home/homeData'
+import { getTopManga } from '@/lib/mangadex/client'
 
 export const metadata: Metadata = {
   // `absolute` bypasses the root `%s | Toonflow Studio Paint` template. This is
@@ -18,7 +19,14 @@ export const metadata: Metadata = {
 export const revalidate = 300
 
 export default async function HomePage() {
-  const feed = await getHomeFeed()
+  const [feed, manga] = await Promise.all([
+    getHomeFeed(),
+    // MangaDex is a third party; a failure must never take the home page down.
+    getTopManga(30).catch((err) => {
+      console.error('[home] top manga failed:', err)
+      return []
+    }),
+  ])
 
   return (
     <div className="space-y-0">
@@ -27,7 +35,7 @@ export default async function HomePage() {
           covers are in the initial HTML and start downloading immediately,
           instead of waiting for hydration + a client Firestore query. */}
       <HeroSlider initialSlides={feed.trending.slice(0, 5)} />
-      <HomeFeed initialFeed={feed} />
+      <HomeFeed initialFeed={feed} initialManga={manga} />
     </div>
   )
 }

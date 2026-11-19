@@ -40,9 +40,7 @@ function DiscordIcon({ size = 18 }: { size?: number }) {
 
 const PLATFORM_LINKS = [
   { href: '/', label: 'Home' },
-  { href: '/originals', label: 'Originals' },
   { href: '/browse', label: 'Browse' },
-  { href: '/earnings', label: 'Creator Earnings' },
 ]
 
 // Keyword-targeted AI creation landing pages. Sitewide footer links give these

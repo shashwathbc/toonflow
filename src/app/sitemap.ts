@@ -4,14 +4,12 @@ import { PUBLIC_STATUSES, isIndexable } from '@/lib/seo/contentMeta'
 
 export const revalidate = 3600 // rebuild the sitemap at most hourly
 
-// Public, crawlable routes. /earnings is a public marketing page linked from the
-// footer — it was missing here, so it was never submitted for indexing.
+// Public, crawlable routes.
 // (/login and /signup are excluded deliberately: robots.ts disallows them.)
 const STATIC_ROUTES = [
   '',
-  '/browse',
   '/originals',
-  '/earnings',
+  '/browse',
   '/marketplace',
   '/marketplace/art',
   '/marketplace/merch',
@@ -77,27 +75,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           priority: 0.6,
         })
       }
-    }
-
-    // Published anime titles. `visibility == public` is the single indexed
-    // filter and `status == published` is applied in memory, mirroring the
-    // catalog query — an `unlisted` title stays reachable by link but out of
-    // search, exactly as its robots meta states.
-    const animeSnap = await db
-      .collection('animeProjects')
-      .where('visibility', '==', 'public')
-      .select('updatedAt', 'status')
-      .limit(10_000)
-      .get()
-    for (const doc of animeSnap.docs) {
-      const data = doc.data()
-      if (data.status !== 'published') continue
-      routes.push({
-        url: `${APP_URL}/anime/${doc.id}`,
-        lastModified: data.updatedAt?.toDate?.() ?? now,
-        changeFrequency: 'weekly',
-        priority: 0.6,
-      })
     }
 
     // Marketplace listings. ONLY `published` documents are queried, and artwork

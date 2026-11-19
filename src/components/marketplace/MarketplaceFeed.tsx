@@ -577,13 +577,8 @@ export default function MarketplaceFeed({ initialTab = 'all' }: { initialTab?: M
           <p className="mt-1.5 max-w-sm text-sm text-text-secondary">
             {needle
               ? 'Try a different search or clear the filters.'
-              : 'The marketplace fills up as creators publish from the Art Studio. Be the first.'}
+              : 'The marketplace fills up as creators publish new work. Check back soon.'}
           </p>
-          {!needle && (
-            <Link href="/create/art" className="btn-accent mt-5 inline-flex px-4 py-2 text-sm">
-              Open Art Studio
-            </Link>
-          )}
         </div>
       ) : density === 'grid' ? (
         <div className="grid grid-cols-3 gap-1.5 sm:gap-2 lg:grid-cols-5">

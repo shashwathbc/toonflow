@@ -9,7 +9,6 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import { cn } from '@/lib/utils/cn'
-import { fmtInr } from '@/lib/revenue/config'
 import type { AnalyticsDay, TopStory } from '@/types/analytics'
 
 const SERIES_1 = '#3987e5' // blue — views
@@ -105,7 +104,6 @@ export default function CreatorCharts({ daily, topStories }: {
 }) {
   const [range, setRange] = useState<Range>('daily')
   const buckets = useMemo(() => bucketize(daily, range), [daily, range])
-  const revenue14 = useMemo(() => bucketize(daily, 'daily'), [daily])
   const followers = useMemo(
     () => daily.slice(-30).map((d) => ({ label: shortDate(d.date), subscribers: d.cumulativeFollowers })),
     [daily],
@@ -170,25 +168,6 @@ export default function CreatorCharts({ daily, topStories }: {
           </LineChart>
         </ResponsiveContainer>
       </ChartCard>
-
-      {/* Revenue */}
-      <div className="lg:col-span-2">
-        <ChartCard title="Revenue" subtitle="Estimated creator earnings per day — last 14 days">
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={revenue14} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-              <CartesianGrid stroke={GRID} vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} tickFormatter={(v: number) => `₹${v}`} />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                cursor={{ stroke: '#3F3F3F' }}
-                formatter={(value) => [fmtInr(Number(value)), 'Earnings']}
-              />
-              <Area type="monotone" dataKey="revenueInr" name="Earnings" stroke={SERIES_2} strokeWidth={2} fill={SERIES_2} fillOpacity={0.1} dot={false} activeDot={{ r: 4, stroke: '#1A1A1A', strokeWidth: 2 }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
 
       {/* Top performing stories */}
       <ChartCard title="Top stories" subtitle="All-time views per work">

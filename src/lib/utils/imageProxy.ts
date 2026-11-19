@@ -91,7 +91,36 @@ export function isStorageUrl(url: string): boolean {
   return bucket !== null && allowedBuckets().has(bucket)
 }
 
-/** Same-origin proxy URL for a remote Storage image. */
+/**
+ * True only for MangaDex image files: covers on uploads.mangadex.org and
+ * chapter pages on the at-home CDN (*.mangadex.network).
+ *
+ * MangaDex answers browser user-agents with a bot challenge — a 403 on covers,
+ * a 404 on chapter pages — which Chrome then rejects as ERR_BLOCKED_BY_ORB, so
+ * a plain cross-origin <img> renders blank. A server-side fetch carries no
+ * browser UA and gets the real bytes. Neither host is user-registrable, so a
+ * host+path allowlist is enough; the path checks keep the proxy from being
+ * pointed at arbitrary endpoints on those hosts.
+ */
+export function isMangadexImageUrl(url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+
+  if (parsed.protocol !== 'https:') return false
+  if (parsed.username || parsed.password) return false
+  if (parsed.port) return false
+
+  const host = parsed.hostname.toLowerCase()
+  if (host === 'uploads.mangadex.org') return parsed.pathname.startsWith('/covers/')
+  if (host.endsWith('.mangadex.network')) return parsed.pathname.startsWith('/data/')
+  return false
+}
+
+/** Same-origin proxy URL for a remote Storage (or MangaDex cover) image. */
 export function proxyImageUrl(url: string): string {
   return `/api/img?u=${encodeURIComponent(url)}`
 }

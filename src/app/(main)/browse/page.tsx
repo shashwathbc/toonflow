@@ -1,14 +1,25 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { BrowseClient } from './BrowseClient'
+import { getTopManga } from '@/lib/mangadex/client'
 
 export const metadata: Metadata = {
   title: 'Browse — Webtoons & Novels',
   description: 'Browse all webtoons, manga, and novels by genre, status, and rating.',
 }
 
-export default function BrowsePage() {
+// The MangaDex tab is refreshed hourly, independently of the live Firestore
+// catalog rendered by BrowseClient.
+export const revalidate = 3600
+
+export default async function BrowsePage() {
+  const manga = await getTopManga(30).catch((err) => {
+    console.error('[browse] top manga failed:', err)
+    return []
+  })
+
   return (
+    <>
     <Suspense fallback={
       <div className="max-w-screen-xl mx-auto px-4 py-8">
         <div className="h-8 w-32 bg-bg-elevated rounded animate-pulse mb-6" />
@@ -25,7 +36,8 @@ export default function BrowsePage() {
         </div>
       </div>
     }>
-      <BrowseClient />
+      <BrowseClient manga={manga} />
     </Suspense>
+    </>
   )
 }

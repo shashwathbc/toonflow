@@ -11,8 +11,6 @@ export const EMAIL_COOKIE_NAME = 'toonflow-user-email'
  */
 export const FEATURE_FLAGS = {
   webtoonStudio: false, // /create/webtoon/** — GATED: allowlist-only (see WEBTOON_STUDIO_ALLOWED_EMAILS). Set true to open to everyone.
-  wallet: false, // /wallet/** — token purchases & payouts (locked in place)
-  buyCoins: false, // dashboard "+ Buy" coins — temporarily locked
 } as const
 
 /**

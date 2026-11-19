@@ -608,10 +608,6 @@ export function ProfilePageClient({ uid }: { uid: string }) {
               )}
             </button>
           ))}
-          <span className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white/25 whitespace-nowrap cursor-default select-none">
-            Anime
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/30">Coming soon</span>
-          </span>
         </div>
 
         {/* Tab panels */}

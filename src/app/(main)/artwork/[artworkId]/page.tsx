@@ -102,11 +102,12 @@ export default async function ArtworkPage({ params }: { params: Promise<{ artwor
 
       <nav aria-label="Breadcrumb" className="mb-5 text-xs text-text-secondary">
         <ol className="flex flex-wrap items-center gap-1.5" role="list">
-          <li>
+         {/* TODO */}
+          {/* <li>
             <Link href="/marketplace" className="rounded hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
               Marketplace
             </Link>
-          </li>
+          </li> */}
           <li aria-hidden="true">/</li>
           <li>
             <Link href="/marketplace/art" className="rounded hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">

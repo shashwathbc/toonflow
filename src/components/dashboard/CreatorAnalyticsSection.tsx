@@ -1,11 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import {
-  Eye, Users, TrendingUp, IndianRupee, Timer, Percent,
-  Repeat, BarChart3, BookOpen, RefreshCw, Info,
+  Eye, Users, TrendingUp, Timer, Percent,
+  Repeat, BarChart3, BookOpen, RefreshCw,
 } from 'lucide-react'
 import AnimatedNumber, { type NumberFormatter } from '@/components/ui/AnimatedNumber'
 import { formatCount } from '@/lib/utils/formatters'
@@ -16,9 +15,6 @@ const CreatorCharts = dynamic(() => import('./CreatorCharts'), {
   ssr: false,
   loading: () => <div className="h-[480px] bg-bg-card border border-bg-border rounded-2xl animate-pulse" aria-hidden="true" />,
 })
-
-const inrFormat: NumberFormatter = (n) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n)
 
 const compactFormat: NumberFormatter = (n) => formatCount(Math.round(n))
 
@@ -113,12 +109,6 @@ export default function CreatorAnalyticsSection() {
         <h2 id="analytics-heading" className="text-sm font-semibold text-text flex items-center gap-2">
           <BarChart3 size={14} aria-hidden="true" /> Creator Analytics
         </h2>
-        <Link
-          href="/earnings"
-          className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded"
-        >
-          <Info size={12} aria-hidden="true" /> How earnings work →
-        </Link>
       </div>
 
       {/* View + audience tiles */}
@@ -128,9 +118,6 @@ export default function CreatorAnalyticsSection() {
         <StatTile label="This month" value={data.monthViews} format={compactFormat} icon={Eye} hint="Last 30 days" />
         <StatTile label="Lifetime views" value={data.lifetimeViews} format={compactFormat} icon={TrendingUp} />
         <StatTile label="Subscribers" value={data.followerCount} format={compactFormat} icon={Users} />
-        <StatTile label="Est. revenue (30d)" value={data.estimatedRevenue30dInr} format={inrFormat} icon={IndianRupee} />
-        <StatTile label="RPM" value={data.rpmInr} format={inrFormat} icon={IndianRupee} hint="Your ₹ per 1K views" />
-        <StatTile label="CPM" value={data.cpmInr} format={inrFormat} icon={IndianRupee} hint="Gross ₹ per 1K views" />
         <StatTile label="Avg read time" value={data.avgReadTimeSec} suffix="s" icon={Timer} hint="Last 30 days" />
         <StatTile label="Completion rate" value={data.completionRatePct} suffix="%" icon={Percent} hint="Avg scroll depth" />
       </div>
@@ -173,11 +160,8 @@ export default function CreatorAnalyticsSection() {
           <BookOpen size={28} className="mx-auto mb-3 text-text-muted opacity-40" aria-hidden="true" />
           <p className="text-sm font-medium text-text">No reader activity yet</p>
           <p className="text-xs text-text-muted mt-1 max-w-sm mx-auto">
-            Charts appear once readers start viewing your published chapters. Every validated view earns you revenue.
+            Charts appear once readers start viewing your published chapters.
           </p>
-          <Link href="/earnings" className="inline-block text-xs text-accent hover:underline mt-3 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none rounded">
-            See how creator earnings work →
-          </Link>
         </div>
       )}
     </section>

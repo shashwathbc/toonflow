@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 
 /**
  * Fire-and-forget view ping for a public listing — marketplace artwork and
- * products, and published anime titles.
+ * products.
  *
  * The COUNT is decided entirely server-side (/api/art/view): bot detection,
  * same-origin check, per-day dedup and the increment itself all live there, so
@@ -15,7 +15,7 @@ export default function ListingViewTracker({
   kind,
   id,
 }: {
-  kind: 'artwork' | 'product' | 'anime'
+  kind: 'artwork' | 'product'
   id: string
 }) {
   const sent = useRef(false)

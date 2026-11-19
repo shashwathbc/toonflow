@@ -7,11 +7,11 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
       // Private/authenticated surfaces should never be crawled. `/create`
-      // covers the Anime and Art studios too — a creator's unreleased projects,
+      // covers the Novel and Webtoon studios — a creator's unreleased projects,
       // drafts and prompts must stay out of search. The PUBLIC results of that
       // work (/marketplace, /product/**, /artwork/**) are deliberately absent
       // from this list so they can be indexed.
-      disallow: ['/admin', '/dashboard', '/wallet', '/create', '/api', '/login', '/signup'],
+      disallow: ['/admin', '/dashboard', '/create', '/api', '/login', '/signup'],
     },
     sitemap: `${APP_URL}/sitemap.xml`,
   }

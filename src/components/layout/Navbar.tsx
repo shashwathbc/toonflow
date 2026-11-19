@@ -3,9 +3,8 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Plus, Search, MessagesSquare } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { useUnreadCount } from '@/hooks/useUnreadCount'
 import { cn } from '@/lib/utils/cn'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Logo } from '@/components/ui/Logo'
@@ -16,14 +15,11 @@ const NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/originals', label: 'Originals' },
   { href: '/browse', label: 'Browse' },
-  { href: '/marketplace', label: 'Marketplace' },
 ]
 
 function Navbar() {
   const pathname = usePathname()
   const { isAuthenticated } = useAuth()
-  const unread = useUnreadCount()
-  const messagesActive = pathname.startsWith('/messages')
 
   return (
     <header
@@ -102,32 +98,6 @@ function Navbar() {
               <Search size={18} aria-hidden="true" />
             </Link>
           </Tooltip>
-
-          {/* Messages */}
-          {isAuthenticated && (
-            <Tooltip label="Messages">
-              <Link
-                href="/messages"
-                data-tour="nav-messages"
-                className={cn(
-                  'relative btn-ghost p-2 rounded-full',
-                  messagesActive && 'bg-bg-elevated text-text'
-                )}
-                aria-current={messagesActive ? 'page' : undefined}
-                aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
-              >
-                <MessagesSquare size={18} aria-hidden="true" />
-                {unread > 0 && (
-                  <span
-                    className="absolute -top-0.5 -right-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-foreground ring-2 ring-bg"
-                    aria-hidden="true"
-                  >
-                    {unread > 9 ? '9+' : unread}
-                  </span>
-                )}
-              </Link>
-            </Tooltip>
-          )}
 
           {/* Live notifications (follows, likes, comments) */}
           <NotificationBell />

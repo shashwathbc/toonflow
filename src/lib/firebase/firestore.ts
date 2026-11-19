@@ -33,7 +33,6 @@ import type {
   Comment,
   Report,
   Withdrawal,
-  WithdrawalMethod,
   BookmarkItem,
   ReadingHistoryItem,
   FollowRecord,
@@ -1032,32 +1031,9 @@ export async function createTransaction(
   return ref.id
 }
 
-// getUserTransactions lives in '@/lib/firebase/wallet' (single source of truth):
-// that variant sorts client-side to tolerate legacy docs missing `createdAt`
-// and avoids a userId+createdAt composite index.
-
 // Token balance mutations are server-only (Admin SDK): AI spend lives in
 // src/lib/tokens.ts and purchases are credited by the Razorpay webhook.
 // Clients cannot write `balance` — Firestore rules forbid it.
-
-// ── Withdrawal Requests ───────────────────────────────────────
-
-export async function createWithdrawalRequest(
-  creatorId: string,
-  amount: number,
-  method: WithdrawalMethod,
-  accountDetails: Record<string, string>
-): Promise<string> {
-  const ref = await addDoc(collection(db, 'withdrawals'), {
-    creatorId,
-    amount,
-    method,
-    accountDetails,
-    status: 'pending',
-    createdAt: serverTimestamp(),
-  })
-  return ref.id
-}
 
 export async function getCreatorWithdrawals(creatorId: string): Promise<Withdrawal[]> {
   const q = query(
@@ -1140,27 +1116,6 @@ export async function searchContent(
     novels: rank(novelSnaps.docs.map((d) => fromDoc<Novel>(d))),
     webtoons: rank(webtoonSnaps.docs.map((d) => fromDoc<Webtoon>(d))),
   }
-}
-
-// ── Originals ─────────────────────────────────────────────────
-
-export async function getOriginals(limitCount = 20): Promise<{ novels: Novel[]; webtoons: Webtoon[] }> {
-  const LIVE = ['published', 'ongoing', 'completed']
-  const [novelSnaps, webtoonSnaps] = await Promise.all([
-    getDocs(query(collection(db, 'novels'), where('isOriginal', '==', true), limit(limitCount * 4))),
-    getDocs(query(collection(db, 'webtoons'), where('isOriginal', '==', true), limit(limitCount * 4))),
-  ])
-  const novels = novelSnaps.docs
-    .map((d) => fromDoc<Novel>(d))
-    .filter((n) => LIVE.includes(n.status) && n.visibility === 'public')
-    .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
-    .slice(0, limitCount)
-  const webtoons = webtoonSnaps.docs
-    .map((d) => fromDoc<Webtoon>(d))
-    .filter((w) => LIVE.includes(w.status) && w.visibility === 'public')
-    .sort((a, b) => compareTimestamps(a.publishedAt, b.publishedAt))
-    .slice(0, limitCount)
-  return { novels, webtoons }
 }
 
 export async function getNewReleases(limitCount = 6): Promise<{ novels: Novel[]; webtoons: Webtoon[] }> {

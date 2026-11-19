@@ -19,15 +19,14 @@ import { checkRateLimitAsync } from '@/lib/views/rateLimit'
 export const runtime = 'nodejs'
 
 const schema = z.object({
-  kind: z.enum(['artwork', 'product', 'anime']),
+  kind: z.enum(['artwork', 'product']),
   id: z.string().min(1).max(128),
 })
 
 /** Listing kind → its collection. Keeps the id space explicit, not guessed. */
-const COLLECTION: Record<'artwork' | 'product' | 'anime', string> = {
+const COLLECTION: Record<'artwork' | 'product', string> = {
   artwork: 'artworks',
   product: 'products',
-  anime: 'animeProjects',
 }
 
 /** Dedup window — one counted view per visitor per listing per day. */

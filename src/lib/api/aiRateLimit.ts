@@ -28,17 +28,6 @@ export const AI_LIMITS = {
   assistChat: { limit: 60, windowMs: HOUR },
   /** Full-chapter generation (Opus, long output) — expensive, cap hard. */
   assistChapter: { limit: 20, windowMs: HOUR },
-  /**
-   * AI VIDEO generation submissions. By far the costliest call on the platform —
-   * a single clip can exceed the vendor cost of a whole chapter — so this is the
-   * tightest bucket we have. It is only the RATE gate; the per-account daily
-   * quota and concurrency cap live in lib/anime/jobs (counted in Firestore, so
-   * they hold across instances), and the platform-wide ceiling in spendGuard.
-   */
-  video: { limit: 20, windowMs: HOUR },
-  /** Storyboard planning for the Anime Studio — cheap text, but fans out to
-   *  expensive video jobs, so it stays well below the plain `text` bucket. */
-  videoPlan: { limit: 20, windowMs: HOUR },
 } as const
 
 export type AiBucket = keyof typeof AI_LIMITS

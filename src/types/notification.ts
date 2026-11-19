@@ -1,9 +1,8 @@
 import type { FirestoreTimestamp } from './user'
 
 /** What kind of engagement produced the notification. A follow/subscribe is a
- * single action in this app (see followUser) and maps to `'follow'`. A
- * `'message'` notification collapses per conversation (see notifyMessage). */
-export type NotificationType = 'follow' | 'like' | 'comment' | 'message'
+ * single action in this app (see followUser) and maps to `'follow'`. */
+export type NotificationType = 'follow' | 'like' | 'comment'
 
 /** Content a like/comment notification points at. */
 export type NotificationTargetType =

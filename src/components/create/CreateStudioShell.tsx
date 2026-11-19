@@ -5,25 +5,22 @@ import { usePathname } from 'next/navigation'
 import {
   BookOpen,
   ChevronLeft,
-  Clapperboard,
   ImageIcon,
   Lock,
-  Palette,
   Store,
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils/cn'
 
 /**
- * Chrome for every page under /create/anime, /create/art, /create/novel and
- * /create/webtoon.
+ * Chrome for every page under /create/novel and /create/webtoon.
  *
  * Deliberately NOT the (studio) sidebar: that shell belongs to Dashboard/Wallet
  * and would drag their nav back into the Create section, which is exactly what
  * this redesign removes. The Create section navigates between the four studios
  * and back to the hub — nothing else.
  */
-type Tint = 'anime' | 'art' | 'novel' | 'webtoon'
+type Tint = 'novel' | 'webtoon'
 
 /**
  * Active-tab tint per studio.
@@ -32,8 +29,6 @@ type Tint = 'anime' | 'art' | 'novel' | 'webtoon'
  * source text, so `bg-studio-${tint}/12` would never make it into the stylesheet.
  */
 const ACTIVE_TINT: Record<Tint, string> = {
-  anime: 'bg-studio-anime/12 text-studio-anime',
-  art: 'bg-studio-art/12 text-studio-art',
   novel: 'bg-studio-novel/12 text-studio-novel',
   webtoon: 'bg-studio-webtoon/12 text-studio-webtoon',
 }
@@ -44,13 +39,11 @@ interface StudioTab {
   label: string
   /** Shortened visual label; the icon stands alone below `sm`. */
   short: string
-  icon: typeof Clapperboard
+  icon: typeof BookOpen
   tint: Tint
 }
 
 const STUDIOS: StudioTab[] = [
-  { href: '/create/anime', label: 'Anime Studio', short: 'Anime', icon: Clapperboard, tint: 'anime' },
-  { href: '/create/art', label: 'Art Studio', short: 'Art', icon: Palette, tint: 'art' },
   { href: '/create/novel', label: 'Novel Studio', short: 'Novel', icon: BookOpen, tint: 'novel' },
   { href: '/create/webtoon', label: 'Webtoon Studio', short: 'Webtoon', icon: ImageIcon, tint: 'webtoon' },
 ]
@@ -106,8 +99,7 @@ export default function CreateStudioShell({
             <span className="text-sm font-semibold lg:hidden">Create</span>
           </Link>
 
-          {/* Four tabs never fit a narrow viewport at full width, so the strip
-              scrolls rather than wrapping the header to two rows. */}
+          {/* The tab strip scrolls rather than wrapping the header to two rows. */}
           <ul
             className="flex flex-1 items-center gap-1 overflow-x-auto scrollbar-none"
             role="list"
@@ -116,8 +108,7 @@ export default function CreateStudioShell({
               const isActive = pathname.startsWith(href)
               const locked = tint === 'webtoon' && !canUseWebtoon
 
-              // A locked studio still holds its place in the row — the tab set
-              // reads as the same four studios as the hub — but it is inert
+              // A locked studio still holds its place in the row but is inert
               // rather than a link that the proxy would bounce straight back.
               if (locked) {
                 return (

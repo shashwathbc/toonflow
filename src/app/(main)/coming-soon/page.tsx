@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Sparkles, Wallet, Palette, ArrowLeft } from 'lucide-react'
+import { Sparkles, Palette, ArrowLeft } from 'lucide-react'
 
 export const metadata: Metadata = {
   // Brand omitted on purpose — the root template appends it.
@@ -15,12 +15,6 @@ const FEATURE_COPY = {
     message:
       'The long vertical canvas creator with AI panel generation is in the final stretch. Webtoon creation opens shortly after launch.',
   },
-  wallet: {
-    icon: Wallet,
-    title: 'Wallet is coming soon',
-    message:
-      'Token purchases, creator earnings, and payouts are almost ready. For now, enjoy reading — everything on Toonflow is free during launch.',
-  },
   default: {
     icon: Sparkles,
     title: 'Coming soon',
@@ -34,10 +28,7 @@ interface PageProps {
 
 export default async function ComingSoonPage({ searchParams }: PageProps) {
   const { feature } = await searchParams
-  const copy =
-    feature === 'studio' ? FEATURE_COPY.studio
-    : feature === 'wallet' ? FEATURE_COPY.wallet
-    : FEATURE_COPY.default
+  const copy = feature === 'studio' ? FEATURE_COPY.studio : FEATURE_COPY.default
   const Icon = copy.icon
 
   return (

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'react-hot-toast'
@@ -63,8 +63,8 @@ export const viewport: Viewport = {
   maximumScale: 5,
 }
 
-const inter = Inter({
-  subsets: ['latin'],
+const inter = localFont({
+  src: '../assets/fonts/Inter-Variable.woff2',
   display: 'swap',
   variable: '--font-inter',
 })

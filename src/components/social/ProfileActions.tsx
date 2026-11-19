@@ -1,14 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { MoreHorizontal, Ban, ShieldOff, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useBlock } from '@/hooks/useBlock'
-import { getFriendship } from '@/lib/firebase/social'
 import SubscribeButton from './SubscribeButton'
-import MessageButton from './MessageButton'
 
 interface ProfileActionsProps {
   targetUid: string
@@ -17,30 +14,14 @@ interface ProfileActionsProps {
 }
 
 /**
- * The action cluster on someone else's profile header: Subscribe, Message
- * (enabled only for mutual followers), and an overflow menu with Block. When
- * the viewer has blocked this user, everything collapses to an Unblock control.
+ * The action cluster on someone else's profile header: Subscribe and an
+ * overflow menu with Block. When the viewer has blocked this user, everything
+ * collapses to an Unblock control.
  */
 export default function ProfileActions({ targetUid, onFollowToggled }: ProfileActionsProps) {
   const { firebaseUser } = useAuth()
   const uid = firebaseUser?.uid ?? null
   const { blocked, pending: blockPending, canBlock, toggle: toggleBlock } = useBlock(targetUid)
-  const [viewerFollows, setViewerFollows] = useState(false)
-  const [followsViewer, setFollowsViewer] = useState(false)
-  const isMutual = viewerFollows && followsViewer
-
-  useEffect(() => {
-    if (!uid || uid === targetUid) return
-    let cancelled = false
-    getFriendship(uid, targetUid)
-      .then((f) => {
-        if (cancelled) return
-        setViewerFollows(f.viewerFollows)
-        setFollowsViewer(f.followsViewer)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [uid, targetUid])
 
   if (uid === targetUid) return null // own profile — handled elsewhere
 
@@ -72,9 +53,8 @@ export default function ProfileActions({ targetUid, onFollowToggled }: ProfileAc
     <div className="flex items-center gap-2">
       <SubscribeButton
         targetUid={targetUid}
-        onToggled={(delta) => { setViewerFollows(delta > 0); onFollowToggled?.(delta) }}
+        onToggled={(delta) => { onFollowToggled?.(delta) }}
       />
-      <MessageButton targetUid={targetUid} isMutual={isMutual} />
       {canBlock && (
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>

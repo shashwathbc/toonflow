@@ -143,7 +143,7 @@ export default function AiNovelGeneratorPage() {
         title="Write & publish your novel with AI"
         subtitle="Turn an idea into a finished, published story. Toonflow's AI novel generator helps you plan plots, draft chapters, design covers, and reach readers — all in one place."
         primaryCta={{ label: 'Start writing free', href: '/signup?redirect=/create/novel' }}
-        secondaryCta={{ label: 'Explore Originals', href: '/originals' }}
+        secondaryCta={{ label: 'Browse novels', href: '/browse?type=novel' }}
       />
 
       <FeatureGrid

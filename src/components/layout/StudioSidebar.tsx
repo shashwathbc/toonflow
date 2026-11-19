@@ -5,11 +5,8 @@ import { usePathname } from 'next/navigation'
 import { Logo } from '@/components/ui/Logo'
 import {
   BookOpen,
-  Clapperboard,
   ImageIcon,
   LayoutDashboard,
-  Palette,
-  Wallet,
   Star,
   ChevronLeft,
   Home,
@@ -29,18 +26,13 @@ interface SidebarItem {
   webtoonGated?: boolean
 }
 
-// NOTE: this sidebar is the chrome for the (studio) route group — /dashboard,
-// /wallet and /admin — NOT for the Create section. The Create studios have
-// their own navigation (CreateStudioShell), which is where Wallet and Dashboard
-// were removed from. Keeping them here is deliberate: this sidebar renders ON
-// those pages, so dropping them would strand a user with no way back.
+// NOTE: this sidebar is the chrome for the (studio) route group — /dashboard
+// and /admin — NOT for the Create section. The Create studios have their own
+// navigation (CreateStudioShell).
 const SIDEBAR_ITEMS: SidebarItem[] = [
-  { href: '/create/anime', label: 'Anime Studio', icon: <Clapperboard size={18} /> },
-  { href: '/create/art', label: 'Art Studio', icon: <Palette size={18} /> },
   { href: '/create/novel', label: 'Novel Studio', icon: <BookOpen size={18} /> },
   { href: '/create/webtoon', label: 'Webtoon Studio', icon: <ImageIcon size={18} />, webtoonGated: true },
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-  { href: '/wallet', label: 'Wallet', icon: <Wallet size={18} /> },
   { href: '/admin/super', label: 'Super Admin', icon: <Star size={18} />, superAdminOnly: true },
 ]
 

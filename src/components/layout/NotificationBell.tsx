@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Bell, Heart, MessageSquare, UserPlus, CheckCheck, Send } from 'lucide-react'
+import { Bell, Heart, MessageSquare, UserPlus, CheckCheck } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useAuth } from '@/hooks/useAuth'
 import { useNotifications } from '@/hooks/useNotifications'
@@ -32,8 +32,6 @@ function notificationText(n: AppNotification): React.ReactNode {
       return <>liked your {target}</>
     case 'comment':
       return <>commented on your {target}</>
-    case 'message':
-      return <>sent you a message</>
   }
 }
 
@@ -50,13 +48,6 @@ function TypeBadge({ type }: { type: AppNotification['type'] }) {
     return (
       <span className={cn(base, 'bg-sky-500 text-white')} aria-hidden="true">
         <MessageSquare size={9} className="fill-current" />
-      </span>
-    )
-  }
-  if (type === 'message') {
-    return (
-      <span className={cn(base, 'bg-violet-500 text-white')} aria-hidden="true">
-        <Send size={9} />
       </span>
     )
   }

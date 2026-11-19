@@ -69,11 +69,6 @@ export default function CreatorShopPanel({
         <p className="text-sm text-white/50">
           {isOwnProfile ? "You haven't published any artwork or products yet." : 'Nothing published yet.'}
         </p>
-        {isOwnProfile && (
-          <Link href="/create/art" className="btn-accent mt-4 text-sm">
-            Open Art Studio
-          </Link>
-        )}
       </div>
     )
   }
