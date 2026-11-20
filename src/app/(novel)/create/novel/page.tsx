@@ -3,8 +3,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
+import CoverImage from '@/components/content/CoverImage'
 import { useNovels } from '@/hooks/useNovels'
 import {
   deleteNovel,
@@ -165,20 +165,12 @@ function NovelCard({ novel, onEdit, onDelete, onPublish, onUnpublish }: NovelCar
         aria-label={`Open ${title} in the editor`}
       >
         <div className="relative aspect-[2/3] overflow-hidden bg-bg-elevated">
-          {novel.coverURL ? (
-            <Image
-              src={novel.coverURL}
-              alt={`Cover of ${title}`}
-              fill
-              className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transform-none"
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-            />
-          ) : (
-            <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-text-muted">
-              <BookOpen size={30} aria-hidden="true" />
-              <span className="text-xs font-medium">No cover</span>
-            </span>
-          )}
+          <CoverImage
+            src={novel.coverURL}
+            alt={`Cover of ${title}`}
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transform-none"
+          />
 
           <span
             className={`absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${statusBadge(novel.status)}`}
